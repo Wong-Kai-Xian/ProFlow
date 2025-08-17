@@ -3,7 +3,7 @@ import React from "react";
 import TopBar from "../components/TopBar";
 import Dashboard from "../components/Dashboard";
 import GroupForum from "../components/GroupForum";
-import ClientChat from "../components/ClientChat";
+import MyOpportunity from "../components/MyOpportunity";
 import UpcomingEvents from "../components/UpcomingEvents";
 
 export default function Home() {
@@ -20,7 +20,7 @@ export default function Home() {
         {/* Left Column */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
           <GroupForum />
-          <ClientChat />
+          <MyOpportunity />
         </div>
 
         {/* Middle Column */}
