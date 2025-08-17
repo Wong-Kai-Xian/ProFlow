@@ -1,4 +1,5 @@
 {
+{
   "name": "proflow",
   "version": "1.0.0",
   "private": true,
@@ -15,4 +16,5 @@
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build"
   }
+}
 }
