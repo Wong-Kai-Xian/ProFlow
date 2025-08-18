@@ -1,12 +1,21 @@
-import React, { useState } from "react";
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
-import GroupForum from "../components/GroupForum";
-import UpcomingEvents from "../components/UpcomingEvents";
-import ForumTabs from "../components/ForumTabs";
+import ForumList from "../components/ForumList";
 import Projects from "../components/Projects";
 import Contacts from "../components/Contacts";
+import UpcomingEvents from "../components/UpcomingEvents";
+import GroupForum from "../components/GroupForum";
 
-export default function Forum() {
+export default function ForumListPage() {
+  const navigate = useNavigate();
+  
+  const handleForumSelect = (forum) => {
+    // Navigate to the specific forum page
+    console.log("Selected forum:", forum);
+    navigate(`/forum/${forum.id}`);
+  };
+
   return (
     <div style={{ fontFamily: 'Arial, sans-serif' }}>
       <TopBar />
@@ -24,9 +33,9 @@ export default function Forum() {
           <Contacts />
         </div>
 
-        {/* Middle Column - Tabbed Content */}
+        {/* Middle: Forum List */}
         <div style={{ gridColumn: 2, gridRow: "1 / span 2" }}>
-          <ForumTabs />
+          <ForumList onForumSelect={handleForumSelect} />
         </div>
 
         {/* Top-right: Upcoming Reminders */}

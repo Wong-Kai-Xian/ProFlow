@@ -3,6 +3,9 @@ import React, { useState, useEffect } from "react";
 export default function Discussion() {
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState([]);
+  const [likedPosts, setLikedPosts] = useState(new Set());
+  const [commentInputs, setCommentInputs] = useState({});
+  const [showCommentInput, setShowCommentInput] = useState({});
 
   useEffect(() => {
     // Mock posts data
@@ -68,11 +71,69 @@ export default function Discussion() {
   };
 
   const handleLike = (postId) => {
-    setPosts(posts.map(post => 
-      post.id === postId 
-        ? { ...post, likes: post.likes + 1 }
-        : post
-    ));
+    const newLikedPosts = new Set(likedPosts);
+    
+    if (likedPosts.has(postId)) {
+      // Unlike the post
+      newLikedPosts.delete(postId);
+      setPosts(posts.map(post => 
+        post.id === postId 
+          ? { ...post, likes: post.likes - 1 }
+          : post
+      ));
+    } else {
+      // Like the post
+      newLikedPosts.add(postId);
+      setPosts(posts.map(post => 
+        post.id === postId 
+          ? { ...post, likes: post.likes + 1 }
+          : post
+      ));
+    }
+    
+    setLikedPosts(newLikedPosts);
+  };
+
+  const handleCommentToggle = (postId) => {
+    setShowCommentInput(prev => ({
+      ...prev,
+      [postId]: !prev[postId]
+    }));
+  };
+
+  const handleCommentChange = (postId, value) => {
+    setCommentInputs(prev => ({
+      ...prev,
+      [postId]: value
+    }));
+  };
+
+  const handleCommentSubmit = (postId) => {
+    const commentText = commentInputs[postId];
+    if (commentText && commentText.trim()) {
+      const newComment = {
+        author: 'Current User',
+        content: commentText.trim()
+      };
+      
+      setPosts(posts.map(post => 
+        post.id === postId 
+          ? { ...post, comments: [...post.comments, newComment] }
+          : post
+      ));
+      
+      // Clear the comment input
+      setCommentInputs(prev => ({
+        ...prev,
+        [postId]: ''
+      }));
+      
+      // Hide the comment input
+      setShowCommentInput(prev => ({
+        ...prev,
+        [postId]: false
+      }));
+    }
   };
 
   const getPostTypeLabel = (type) => {
@@ -100,6 +161,37 @@ export default function Discussion() {
 
   return (
     <div>
+      {/* Forum Banner */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        height: '200px',
+        marginBottom: '20px',
+        borderRadius: '10px',
+        overflow: 'hidden',
+        backgroundImage: 'url(https://via.placeholder.com/800x200/3498DB/FFFFFF?text=Forum+Banner)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      }}>
+        {/* Overlay for better text readability */}
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+          padding: '20px',
+          color: 'white'
+        }}>
+          <h1 style={{ margin: '0 0 5px 0', fontSize: '24px', fontWeight: 'bold' }}>
+            Project Alpha Discussion
+          </h1>
+          <p style={{ margin: 0, fontSize: '14px', opacity: 0.9 }}>
+            Main discussion forum for Project Alpha development, updates, and team collaboration
+          </p>
+        </div>
+      </div>
+
       {/* Post Creation Section */}
       <div style={{ 
         backgroundColor: 'white', 
@@ -134,6 +226,7 @@ export default function Discussion() {
         }}>
           <div>
             <button 
+              onClick={() => console.log("Image upload clicked")}
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
@@ -141,6 +234,7 @@ export default function Discussion() {
               📷 Picture
             </button>
             <button 
+              onClick={() => console.log("File attachment clicked")}
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
@@ -148,6 +242,7 @@ export default function Discussion() {
               📎 Attachment
             </button>
             <button 
+              onClick={() => console.log("Schedule meeting clicked")}
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
@@ -155,6 +250,7 @@ export default function Discussion() {
               📅 Schedule Meeting
             </button>
             <button 
+              onClick={() => console.log("Share location clicked")}
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
@@ -271,22 +367,69 @@ export default function Discussion() {
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
+                    color: likedPosts.has(post.id) ? '#3498DB' : '#7F8C8D',
+                    fontSize: '12px',
+                    fontWeight: likedPosts.has(post.id) ? 'bold' : 'normal'
+                  }}
+                >
+                  {likedPosts.has(post.id) ? '👍' : '👍'} {post.likes} Like{post.likes !== 1 ? 's' : ''}
+                </button>
+                <button 
+                  onClick={() => handleCommentToggle(post.id)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
                     color: '#7F8C8D',
                     fontSize: '12px'
                   }}
                 >
-                  👍 {post.likes} Like{post.likes !== 1 ? 's' : ''}
-                </button>
-                <button style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#7F8C8D',
-                  fontSize: '12px'
-                }}>
                   💬 {post.comments.length} Comment{post.comments.length !== 1 ? 's' : ''}
                 </button>
               </div>
+
+              {/* Comment Input */}
+              {showCommentInput[post.id] && (
+                <div style={{ 
+                  marginTop: '15px', 
+                  paddingTop: '15px',
+                  borderTop: '1px solid #ECF0F1'
+                }}>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+                    <textarea
+                      value={commentInputs[post.id] || ''}
+                      onChange={(e) => handleCommentChange(post.id, e.target.value)}
+                      placeholder="Write a comment..."
+                      style={{
+                        flex: 1,
+                        minHeight: '60px',
+                        padding: '8px 12px',
+                        border: '1px solid #BDC3C7',
+                        borderRadius: '5px',
+                        fontSize: '12px',
+                        fontFamily: 'Arial, sans-serif',
+                        resize: 'vertical',
+                        outline: 'none'
+                      }}
+                    />
+                    <button
+                      onClick={() => handleCommentSubmit(post.id)}
+                      style={{
+                        padding: '8px 15px',
+                        backgroundColor: '#3498DB',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '5px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      Post Comment
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Comments */}
               {post.comments.length > 0 && (
