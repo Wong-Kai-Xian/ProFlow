@@ -6,6 +6,7 @@ export default function Discussion() {
   const [likedPosts, setLikedPosts] = useState(new Set());
   const [commentInputs, setCommentInputs] = useState({});
   const [showCommentInput, setShowCommentInput] = useState({});
+  const [selectedFiles, setSelectedFiles] = useState([]);
 
   useEffect(() => {
     // Mock posts data
@@ -67,6 +68,7 @@ export default function Discussion() {
       };
       setPosts([newPost, ...posts]);
       setPostText('');
+      setSelectedFiles([]);
     }
   };
 
@@ -136,6 +138,31 @@ export default function Discussion() {
     }
   };
 
+  const handleImageUpload = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = (e) => {
+      const files = Array.from(e.target.files);
+      console.log("Image files selected:", files);
+      setSelectedFiles(prev => [...prev, ...files]);
+    };
+    input.click();
+  };
+
+  const handleFileAttachment = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.onchange = (e) => {
+      const files = Array.from(e.target.files);
+      console.log("Files selected:", files);
+      setSelectedFiles(prev => [...prev, ...files]);
+    };
+    input.click();
+  };
+
   const getPostTypeLabel = (type) => {
     switch(type) {
       case 'meeting':
@@ -161,37 +188,6 @@ export default function Discussion() {
 
   return (
     <div>
-      {/* Forum Banner */}
-      <div style={{
-        position: 'relative',
-        width: '100%',
-        height: '200px',
-        marginBottom: '20px',
-        borderRadius: '10px',
-        overflow: 'hidden',
-        backgroundImage: 'url(https://via.placeholder.com/800x200/3498DB/FFFFFF?text=Forum+Banner)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center'
-      }}>
-        {/* Overlay for better text readability */}
-        <div style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
-          padding: '20px',
-          color: 'white'
-        }}>
-          <h1 style={{ margin: '0 0 5px 0', fontSize: '24px', fontWeight: 'bold' }}>
-            Project Alpha Discussion
-          </h1>
-          <p style={{ margin: 0, fontSize: '14px', opacity: 0.9 }}>
-            Main discussion forum for Project Alpha development, updates, and team collaboration
-          </p>
-        </div>
-      </div>
-
       {/* Post Creation Section */}
       <div style={{ 
         backgroundColor: 'white', 
@@ -218,6 +214,50 @@ export default function Discussion() {
           }}
         />
         
+        {/* Selected Files Display */}
+        {selectedFiles.length > 0 && (
+          <div style={{
+            marginTop: '10px',
+            padding: '10px',
+            backgroundColor: '#F8F9F9',
+            borderRadius: '5px',
+            border: '1px solid #ECF0F1'
+          }}>
+            <div style={{ fontSize: '12px', color: '#7F8C8D', marginBottom: '5px' }}>
+              Selected files ({selectedFiles.length}):
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+              {selectedFiles.map((file, index) => (
+                <span key={index} style={{
+                  fontSize: '11px',
+                  padding: '2px 6px',
+                  backgroundColor: '#3498DB',
+                  color: 'white',
+                  borderRadius: '3px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px'
+                }}>
+                  {file.name}
+                  <button
+                    onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== index))}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'white',
+                      cursor: 'pointer',
+                      fontSize: '10px',
+                      padding: '0'
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
@@ -226,7 +266,7 @@ export default function Discussion() {
         }}>
           <div>
             <button 
-              onClick={() => console.log("Image upload clicked")}
+              onClick={handleImageUpload}
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
@@ -234,7 +274,7 @@ export default function Discussion() {
               📷 Picture
             </button>
             <button 
-              onClick={() => console.log("File attachment clicked")}
+              onClick={handleFileAttachment}
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
