@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import ForumList from "../components/ForumList";
-import Projects from "../components/Projects";
+import Projects from "../components/ProjectsTab";
 import Contacts from "../components/Contacts";
 import UpcomingEvents from "../components/UpcomingEvents";
 import GroupForum from "../components/GroupForum";

@@ -3,8 +3,9 @@ import TopBar from "../components/TopBar";
 import GroupForum from "../components/GroupForum";
 import UpcomingEvents from "../components/UpcomingEvents";
 import ForumTabs from "../components/ForumTabs";
-import Projects from "../components/Projects";
+import Projects from "../components/ProjectsTab";
 import Contacts from "../components/Contacts";
+import ProjectsTab from "../components/ProjectsTab";
 
 export default function Forum() {
   return (
@@ -20,7 +21,7 @@ export default function Forum() {
       }}>
         {/* Left column: Projects + Contacts */}
         <div style={{ gridColumn: 1, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <Projects />
+          <ProjectsTab />
           <Contacts />
         </div>
 
