@@ -18,7 +18,7 @@ export default function GroupForum() {
     let sorted = [...forums];
     if (sortBy === "recent") {
       // Here we just keep the mock order; in real, sort by date
-      sorted.sort((a, b) => b.posts - a.posts);
+      sorted.sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated));
     } else if (sortBy === "notifications") {
       sorted.sort((a, b) => b.notifications - a.notifications);
     }

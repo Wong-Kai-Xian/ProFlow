@@ -1,43 +1,119 @@
 // src/pages/Home.js
-import React from "react";
+import React, { useState } from "react";
 import TopBar from "../components/TopBar";
 import Dashboard from "../components/Dashboard";
 import GroupForum from "../components/GroupForum";
 import Contacts from "../components/Contacts"; 
 import UpcomingEvents from "../components/UpcomingEvents";
-import Projects from "../components/Projects";
+import ProjectsTab from "../components/ProjectsTab";
 
 export default function Home() {
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+
+  const leftWidth = leftCollapsed ? 40 : 300;
+  const rightWidth = rightCollapsed ? 40 : 300;
+
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ fontFamily: "Arial, sans-serif", position: "relative" }}>
       <TopBar />
       <div style={{
         display: "grid",
-        gridTemplateColumns: "1fr 2fr 1fr",
+        gridTemplateColumns: `${leftWidth}px 1fr ${rightWidth}px`,
         gridTemplateRows: "auto 1fr",
         gap: "20px",
         padding: "10px",
-        minHeight: "90vh"
+        minHeight: "90vh",
+        transition: "grid-template-columns 0.3s ease"
       }}>
-        {/* Left column: Projects + Contacts */}
-        <div style={{ gridColumn: 1, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <Projects />
-          <Contacts />
+        {/* Left Panel */}
+        <div style={{
+          gridColumn: 1,
+          gridRow: "1 / span 2",
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px"
+        }}>
+          {!leftCollapsed && (
+            <>
+              <ProjectsTab />
+              <Contacts />
+            </>
+          )}
+
+          {/* Left Collapse Button - Shorter */}
+          <div
+            onClick={() => setLeftCollapsed(!leftCollapsed)}
+            style={{
+              position: "absolute",
+              top: "50%",
+              right: -20,
+              transform: "translateY(-50%)",
+              width: 20,
+              height: 80,
+              background: "#3498DB",
+              color: "#fff",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: "bold",
+              borderRadius: "4px 0 0 4px",
+              userSelect: "none",
+            }}
+          >
+            {leftCollapsed ? ">" : "<"}
+          </div>
         </div>
 
-        {/* Middle: Dashboard */}
+        {/* Middle Panel */}
         <div style={{ gridColumn: 2, gridRow: "1 / span 2" }}>
           <Dashboard />
         </div>
 
-        {/* Top-right: Upcoming Reminders */}
-        <div style={{ gridColumn: 3, gridRow: 1 }}>
-          <UpcomingEvents style={{ maxHeight: "200px", overflowY: "auto" }} />
-        </div>
+        {/* Right Panel */}
+        <div style={{
+          gridColumn: 3,
+          gridRow: "1 / span 2",
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px"
+        }}>
+          {/* Shift top panel down a bit when expanded */}
+          <div style={{ marginTop: rightCollapsed ? 0 : 0, maxHeight: 300, overflowY: "auto" }}>
+            {!rightCollapsed && <UpcomingEvents />}
+          </div>
 
-        {/* Bottom-right: Group Forum */}
-        <div style={{ gridColumn: 3, gridRow: 2, alignSelf: "start" }}>
-          <GroupForum />
+          {/* Shift bottom panel further down to separate visually */}
+          <div style={{ marginTop: rightCollapsed ? 0 : 20 }}>
+            {!rightCollapsed && <GroupForum />}
+          </div>
+
+          {/* Right Collapse Button - Shorter */}
+          <div
+            onClick={() => setRightCollapsed(!rightCollapsed)}
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: -20,
+              transform: "translateY(-50%)",
+              width: 20,
+              height: 80,
+              background: "#3498DB",
+              color: "#fff",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: "bold",
+              borderRadius: "0 4px 4px 0",
+              userSelect: "none",
+            }}
+          >
+            {rightCollapsed ? "<" : ">"}
+          </div>
         </div>
       </div>
     </div>
