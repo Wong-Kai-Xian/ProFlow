@@ -1,51 +1,56 @@
+// src/pages/ForumListPage.js
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import ForumList from "../components/ForumList";
-import Projects from "../components/Projects";
-import Contacts from "../components/Contacts";
-import UpcomingEvents from "../components/UpcomingEvents";
-import GroupForum from "../components/GroupForum";
 
 export default function ForumListPage() {
   const navigate = useNavigate();
-  
+
   const handleForumSelect = (forum) => {
-    // Navigate to the specific forum page
     console.log("Selected forum:", forum);
     navigate(`/forum/${forum.id}`);
   };
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif' }}>
+    <div 
+      style={{ 
+        fontFamily: "Arial, sans-serif", 
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #0f172a, #1e293b)", // same theme as Project.js
+        color: "white"
+      }}
+    >
+      {/* Top Navigation Bar */}
       <TopBar />
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 2fr 1fr",
-        gridTemplateRows: "auto 1fr",
-        gap: "20px",
-        padding: "10px",
-        minHeight: "90vh"
-      }}>
-        {/* Left column: Projects + Contacts */}
-        <div style={{ gridColumn: 1, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <Projects />
-          <Contacts />
-        </div>
 
-        {/* Middle: Forum List */}
-        <div style={{ gridColumn: 2, gridRow: "1 / span 2" }}>
+      {/* Page Content */}
+      <div 
+        style={{ 
+          display: "flex", 
+          flexDirection: "column",
+          alignItems: "center",
+          padding: "20px",
+        }}
+      >
+        {/* Forum List in the Center */}
+        <div style={{ width: "80%", maxWidth: "900px" }}>
           <ForumList onForumSelect={handleForumSelect} />
         </div>
 
-        {/* Top-right: Upcoming Reminders */}
-        <div style={{ gridColumn: 3, gridRow: 1 }}>
-          <UpcomingEvents style={{ maxHeight: "200px", overflowY: "auto" }} />
-        </div>
-
-        {/* Bottom-right: Group Forum */}
-        <div style={{ gridColumn: 3, gridRow: 2, alignSelf: "start" }}>
-          <GroupForum />
+        {/* Background Logo */}
+        <div 
+          style={{ 
+            marginTop: "40px", 
+            opacity: 0.08, 
+            textAlign: "center" 
+          }}
+        >
+          <img 
+            src="/logo.png" 
+            alt="ProFlow Logo" 
+            style={{ maxWidth: "300px" }}
+          />
         </div>
       </div>
     </div>

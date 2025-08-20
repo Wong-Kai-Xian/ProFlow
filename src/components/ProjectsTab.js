@@ -1,9 +1,10 @@
+// src/pages/ProjectsTab.js
 import React, { useEffect, useState } from "react";
 
-export default function Projects() {
+export default function ProjectsTab() {
   const [projects, setProjects] = useState([]);
   const [collapseOngoing, setCollapseOngoing] = useState(false);
-  const [collapseCompleted, setCollapseCompleted] = useState(false);
+  const [collapseCompleted, setCollapseCompleted] = useState(true); // collapsed by default
   const [filter, setFilter] = useState("deadline"); // default sort
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function Projects() {
     }}>
       {/* Title + Filter */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-        <h3 style={{ margin: 0, color: '#2C3E50' }}>Projects</h3>
+        <h3 style={{ margin: 10, color: '#2C3E50' }}>Projects</h3>
         <div style={{ display: "flex", gap: "5px" }}>
           <button 
             style={{ ...filterButtonStyle, background: filter === "deadline" ? "#3498DB" : "#E0E0E0", color: filter === "deadline" ? "#fff" : "#000" }}
