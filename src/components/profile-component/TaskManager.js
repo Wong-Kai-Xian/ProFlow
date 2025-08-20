@@ -1,5 +1,5 @@
 import React from "react";
-import { COLORS, BUTTON_STYLES } from "./constants";
+import { COLORS, BUTTON_STYLES, LAYOUT } from "./constants"; // Import LAYOUT
 
 export default function TaskManager({ stage, stageData, setStageData }) {
   const tasks = stageData[stage]?.tasks || [];
@@ -42,20 +42,20 @@ export default function TaskManager({ stage, stageData, setStageData }) {
   };
 
   return (
-    <div style={{ marginTop: "15px" }}>
+    <div style={{ marginTop: LAYOUT.gap }}>
       <div style={{ 
         display: "flex", 
         justifyContent: "space-between", 
         alignItems: "center",
-        marginBottom: "10px"
+        marginBottom: LAYOUT.smallGap
       }}>
         <h5 style={{ margin: 0, color: COLORS.text }}>Tasks</h5>
         <button
           onClick={addTask}
           style={{
             ...BUTTON_STYLES.primary,
-            fontSize: "12px",
-            padding: "4px 8px"
+            padding: "4px 8px",
+            fontSize: "12px"
           }}
         >
           + Add Task
@@ -67,7 +67,7 @@ export default function TaskManager({ stage, stageData, setStageData }) {
           color: COLORS.lightText, 
           fontSize: "14px", 
           fontStyle: "italic",
-          margin: "10px 0"
+          margin: LAYOUT.smallGap + " 0"
         }}>
           No tasks yet. Add one to get started!
         </p>
@@ -107,12 +107,12 @@ export default function TaskManager({ stage, stageData, setStageData }) {
               <button
                 onClick={() => removeTask(index)}
                 style={{
-                  background: "none",
-                  border: "none",
-                  color: COLORS.danger,
-                  cursor: "pointer",
+                  ...BUTTON_STYLES.secondary,
+                  background: "none", // No background for 'x' button
+                  border: "none", // No border
+                  color: COLORS.danger, // Red color for 'x'
+                  padding: "2px", // Minimal padding
                   fontSize: "16px",
-                  padding: "2px",
                   borderRadius: "3px"
                 }}
                 title="Remove task"

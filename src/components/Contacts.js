@@ -3,6 +3,8 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AddOrganization from "./AddOrganization";
 import DelOrganization from "./DelOrganization";
+import Card from "./profile-component/Card"; // Corrected import path
+import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; // Import constants
 
 export default function Contacts() {
   const navigate = useNavigate();
@@ -88,42 +90,43 @@ export default function Contacts() {
   };
 
   return (
-    <div style={{
-      background: "#F8F9F9",
-      padding: "15px",
-      borderRadius: "10px",
-      display: "flex",
-      flexDirection: "column",
+    <Card style={{
       height: "100%",
       overflowY: "auto"
     }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-        <h3 style={{ margin: 0, color: "#2C3E50" }}>Contacts</h3>
-        <div style={{ display: "flex", gap: "5px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
+        <h3 style={{ margin: 0, color: COLORS.text }}>Contacts</h3>
+        <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
           {view === "clients" && (
             <>
-              <button onClick={() => setShowAddOrg(true)} style={btnStyle}>+ Org</button>
-              <button onClick={() => setShowDelOrg(true)} style={{ ...btnStyle, background: "#E74C3C" }}>- Org</button>
+              <button onClick={() => setShowAddOrg(true)} style={{ ...BUTTON_STYLES.primary, padding: "4px 8px", fontSize: "10px" }}>+ Org</button>
+              <button onClick={() => setShowDelOrg(true)} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "4px 8px", fontSize: "10px" }}>- Org</button>
             </>
           )}
           {view === "team" && (
-            <button onClick={addTeamMember} style={btnStyle}>+ Team Contact</button>
+            <button onClick={addTeamMember} style={{ ...BUTTON_STYLES.primary, padding: "4px 8px", fontSize: "10px" }}>+ Team Contact</button>
           )}
         </div>
       </div>
 
       {/* View Switch */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+      <div style={{ display: "flex", gap: LAYOUT.smallGap, marginBottom: LAYOUT.smallGap }}>
         <button
           onClick={() => setView("clients")}
-          style={{ ...switchBtnStyle, background: view === "clients" ? "#3498DB" : "#E0E0E0", color: view === "clients" ? "#fff" : "#000", flex: 1 }}
+          style={{ 
+            ...(view === "clients" ? BUTTON_STYLES.primary : BUTTON_STYLES.secondary),
+            flex: 1
+          }}
         >
           Clients
         </button>
         <button
           onClick={() => setView("team")}
-          style={{ ...switchBtnStyle, background: view === "team" ? "#3498DB" : "#E0E0E0", color: view === "team" ? "#fff" : "#000", flex: 1 }}
+          style={{
+            ...(view === "team" ? BUTTON_STYLES.primary : BUTTON_STYLES.secondary),
+            flex: 1
+          }}
         >
           Team
         </button>
@@ -133,22 +136,23 @@ export default function Contacts() {
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {view === "clients"
           ? organizations.map((org, idx) => (
-              <li key={idx} style={{ marginBottom: "10px" }}>
+              <li key={idx} style={{ marginBottom: LAYOUT.smallGap }}>
                 <div style={{
-                  background: "#BDC3C7",
-                  padding: "8px 10px",
-                  borderRadius: "8px",
+                  background: COLORS.light,
+                  padding: LAYOUT.smallGap,
+                  borderRadius: LAYOUT.smallBorderRadius,
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  fontWeight: "bold"
+                  fontWeight: "bold",
+                  color: COLORS.text
                 }}>
                   <span onClick={() => toggleCollapse(idx)} style={{ cursor: "pointer" }}>
                     {org.name} {org.collapsed ? "+" : "-"}
                   </span>
-                  <div style={{ display: "flex", gap: "5px" }}>
-                    <button onClick={() => addClient(idx)} style={{ ...btnStyleSmall, background: "#3498DB" }}>+</button>
-                    <button onClick={() => removeClient(idx)} style={{ ...btnStyleSmall, background: "#E74C3C" }}>-</button>
+                  <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
+                    <button onClick={() => addClient(idx)} style={{ ...BUTTON_STYLES.primary, padding: "2px 5px", fontSize: "9px" }}>+</button>
+                    <button onClick={() => removeClient(idx)} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "2px 5px", fontSize: "9px" }}>-</button>
                   </div>
                 </div>
                 {!org.collapsed && org.clients.map((c, i) => (
@@ -156,10 +160,10 @@ export default function Contacts() {
                     key={i}
                     onClick={() => goToCustomerProfile(c.id)}
                     style={{
-                      background: "#ffffff",
-                      padding: "10px",
-                      margin: "5px 0",
-                      borderRadius: "8px",
+                      background: COLORS.cardBackground,
+                      padding: LAYOUT.smallGap,
+                      margin: LAYOUT.smallGap + " 0",
+                      borderRadius: LAYOUT.smallBorderRadius,
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
@@ -168,12 +172,12 @@ export default function Contacts() {
                     }}
                   >
                     <div>
-                      <strong>{c.name}</strong><br/>
-                      <span style={{ fontSize: "12px", color: "#555" }}>{c.email}</span>
+                      <strong style={{ color: COLORS.text }}>{c.name}</strong><br/>
+                      <span style={{ fontSize: "12px", color: COLORS.lightText }}>{c.email}</span>
                     </div>
-                    <div style={{ display: "flex", gap: "5px" }}>
-                      <button onClick={(e) => { e.stopPropagation(); openWhatsApp(c.whatsapp); }} style={btnWhatsApp}>WhatsApp</button>
-                      <button onClick={(e) => { e.stopPropagation(); openEmail(c.email); }} style={btnEmail}>Email</button>
+                    <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
+                      <button onClick={(e) => { e.stopPropagation(); openWhatsApp(c.whatsapp); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "4px 8px", fontSize: "10px" }}>WhatsApp</button>
+                      <button onClick={(e) => { e.stopPropagation(); openEmail(c.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", fontSize: "10px" }}>Email</button>
                     </div>
                   </div>
                 ))}
@@ -181,22 +185,22 @@ export default function Contacts() {
             ))
           : team.map((t, i) => (
               <li key={i} style={{
-                background: "#ffffff",
-                padding: "10px",
-                marginBottom: "10px",
-                borderRadius: "8px",
+                background: COLORS.cardBackground,
+                padding: LAYOUT.smallGap,
+                marginBottom: LAYOUT.smallGap,
+                borderRadius: LAYOUT.smallBorderRadius,
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
               }}>
                 <div>
-                  <strong>{t.name}</strong><br/>
-                  <span style={{ fontSize: "12px", color: "#555" }}>{t.email}</span>
+                  <strong style={{ color: COLORS.text }}>{t.name}</strong><br/>
+                  <span style={{ fontSize: "12px", color: COLORS.lightText }}>{t.email}</span>
                 </div>
-                <div style={{ display: "flex", gap: "5px" }}>
-                  <button onClick={() => openWhatsApp(t.whatsapp)} style={btnWhatsApp}>WhatsApp</button>
-                  <button onClick={() => openEmail(t.email)} style={btnEmail}>Email</button>
+                <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
+                  <button onClick={() => openWhatsApp(t.whatsapp)} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "4px 8px", fontSize: "10px" }}>WhatsApp</button>
+                  <button onClick={() => openEmail(t.email)} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", fontSize: "10px" }}>Email</button>
                 </div>
               </li>
             ))}
@@ -205,13 +209,6 @@ export default function Contacts() {
       {/* Modals */}
       {showAddOrg && <AddOrganization onClose={() => setShowAddOrg(false)} onSave={handleAddOrganization} />}
       {showDelOrg && <DelOrganization organizations={organizations} onDelete={handleDeleteOrganization} onClose={() => setShowDelOrg(false)} />}
-    </div>
+    </Card>
   );
 }
-
-// Styles
-const btnStyle = { padding: "5px 10px", background: "#3498DB", color: "#fff", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: "12px" };
-const btnStyleSmall = { padding: "2px 6px", background: "#27AE60", color: "#fff", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: "10px" };
-const btnWhatsApp = { padding: "5px 8px", background: "#25D366", color: "white", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: "12px" };
-const btnEmail = { padding: "5px 8px", background: "#E74C3C", color: "white", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: "12px" };
-const switchBtnStyle = { marginRight: "5px", padding: "5px 10px", border: "none", borderRadius: "5px", cursor: "pointer" };

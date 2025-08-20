@@ -10,7 +10,7 @@ import Reminders from "../components/profile-component/Reminders";
 import AttachedFiles from "../components/profile-component/AttachedFiles";
 import TaskManager from "../components/profile-component/TaskManager";
 import customerData from "../components/profile-component/customerData.json";
-import { STAGES, COLORS } from "../components/profile-component/constants";
+import { STAGES, COLORS, LAYOUT } from "../components/profile-component/constants";
 
 export default function CustomerProfile() {
   const { id } = useParams();
@@ -22,39 +22,65 @@ export default function CustomerProfile() {
     ...customerData.activities
   ]);
   
-  const [reminders, setReminders] = useState([
-    "[10:00 AM] Follow up on proposal",
-    "[2:00 PM] Send contract details",
-    ...customerData.reminders
-  ]);
+  const [reminders, setReminders] = useState(
+    customerData.reminders.map(r => ({ text: r, deadline: "", description: "", link: "" })) // Initialize existing reminders with empty deadline, description, and link
+  );
   
-  const [files] = useState(customerData.files);
+  const [files, setFiles] = useState(
+    customerData.files.map(file => ({ name: file, type: 'document', description: '', url: '', size: 0, uploadTime: '' }))
+  );
   const [currentStage, setCurrentStage] = useState("Working");
   const [stageData, setStageData] = useState({
     Working: { 
-      notes: "Initial contact established. Client interested in our services.", 
+      notes: ["Initial contact established. Client interested in our services."], 
       tasks: [
         { name: "Send proposal", done: true },
         { name: "Schedule follow-up call", done: false }
-      ]
+      ],
+      completed: false // Added completion status
     },
     Qualified: { 
-      notes: "", 
-      tasks: [] 
+      notes: [], 
+      tasks: [],
+      completed: false // Added completion status
     },
     Converted: { 
-      notes: "", 
-      tasks: [] 
+      notes: [], 
+      tasks: [],
+      completed: false // Added completion status
     },
   });
+  const [stages, setStages] = useState(STAGES); // Added state for stages
+
+  const [customerProfile, setCustomerProfile] = useState(customerData.customerProfile); // Added state for customer profile
+
+  const [companyProfile, setCompanyProfile] = useState(customerData.companyProfile); // Added state for company profile
 
   const handleAddActivity = (activity) => {
     setActivities([activity, ...activities]);
   };
 
   const handleAddReminder = (reminder) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setReminders([`[${timestamp}] ${reminder}`, ...reminders]);
+    // reminder is now an object { text, deadline, description, link }
+    setReminders([reminder, ...reminders]);
+  };
+
+  const handleReminderRemove = (indexToRemove) => {
+    setReminders(reminders.filter((_, index) => index !== indexToRemove));
+  };
+
+  const handleFileAdd = (file) => {
+    setFiles([...files, file]);
+  };
+
+  const handleFileRemove = (indexToRemove) => {
+    setFiles(files.filter((_, index) => index !== indexToRemove));
+  };
+
+  const handleFileRename = (indexToRename, newName) => {
+    setFiles(files.map((file, index) => 
+      index === indexToRename ? { ...file, name: newName } : file
+    ));
   };
 
   return (
@@ -67,23 +93,24 @@ export default function CustomerProfile() {
       <div style={{ 
         display: "grid", 
         gridTemplateColumns: "1fr 2fr 1fr", 
-        gap: "20px", 
+        gap: LAYOUT.gap, 
         padding: "20px",
-        maxWidth: "1400px",
+        maxWidth: "1200px", // Adjusted max-width for a slightly tighter layout
         margin: "0 auto"
       }}>
         
         {/* Left Column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-          <CustomerInfo data={customerData.customerProfile} />
-          <CompanyInfo data={customerData.companyProfile} />
+        <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap }}>
+          <CustomerInfo data={customerProfile} setCustomerProfile={setCustomerProfile} />
+          <CompanyInfo data={companyProfile} setCompanyProfile={setCompanyProfile} />
           <CompanyReputation data={customerData.reputation} />
         </div>
 
         {/* Middle Column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap }}>
           <StatusPanel
-            stages={STAGES}
+            stages={stages} // Pass stages from state
+            setStages={setStages} // Pass setStages function
             currentStage={currentStage}
             setCurrentStage={setCurrentStage}
             stageData={stageData}
@@ -104,13 +131,14 @@ export default function CustomerProfile() {
         </div>
 
         {/* Right Column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap }}>
           <Reminders 
             reminders={reminders}
             onAddReminder={handleAddReminder}
+            onReminderRemove={handleReminderRemove}
           />
           
-          <AttachedFiles files={files} />
+          <AttachedFiles files={files} onFileAdd={handleFileAdd} onFileRemove={handleFileRemove} onFileRename={handleFileRename} />
         </div>
 
       </div>

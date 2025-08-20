@@ -7,6 +7,7 @@ import Contacts from "../components/Contacts";
 import UpcomingEvents from "../components/UpcomingEvents";
 import ProjectsTab from "../components/ProjectsTab";
 import GroupForum from "../components/GroupForum";
+import { COLORS, LAYOUT, BUTTON_STYLES } from "../components/profile-component/constants"; // Import COLORS and LAYOUT
 
 export default function Home() {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ export default function Home() {
   };
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", position: "relative" }}>
+    <div style={{ fontFamily: "Arial, sans-serif", position: "relative", background: COLORS.background, minHeight: "100vh" }}>
       <TopBar />
 
       <div
@@ -30,8 +31,8 @@ export default function Home() {
           display: "grid",
           gridTemplateColumns: `${leftWidth}px 1fr ${rightWidth}px`,
           gridTemplateRows: "auto 1fr",
-          gap: "20px",
-          padding: "10px",
+          gap: LAYOUT.gap,
+          padding: LAYOUT.gap,
           minHeight: "90vh",
           transition: "grid-template-columns 0.3s ease"
         }}
@@ -44,7 +45,7 @@ export default function Home() {
             position: "relative",
             display: "flex",
             flexDirection: "column",
-            gap: "8px"
+            gap: LAYOUT.smallGap
           }}
         >
           {!leftCollapsed && (
@@ -55,28 +56,29 @@ export default function Home() {
           )}
 
           {/* Left Collapse Button */}
-          <div
+          <button
             onClick={() => setLeftCollapsed(!leftCollapsed)}
             style={{
+              ...BUTTON_STYLES.secondary, // Apply base secondary button styles
               position: "absolute",
               top: "50%",
               right: -20,
               transform: "translateY(-50%)",
               width: 20,
               height: 80,
-              background: "#3498DB",
-              color: "#fff",
-              cursor: "pointer",
+              background: COLORS.secondary, // Use a darker background
+              color: COLORS.light, // Use lighter text color
+              borderRadius: LAYOUT.smallBorderRadius + " 0 0 " + LAYOUT.smallBorderRadius,
+              padding: 0, // Remove default padding for tighter fit
+              fontSize: "18px", // Make arrows larger
+              fontWeight: "bold",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontWeight: "bold",
-              borderRadius: "4px 0 0 4px",
-              userSelect: "none",
             }}
           >
             {leftCollapsed ? ">" : "<"}
-          </div>
+          </button>
         </div>
 
         {/* Middle Panel */}
@@ -92,40 +94,41 @@ export default function Home() {
             position: "relative",
             display: "flex",
             flexDirection: "column",
-            gap: "8px"
+            gap: LAYOUT.smallGap
           }}
         >
           <div style={{ marginTop: rightCollapsed ? 0 : 0, maxHeight: 300, overflowY: "auto" }}>
             {!rightCollapsed && <UpcomingEvents />}
           </div>
 
-          <div style={{ marginTop: rightCollapsed ? 0 : 20 }}>
+          <div style={{ marginTop: rightCollapsed ? 0 : LAYOUT.gap }}>
             {!rightCollapsed && <GroupForum />}
           </div>
 
           {/* Right Collapse Button */}
-          <div
+          <button
             onClick={() => setRightCollapsed(!rightCollapsed)}
             style={{
+              ...BUTTON_STYLES.secondary, // Apply base secondary button styles
               position: "absolute",
               top: "50%",
               left: -20,
               transform: "translateY(-50%)",
               width: 20,
               height: 80,
-              background: "#3498DB",
-              color: "#fff",
-              cursor: "pointer",
+              background: COLORS.secondary, // Use a darker background
+              color: COLORS.light, // Use lighter text color
+              borderRadius: "0 " + LAYOUT.smallBorderRadius + " " + LAYOUT.smallBorderRadius + " 0",
+              padding: 0, // Remove default padding for tighter fit
+              fontSize: "18px", // Make arrows larger
+              fontWeight: "bold",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontWeight: "bold",
-              borderRadius: "0 4px 4px 0",
-              userSelect: "none",
             }}
           >
             {rightCollapsed ? "<" : ">"}
-          </div>
+          </button>
         </div>
       </div>
     </div>

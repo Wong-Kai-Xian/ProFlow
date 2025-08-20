@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import Card from "./profile-component/Card"; // Corrected import path
+import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; // Import constants
 
 export default function GroupForum() {
   const [forums, setForums] = useState([]);
@@ -26,19 +28,20 @@ export default function GroupForum() {
   };
 
   return (
-    <div style={{ background: '#F8F9F9', padding: '15px', borderRadius: '10px', height: '100%', overflowY: 'auto' }}>
+    <Card style={{
+      height: "100%",
+      overflowY: "auto"
+    }}>
       {/* Header with top-right button */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-        <h3 style={{ margin: 0, color: '#2C3E50' }}>Group Forum</h3>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
+        <h3 style={{ margin: 0, color: COLORS.text }}>Group Forum</h3>
         <button 
           onClick={() => setSortBy(sortBy === "recent" ? "notifications" : "recent")} 
           style={{
+            ...BUTTON_STYLES.secondary,
+            background: BUTTON_STYLES.secondary.background, // Maintain secondary button background
+            color: BUTTON_STYLES.secondary.color, // Maintain secondary button text color
             padding: "5px 10px",
-            background: "#3498DB",
-            color: "white",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
             fontSize: "12px"
           }}
         >
@@ -51,25 +54,25 @@ export default function GroupForum() {
         {sortForums().map((forum, index) => (
           <li key={index} style={{ 
             position: "relative",
-            background: 'white', 
-            margin: '10px 0', 
-            padding: '10px', 
-            borderRadius: '5px',
-            borderLeft: '4px solid #3498DB',
+            background: COLORS.cardBackground, 
+            margin: LAYOUT.smallGap + " 0", 
+            padding: LAYOUT.smallGap, 
+            borderRadius: LAYOUT.smallBorderRadius,
+            borderLeft: `4px solid ${COLORS.primary}`,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
             <div>
-              <strong>{forum.title}</strong>
+              <strong style={{ color: COLORS.text }}>{forum.title}</strong>
               <br />
-              <small style={{ color: '#7F8C8D' }}>
+              <small style={{ color: COLORS.lightText }}>
                 {forum.posts} posts • Last activity: {forum.lastActivity}
               </small>
             </div>
             {forum.notifications > 0 && (
               <div style={{
-                background: "#E74C3C",
+                background: COLORS.danger,
                 color: "white",
                 borderRadius: "50%",
                 width: "20px",
@@ -86,6 +89,6 @@ export default function GroupForum() {
           </li>
         ))}
       </ul>
-    </div>
+    </Card>
   );
 }

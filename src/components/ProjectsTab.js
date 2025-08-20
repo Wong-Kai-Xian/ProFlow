@@ -1,5 +1,8 @@
 // src/pages/ProjectsTab.js
 import React, { useEffect, useState } from "react";
+import Card from "./profile-component/Card"; // Corrected import path
+import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; // Import constants
+import Switch from "./Switch"; // Import Switch component
 
 export default function ProjectsTab() {
   const [projects, setProjects] = useState([]);
@@ -73,42 +76,30 @@ export default function ProjectsTab() {
   );
 
   return (
-    <div style={{ 
-      background: '#F8F9F9', 
-      padding: '15px', 
-      borderRadius: '10px', 
-      display: "flex", 
-      flexDirection: "column", 
-      height: "100%", 
+    <Card style={{
+      height: "100%",
       overflowY: "auto"
     }}>
       {/* Title + Filter */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-        <h3 style={{ margin: 10, color: '#2C3E50' }}>Projects</h3>
-        <div style={{ display: "flex", gap: "5px" }}>
-          <button 
-            style={{ ...filterButtonStyle, background: filter === "deadline" ? "#3498DB" : "#E0E0E0", color: filter === "deadline" ? "#fff" : "#000" }}
-            onClick={() => setFilter("deadline")}
-          >
-            Closest Deadline
-          </button>
-          <button 
-            style={{ ...filterButtonStyle, background: filter === "notifications" ? "#3498DB" : "#E0E0E0", color: filter === "notifications" ? "#fff" : "#000" }}
-            onClick={() => setFilter("notifications")}
-          >
-            Most Notifications
-          </button>
-        </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
+        <h3 style={{ margin: 0, color: COLORS.text }}>Projects</h3>
+        <Switch
+          isOn={filter === "notifications"}
+          handleToggle={() => setFilter(filter === "deadline" ? "notifications" : "deadline")}
+          onColor={COLORS.primary}
+          offColor={COLORS.lightText}
+          labelText={filter === "deadline" ? "Sort by Deadline" : "Sort by Notifications"}
+        />
       </div>
 
       {/* Ongoing Section */}
       <div>
-        <div 
-          style={{ cursor: "pointer", fontWeight: "bold", marginBottom: "5px" }} 
+        <button 
+          style={{ ...BUTTON_STYLES.secondary, width: "100%", justifyContent: "flex-start", textAlign: "left", marginBottom: LAYOUT.smallGap, color: COLORS.text, background: COLORS.light, border: `1px solid ${COLORS.border}` }}
           onClick={() => setCollapseOngoing(!collapseOngoing)}
         >
           {collapseOngoing ? "▶ Ongoing Projects" : "▼ Ongoing Projects"}
-        </div>
+        </button>
         {!collapseOngoing && (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {ongoingProjects.map((p, idx) => <ProjectCard key={idx} project={p} completed={false} />)}
@@ -117,28 +108,19 @@ export default function ProjectsTab() {
       </div>
 
       {/* Completed Section */}
-      <div style={{ marginTop: "10px" }}>
-        <div 
-          style={{ cursor: "pointer", fontWeight: "bold", marginBottom: "5px" }} 
+      <div style={{ marginTop: LAYOUT.gap }}>
+        <button 
+          style={{ ...BUTTON_STYLES.secondary, width: "100%", justifyContent: "flex-start", textAlign: "left", marginBottom: LAYOUT.smallGap, color: COLORS.text, background: COLORS.light, border: `1px solid ${COLORS.border}` }}
           onClick={() => setCollapseCompleted(!collapseCompleted)}
         >
           {collapseCompleted ? "▶ Completed Projects" : "▼ Completed Projects"}
-        </div>
+        </button>
         {!collapseCompleted && (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {completedProjects.map((p, idx) => <ProjectCard key={idx} project={p} completed={true} />)}
           </ul>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
-
-// Button styles
-const filterButtonStyle = {
-  padding: "5px 10px",
-  border: "none",
-  borderRadius: "5px",
-  cursor: "pointer",
-  fontSize: "12px"
-};
