@@ -1,48 +1,60 @@
 // src/pages/Home.js
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import Dashboard from "../components/Dashboard";
-import GroupForum from "../components/GroupForum";
 import Contacts from "../components/Contacts"; 
 import UpcomingEvents from "../components/UpcomingEvents";
 import ProjectsTab from "../components/ProjectsTab";
+import GroupForum from "../components/GroupForum";
 
 export default function Home() {
+  const navigate = useNavigate();
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
   const leftWidth = leftCollapsed ? 40 : 300;
   const rightWidth = rightCollapsed ? 40 : 300;
 
+  // Redirect to customer profile page
+  const goToCustomerProfile = (customerId) => {
+    navigate(`/customer/${customerId}`);
+  };
+
   return (
     <div style={{ fontFamily: "Arial, sans-serif", position: "relative" }}>
       <TopBar />
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: `${leftWidth}px 1fr ${rightWidth}px`,
-        gridTemplateRows: "auto 1fr",
-        gap: "20px",
-        padding: "10px",
-        minHeight: "90vh",
-        transition: "grid-template-columns 0.3s ease"
-      }}>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `${leftWidth}px 1fr ${rightWidth}px`,
+          gridTemplateRows: "auto 1fr",
+          gap: "20px",
+          padding: "10px",
+          minHeight: "90vh",
+          transition: "grid-template-columns 0.3s ease"
+        }}
+      >
         {/* Left Panel */}
-        <div style={{
-          gridColumn: 1,
-          gridRow: "1 / span 2",
-          position: "relative",
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px"
-        }}>
+        <div
+          style={{
+            gridColumn: 1,
+            gridRow: "1 / span 2",
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px"
+          }}
+        >
           {!leftCollapsed && (
             <>
               <ProjectsTab />
-              <Contacts />
+              <Contacts onSelectCustomer={goToCustomerProfile} />
             </>
           )}
 
-          {/* Left Collapse Button - Shorter */}
+          {/* Left Collapse Button */}
           <div
             onClick={() => setLeftCollapsed(!leftCollapsed)}
             style={{
@@ -73,25 +85,25 @@ export default function Home() {
         </div>
 
         {/* Right Panel */}
-        <div style={{
-          gridColumn: 3,
-          gridRow: "1 / span 2",
-          position: "relative",
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px"
-        }}>
-          {/* Shift top panel down a bit when expanded */}
+        <div
+          style={{
+            gridColumn: 3,
+            gridRow: "1 / span 2",
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px"
+          }}
+        >
           <div style={{ marginTop: rightCollapsed ? 0 : 0, maxHeight: 300, overflowY: "auto" }}>
             {!rightCollapsed && <UpcomingEvents />}
           </div>
 
-          {/* Shift bottom panel further down to separate visually */}
           <div style={{ marginTop: rightCollapsed ? 0 : 20 }}>
             {!rightCollapsed && <GroupForum />}
           </div>
 
-          {/* Right Collapse Button - Shorter */}
+          {/* Right Collapse Button */}
           <div
             onClick={() => setRightCollapsed(!rightCollapsed)}
             style={{

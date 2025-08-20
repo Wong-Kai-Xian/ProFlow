@@ -1,8 +1,11 @@
+// src/components/Contacts.js
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AddOrganization from "./AddOrganization";
 import DelOrganization from "./DelOrganization";
 
 export default function Contacts() {
+  const navigate = useNavigate();
   const [view, setView] = useState("clients");
   const [showAddOrg, setShowAddOrg] = useState(false);
   const [showDelOrg, setShowDelOrg] = useState(false);
@@ -11,14 +14,16 @@ export default function Contacts() {
     {
       name: "Acme Corp",
       clients: [
-        { name: "John Smith", email: "john@example.com", whatsapp: "+60123456789" },
-        { name: "Sarah Johnson", email: "sarah@gmail.com", whatsapp: "+60198765432" },
+        { id: "johnsmith", name: "John Smith", email: "john@example.com", whatsapp: "+60123456789" },
+        { id: "sarahjohnson", name: "Sarah Johnson", email: "sarah@gmail.com", whatsapp: "+60198765432" },
       ],
       collapsed: false,
     },
     {
       name: "Beta Ltd",
-      clients: [{ name: "Mike Chen", email: "mike@gmail.com", whatsapp: "+60111222333" }],
+      clients: [
+        { id: "mikechen", name: "Mike Chen", email: "mike@gmail.com", whatsapp: "+60111222333" }
+      ],
       collapsed: true,
     },
   ]);
@@ -51,7 +56,8 @@ export default function Contacts() {
     const whatsapp = prompt("Client WhatsApp:");
     if (name && email && whatsapp) {
       const newOrgs = [...organizations];
-      newOrgs[orgIndex].clients.push({ name, email, whatsapp });
+      const id = name.toLowerCase().replace(/\s+/g, "");
+      newOrgs[orgIndex].clients.push({ id, name, email, whatsapp });
       setOrganizations(newOrgs);
     }
   };
@@ -75,6 +81,10 @@ export default function Contacts() {
     const email = prompt("Email:");
     const whatsapp = prompt("WhatsApp:");
     if (name && email && whatsapp) setTeam([...team, { name, email, whatsapp }]);
+  };
+
+  const goToCustomerProfile = (id) => {
+    navigate(`/customer/${id}`);
   };
 
   return (
@@ -137,28 +147,33 @@ export default function Contacts() {
                     {org.name} {org.collapsed ? "+" : "-"}
                   </span>
                   <div style={{ display: "flex", gap: "5px" }}>
-                  <button onClick={() => addClient(idx)} style={{ ...btnStyleSmall, background: "#3498DB" }}>+</button>
-                  <button onClick={() => removeClient(idx)} style={{ ...btnStyleSmall, background: "#E74C3C" }}>-</button>
+                    <button onClick={() => addClient(idx)} style={{ ...btnStyleSmall, background: "#3498DB" }}>+</button>
+                    <button onClick={() => removeClient(idx)} style={{ ...btnStyleSmall, background: "#E74C3C" }}>-</button>
                   </div>
                 </div>
                 {!org.collapsed && org.clients.map((c, i) => (
-                  <div key={i} style={{
-                    background: "#ffffff",
-                    padding: "10px",
-                    margin: "5px 0",
-                    borderRadius: "8px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
-                  }}>
+                  <div
+                    key={i}
+                    onClick={() => goToCustomerProfile(c.id)}
+                    style={{
+                      background: "#ffffff",
+                      padding: "10px",
+                      margin: "5px 0",
+                      borderRadius: "8px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                      cursor: "pointer"
+                    }}
+                  >
                     <div>
                       <strong>{c.name}</strong><br/>
                       <span style={{ fontSize: "12px", color: "#555" }}>{c.email}</span>
                     </div>
                     <div style={{ display: "flex", gap: "5px" }}>
-                      <button onClick={() => openWhatsApp(c.whatsapp)} style={btnWhatsApp}>WhatsApp</button>
-                      <button onClick={() => openEmail(c.email)} style={btnEmail}>Email</button>
+                      <button onClick={(e) => { e.stopPropagation(); openWhatsApp(c.whatsapp); }} style={btnWhatsApp}>WhatsApp</button>
+                      <button onClick={(e) => { e.stopPropagation(); openEmail(c.email); }} style={btnEmail}>Email</button>
                     </div>
                   </div>
                 ))}
@@ -188,68 +203,15 @@ export default function Contacts() {
       </ul>
 
       {/* Modals */}
-      {showAddOrg && (
-        <AddOrganization
-          onClose={() => setShowAddOrg(false)}
-          onSave={handleAddOrganization}
-        />
-      )}
-      {showDelOrg && (
-        <DelOrganization
-          organizations={organizations}
-          onDelete={handleDeleteOrganization}
-          onClose={() => setShowDelOrg(false)}
-        />
-      )}
+      {showAddOrg && <AddOrganization onClose={() => setShowAddOrg(false)} onSave={handleAddOrganization} />}
+      {showDelOrg && <DelOrganization organizations={organizations} onDelete={handleDeleteOrganization} onClose={() => setShowDelOrg(false)} />}
     </div>
   );
 }
 
 // Styles
-const btnStyle = {
-  padding: "5px 10px",
-  background: "#3498DB",
-  color: "#fff",
-  border: "none",
-  borderRadius: "5px",
-  cursor: "pointer",
-  fontSize: "12px",
-};
-
-const btnStyleSmall = {
-  padding: "2px 6px",
-  background: "#27AE60",
-  color: "#fff",
-  border: "none",
-  borderRadius: "5px",
-  cursor: "pointer",
-  fontSize: "10px",
-};
-
-const btnWhatsApp = {
-  padding: "5px 8px",
-  background: "#25D366",
-  color: "white",
-  border: "none",
-  borderRadius: "5px",
-  cursor: "pointer",
-  fontSize: "12px",
-};
-
-const btnEmail = {
-  padding: "5px 8px",
-  background: "#E74C3C",
-  color: "white",
-  border: "none",
-  borderRadius: "5px",
-  cursor: "pointer",
-  fontSize: "12px",
-};
-
-const switchBtnStyle = {
-  marginRight: "5px",
-  padding: "5px 10px",
-  border: "none",
-  borderRadius: "5px",
-  cursor: "pointer",
-};
+const btnStyle = { padding: "5px 10px", background: "#3498DB", color: "#fff", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: "12px" };
+const btnStyleSmall = { padding: "2px 6px", background: "#27AE60", color: "#fff", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: "10px" };
+const btnWhatsApp = { padding: "5px 8px", background: "#25D366", color: "white", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: "12px" };
+const btnEmail = { padding: "5px 8px", background: "#E74C3C", color: "white", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: "12px" };
+const switchBtnStyle = { marginRight: "5px", padding: "5px 10px", border: "none", borderRadius: "5px", cursor: "pointer" };
