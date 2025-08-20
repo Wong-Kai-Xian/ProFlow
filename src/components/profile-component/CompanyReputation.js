@@ -1,6 +1,6 @@
 // src/components/profile-component/CompanyReputation.js
 import React from "react";
-import { Card } from "../../pages/CustomerProfile";
+import Card from "./Card";
 
 export default function CompanyReputation({ data }) {
   return (

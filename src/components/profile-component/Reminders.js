@@ -1,81 +1,78 @@
-// src/components/profile-component/StatusPanel.js
-import React from "react";
+import React, { useState } from "react";
+import Card from "./Card";
 
-export default function StatusPanel({
-  stages,
-  currentStage,
-  setCurrentStage,
-  stageData,
-  setStageData,
-  renderStageContent, // new prop: function to render extra stage content
-}) {
+export default function Reminders({ reminders, onAddReminder }) {
+  const [newReminder, setNewReminder] = useState("");
+
+  const handleAdd = () => {
+    if (newReminder.trim()) {
+      onAddReminder(newReminder);
+      setNewReminder("");
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleAdd();
+    }
+  };
+
   return (
-    <div
-      style={{
-        padding: "16px",
-        borderRadius: "12px",
-        background: "#fff",
-        border: "1px solid #ddd",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-      }}
-    >
-      <h3>Status</h3>
-      <div style={{ display: "flex", justifyContent: "space-around", marginTop: "15px" }}>
-        {stages.map((stage) => (
-          <div
-            key={stage}
-            onClick={() => setCurrentStage(stage)}
-            style={{ cursor: "pointer", textAlign: "center", flex: 1 }}
-          >
-            <div
-              style={{
-                width: "35px",
-                height: "35px",
-                borderRadius: "50%",
-                margin: "0 auto",
-                background: currentStage === stage ? "#3498DB" : "#ccc",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                color: "#fff",
-                fontWeight: "bold",
-              }}
-            >
-              {stages.indexOf(stage) + 1}
-            </div>
-            <span style={{ fontSize: "13px", marginTop: "6px", display: "block" }}>{stage}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Active Stage Panel */}
-      <div
-        style={{
-          marginTop: "15px",
-          padding: "10px",
-          background: "#f9f9f9",
-          borderRadius: "6px",
-        }}
-      >
-        <h4 style={{ marginBottom: "8px" }}>{currentStage} Details</h4>
-
-        {/* Notes */}
-        <textarea
-          rows="3"
-          value={stageData[currentStage]?.notes || ""}
-          onChange={(e) =>
-            setStageData({
-              ...stageData,
-              [currentStage]: { ...stageData[currentStage], notes: e.target.value },
-            })
-          }
-          style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
-          placeholder={`Enter notes for ${currentStage}...`}
+    <Card style={{ minHeight: "180px" }}>
+      <h3>Reminders</h3>
+      <div style={{ 
+        display: "flex", 
+        gap: "8px", 
+        marginBottom: "10px" 
+      }}>
+        <input
+          type="text"
+          placeholder="New Reminder"
+          value={newReminder}
+          onChange={(e) => setNewReminder(e.target.value)}
+          onKeyPress={handleKeyPress}
+          style={{ 
+            flex: 1, 
+            padding: "6px", 
+            borderRadius: "6px", 
+            border: "1px solid #ccc",
+            fontSize: "14px"
+          }}
         />
-
-        {/* Extra Stage Content */}
-        {renderStageContent && renderStageContent(currentStage, stageData, setStageData)}
+        <button
+          onClick={handleAdd}
+          style={{ 
+            padding: "6px 12px", 
+            borderRadius: "6px", 
+            background: "#3498DB", 
+            color: "white", 
+            border: "none",
+            cursor: "pointer",
+            fontSize: "14px"
+          }}
+        >
+          Add
+        </button>
       </div>
-    </div>
+      <ul style={{ 
+        marginTop: "10px", 
+        maxHeight: "120px", 
+        overflowY: "auto",
+        listStyle: "none",
+        padding: 0
+      }}>
+        {reminders.map((reminder, i) => (
+          <li key={i} style={{ 
+            padding: "8px", 
+            background: "#f9f9f9", 
+            borderRadius: "6px", 
+            marginBottom: "6px",
+            fontSize: "14px"
+          }}>
+            {reminder}
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }

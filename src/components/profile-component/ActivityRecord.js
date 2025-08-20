@@ -1,11 +1,8 @@
 import React, { useState } from "react";
+import Card from "./Card";
+import { COLORS, BUTTON_STYLES, INPUT_STYLES, ACTIVITY_TYPES } from "./constants";
 
-export default function ActivityRecord() {
-  const [activities, setActivities] = useState([
-    { type: "Gmail", time: "2025-08-20 10:00", description: "Sent introduction email" },
-    { type: "Call", time: "2025-08-20 14:00", description: "Scheduled call with client" },
-  ]);
-
+export default function ActivityRecord({ activities, onAddActivity }) {
   const [newActivity, setNewActivity] = useState("");
   const [newType, setNewType] = useState("Gmail");
 
@@ -15,106 +12,133 @@ export default function ActivityRecord() {
     const now = new Date();
     const timestamp = now.toLocaleString();
 
-    setActivities([
-      ...activities,
-      { type: newType, time: timestamp, description: newActivity },
-    ]);
+    onAddActivity({
+      type: newType,
+      time: timestamp,
+      description: newActivity.trim()
+    });
 
     setNewActivity("");
   };
 
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleAddActivity();
+    }
+  };
+
   return (
-    <div
-      style={{
-        background: "#fff",
-        borderRadius: "12px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        padding: "20px",
-        minHeight: "350px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "16px",
-      }}
-    >
+    <Card style={{ minHeight: "300px" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3 style={{ margin: 0 }}>Activity Record</h3>
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center",
+        marginBottom: "15px"
+      }}>
+        <h3 style={{ margin: 0, color: COLORS.text }}>Activity Record</h3>
         <button
           onClick={handleAddActivity}
-          style={{
-            background: "#3498DB",
-            color: "#fff",
-            border: "none",
-            padding: "6px 14px",
-            borderRadius: "6px",
-            cursor: "pointer",
-          }}
+          style={BUTTON_STYLES.primary}
         >
           + Add
         </button>
       </div>
 
       {/* Input Row */}
-      <div style={{ display: "flex", gap: "10px" }}>
+      <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
         <select
           value={newType}
           onChange={(e) => setNewType(e.target.value)}
           style={{
-            padding: "6px 8px",
-            borderRadius: "6px",
-            border: "1px solid #ccc",
+            ...INPUT_STYLES.base,
             minWidth: "100px",
           }}
         >
-          <option value="Call">Call</option>
-          <option value="Gmail">Gmail</option>
-          <option value="Meeting">Meeting</option>
+          {ACTIVITY_TYPES.map(type => (
+            <option key={type} value={type}>{type}</option>
+          ))}
         </select>
         <input
           type="text"
           placeholder="Enter activity description"
           value={newActivity}
           onChange={(e) => setNewActivity(e.target.value)}
+          onKeyPress={handleKeyPress}
           style={{
-            flex: 1,
-            padding: "6px 10px",
-            borderRadius: "6px",
-            border: "1px solid #ccc",
+            ...INPUT_STYLES.base,
+            flex: 1
           }}
         />
       </div>
 
       {/* Activity List */}
-      <ul
-        style={{
-          marginTop: "10px",
+      {activities.length === 0 ? (
+        <p style={{ 
+          color: COLORS.lightText, 
+          fontSize: "14px", 
+          fontStyle: "italic",
+          textAlign: "center",
+          padding: "20px 0"
+        }}>
+          No activities recorded yet. Add one to get started!
+        </p>
+      ) : (
+        <ul style={{
+          listStyle: "none",
+          padding: 0,
+          margin: 0,
+          maxHeight: "200px",
           overflowY: "auto",
-          flex: 1,
           display: "flex",
           flexDirection: "column",
-          gap: "10px",
-        }}
-      >
-        {activities.map((a, i) => (
-          <li
-            key={i}
-            style={{
-              background: "#f9f9f9",
-              borderRadius: "8px",
-              padding: "12px 16px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "4px",
-              boxShadow: "inset 0 0 2px rgba(0,0,0,0.05)",
-            }}
-          >
-            <div style={{ fontWeight: "bold", fontSize: "14px" }}>
-              [{a.type}] {a.time}
-            </div>
-            <div style={{ fontSize: "13px", color: "#555" }}>{a.description}</div>
-          </li>
-        ))}
-      </ul>
-    </div>
+          gap: "8px"
+        }}>
+          {activities.map((activity, index) => (
+            <li
+              key={index}
+              style={{
+                background: "#f8f9fa",
+                borderRadius: "8px",
+                padding: "12px",
+                border: `1px solid ${COLORS.lightBorder}`,
+                transition: "all 0.2s ease"
+              }}
+            >
+              <div style={{ 
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: "4px"
+              }}>
+                <span style={{
+                  background: COLORS.primary,
+                  color: "white",
+                  padding: "2px 8px",
+                  borderRadius: "12px",
+                  fontSize: "11px",
+                  fontWeight: "600"
+                }}>
+                  {activity.type}
+                </span>
+                <span style={{ 
+                  fontSize: "12px", 
+                  color: COLORS.lightText 
+                }}>
+                  {activity.time}
+                </span>
+              </div>
+              <div style={{ 
+                fontSize: "14px", 
+                color: COLORS.text,
+                lineHeight: "1.4"
+              }}>
+                {activity.description}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
