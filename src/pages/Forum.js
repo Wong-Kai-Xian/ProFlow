@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import GroupForum from "../components/GroupForum";
 import UpcomingEvents from "../components/UpcomingEvents";
@@ -7,6 +8,59 @@ import Contacts from "../components/Contacts";
 import ProjectsTab from "../components/ProjectsTab";
 
 export default function Forum() {
+  const { id } = useParams();
+  const [forumData, setForumData] = useState(null);
+
+  useEffect(() => {
+    // Mock forum data - in real app this would come from backend based on ID
+    const forums = [
+      {
+        id: 1,
+        name: "Project Alpha Discussion",
+        picture: "https://via.placeholder.com/800x200/3498DB/FFFFFF?text=Alpha",
+        memberCount: 24,
+        description: "Main discussion forum for Project Alpha development and updates"
+      },
+      {
+        id: 2,
+        name: "Client Feedback Hub",
+        picture: "https://via.placeholder.com/800x200/E74C3C/FFFFFF?text=Feedback",
+        memberCount: 18,
+        description: "Centralized location for client feedback and responses"
+      },
+      {
+        id: 3,
+        name: "Team Updates",
+        picture: "https://via.placeholder.com/800x200/27AE60/FFFFFF?text=Updates",
+        memberCount: 32,
+        description: "Daily standups, announcements, and team coordination"
+      },
+      {
+        id: 4,
+        name: "Technical Support",
+        picture: "https://via.placeholder.com/800x200/F39C12/FFFFFF?text=Support",
+        memberCount: 15,
+        description: "Technical issues, bug reports, and troubleshooting"
+      },
+      {
+        id: 5,
+        name: "Design Reviews",
+        picture: "https://via.placeholder.com/800x200/9B59B6/FFFFFF?text=Design",
+        memberCount: 12,
+        description: "UI/UX discussions, design feedback, and creative reviews"
+      },
+      {
+        id: 6,
+        name: "Marketing Strategy",
+        picture: "https://via.placeholder.com/800x200/E67E22/FFFFFF?text=Marketing",
+        memberCount: 8,
+        description: "Marketing campaigns, social media, and promotional activities"
+      }
+    ];
+    
+    const forum = forums.find(f => f.id === parseInt(id)) || forums[0];
+    setForumData(forum);
+  }, [id]);
   return (
     <div style={{ fontFamily: 'Arial, sans-serif' }}>
       <TopBar />
@@ -26,7 +80,7 @@ export default function Forum() {
 
         {/* Middle Column - Tabbed Content */}
         <div style={{ gridColumn: 2, gridRow: "1 / span 2" }}>
-          <ForumTabs />
+          <ForumTabs forumData={forumData} />
         </div>
 
         {/* Top-right: Upcoming Reminders */}
