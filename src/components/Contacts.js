@@ -123,7 +123,10 @@ export default function Contacts() {
   return (
     <Card style={{
       height: "100%",
-      overflowY: "auto"
+      overflowY: "auto",
+      display: "flex",
+      flexDirection: "column",
+      minHeight: 0,
     }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
@@ -180,7 +183,7 @@ export default function Contacts() {
       </div>
 
       {/* List */}
-      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+      <ul style={{ listStyle: "none", padding: 0, margin: 0, maxHeight: "400px", overflowY: "auto", flexGrow: 1 }}> {/* Added maxHeight and overflowY */}
         {view === "clients"
           ? organizations.map((org, idx) => (
               <li key={idx} style={{ marginBottom: LAYOUT.smallGap }}>

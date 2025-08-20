@@ -66,7 +66,7 @@ export const CARD_STYLES = {
     borderRadius: "12px",
     background: COLORS.cardBackground,
     border: `1px solid ${COLORS.border}`,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.05)"
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
   },
   ai: {
     background: COLORS.aiBackground

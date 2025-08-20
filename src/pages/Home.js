@@ -14,6 +14,10 @@ export default function Home() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
+  // State for hover effects on collapse buttons
+  const [leftButtonHovered, setLeftButtonHovered] = useState(false);
+  const [rightButtonHovered, setRightButtonHovered] = useState(false);
+
   const leftWidth = leftCollapsed ? 40 : 300;
   const rightWidth = rightCollapsed ? 40 : 300;
 
@@ -58,23 +62,29 @@ export default function Home() {
           {/* Left Collapse Button */}
           <button
             onClick={() => setLeftCollapsed(!leftCollapsed)}
+            onMouseEnter={() => setLeftButtonHovered(true)}
+            onMouseLeave={() => setLeftButtonHovered(false)}
             style={{
-              ...BUTTON_STYLES.secondary, // Apply base secondary button styles
+              ...BUTTON_STYLES.flat,
               position: "absolute",
               top: "50%",
               right: -20,
               transform: "translateY(-50%)",
               width: 20,
               height: 80,
-              background: COLORS.secondary, // Use a darker background
-              color: COLORS.light, // Use lighter text color
+              background: leftButtonHovered ? "rgba(0,0,0,0.1)" : "rgba(0,0,0,0.05)",
+              color: leftButtonHovered ? COLORS.text : COLORS.lightText,
+              border: `1px solid ${COLORS.lightBorder}`,
               borderRadius: LAYOUT.smallBorderRadius + " 0 0 " + LAYOUT.smallBorderRadius,
-              padding: 0, // Remove default padding for tighter fit
-              fontSize: "18px", // Make arrows larger
+              padding: 0,
+              fontSize: "18px",
               fontWeight: "bold",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              boxShadow: "none",
+              cursor: "pointer",
+              transition: "all 0.2s ease-in-out",
             }}
           >
             {leftCollapsed ? ">" : "<"}
@@ -108,23 +118,29 @@ export default function Home() {
           {/* Right Collapse Button */}
           <button
             onClick={() => setRightCollapsed(!rightCollapsed)}
+            onMouseEnter={() => setRightButtonHovered(true)}
+            onMouseLeave={() => setRightButtonHovered(false)}
             style={{
-              ...BUTTON_STYLES.secondary, // Apply base secondary button styles
+              ...BUTTON_STYLES.flat,
               position: "absolute",
               top: "50%",
               left: -20,
               transform: "translateY(-50%)",
               width: 20,
               height: 80,
-              background: COLORS.secondary, // Use a darker background
-              color: COLORS.light, // Use lighter text color
+              background: rightButtonHovered ? "rgba(0,0,0,0.1)" : "rgba(0,0,0,0.05)",
+              color: rightButtonHovered ? COLORS.text : COLORS.lightText,
+              border: `1px solid ${COLORS.lightBorder}`,
               borderRadius: "0 " + LAYOUT.smallBorderRadius + " " + LAYOUT.smallBorderRadius + " 0",
-              padding: 0, // Remove default padding for tighter fit
-              fontSize: "18px", // Make arrows larger
+              padding: 0,
+              fontSize: "18px",
               fontWeight: "bold",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              boxShadow: "none",
+              cursor: "pointer",
+              transition: "all 0.2s ease-in-out",
             }}
           >
             {rightCollapsed ? "<" : ">"}

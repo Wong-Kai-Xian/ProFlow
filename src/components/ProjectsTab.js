@@ -78,7 +78,10 @@ export default function ProjectsTab() {
   return (
     <Card style={{
       height: "100%",
-      overflowY: "auto"
+      overflowY: "auto",
+      display: "flex",
+      flexDirection: "column",
+      minHeight: 0, // Crucial for flex items
     }}>
       {/* Title + Filter */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
@@ -101,7 +104,7 @@ export default function ProjectsTab() {
           {collapseOngoing ? "▶ Ongoing Projects" : "▼ Ongoing Projects"}
         </button>
         {!collapseOngoing && (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: "200px", overflowY: "auto", flexGrow: 1 }}>
             {ongoingProjects.map((p, idx) => <ProjectCard key={idx} project={p} completed={false} />)}
           </ul>
         )}
@@ -116,7 +119,7 @@ export default function ProjectsTab() {
           {collapseCompleted ? "▶ Completed Projects" : "▼ Completed Projects"}
         </button>
         {!collapseCompleted && (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: "200px", overflowY: "auto", flexGrow: 1 }}>
             {completedProjects.map((p, idx) => <ProjectCard key={idx} project={p} completed={true} />)}
           </ul>
         )}

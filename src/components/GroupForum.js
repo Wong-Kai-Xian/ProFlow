@@ -30,7 +30,10 @@ export default function GroupForum() {
   return (
     <Card style={{
       height: "100%",
-      overflowY: "auto"
+      overflowY: "auto",
+      display: "flex",
+      flexDirection: "column",
+      minHeight: 0,
     }}>
       {/* Header with top-right button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
@@ -50,7 +53,7 @@ export default function GroupForum() {
       </div>
 
       {/* Forum List */}
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <ul style={{ listStyle: 'none', padding: 0, maxHeight: "250px", overflowY: "auto", flexGrow: 1 }}>
         {sortForums().map((forum, index) => (
           <li key={index} style={{ 
             position: "relative",

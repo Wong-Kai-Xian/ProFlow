@@ -62,9 +62,15 @@ export default function UpcomingEvents() {
   };
 
   return (
-    <Card>
+    <Card style={{
+      height: "100%",
+      overflowY: "auto",
+      display: "flex",
+      flexDirection: "column",
+      minHeight: 0,
+    }}>
       <h3 style={{ marginTop: 0, color: COLORS.text }}>Upcoming Events</h3>
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <ul style={{ listStyle: 'none', padding: 0, maxHeight: "250px", overflowY: "auto", flexGrow: 1 }}> {/* Added maxHeight and overflowY and flexGrow */}
         {events.map((event, index) => (
           <li key={index} style={{ 
             background: COLORS.cardBackground, 
