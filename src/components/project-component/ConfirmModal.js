@@ -1,8 +1,5 @@
 import React from "react";
-
 export default function ConfirmModal({ visible, onConfirm, onCancel, message }) {
-  if (!visible) return null;
-
   return (
     <div
       style={{

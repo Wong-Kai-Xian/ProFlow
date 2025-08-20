@@ -3,7 +3,6 @@ import TopBar from "../components/TopBar";
 import GroupForum from "../components/GroupForum";
 import UpcomingEvents from "../components/UpcomingEvents";
 import ForumTabs from "../components/ForumTabs";
-import Projects from "../components/ProjectsTab";
 import Contacts from "../components/Contacts";
 import ProjectsTab from "../components/ProjectsTab";
 
