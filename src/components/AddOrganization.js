@@ -46,7 +46,9 @@ export default function AddOrganization({ onClose, onSave }) {
       <div
         style={{
           ...CARD_STYLES.base,
-          width: "400px",
+          width: "90%",
+          maxWidth: "400px",
+          boxSizing: "border-box", // Ensure proper box model
         }}
       >
         <h2 style={{ marginBottom: LAYOUT.smallGap, color: COLORS.text }}>Add Organization</h2>
@@ -58,7 +60,8 @@ export default function AddOrganization({ onClose, onSave }) {
           style={{
             ...INPUT_STYLES.base,
             width: "100%",
-            marginBottom: LAYOUT.smallGap
+            marginBottom: LAYOUT.smallGap,
+            boxSizing: "border-box", // Ensure proper box model
           }}
         />
         {suggestions.length > 0 && (
@@ -70,7 +73,8 @@ export default function AddOrganization({ onClose, onSave }) {
             marginBottom: LAYOUT.smallGap,
             background: COLORS.light,
             listStyle: "none",
-            padding: LAYOUT.smallGap
+            padding: LAYOUT.smallGap,
+            boxSizing: "border-box", // Ensure proper box model
           }}>
             {suggestions.map((s, i) => (
               <li

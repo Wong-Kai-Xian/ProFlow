@@ -5,12 +5,20 @@ import AddOrganization from "./AddOrganization";
 import DelOrganization from "./DelOrganization";
 import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; // Import constants
+import AddProfileModal from "./profile-component/AddProfileModal"; // Import the new AddProfileModal
+import DeleteProfileModal from "./profile-component/DeleteProfileModal"; // Import the new DeleteProfileModal
 
 export default function Contacts() {
   const navigate = useNavigate();
   const [view, setView] = useState("clients");
   const [showAddOrg, setShowAddOrg] = useState(false);
   const [showDelOrg, setShowDelOrg] = useState(false);
+  const [showAddClientModal, setShowAddClientModal] = useState(false); // New state for add client modal
+  const [currentOrgIndex, setCurrentOrgIndex] = useState(null); // To keep track of which org to add client to
+  const [showDeleteClientModal, setShowDeleteClientModal] = useState(false); // New state for delete client modal
+  const [clientToDelete, setClientToDelete] = useState(null); // To store client to delete
+  const [showAddTeamMemberModal, setShowAddTeamMemberModal] = useState(false); // New state for add team member modal
+  const [teamMemberToDelete, setTeamMemberToDelete] = useState(null); // To store team member to delete
 
   const [organizations, setOrganizations] = useState([
     {
@@ -52,37 +60,60 @@ export default function Contacts() {
     setOrganizations(organizations.filter(o => o.name !== orgName));
   };
 
-  const addClient = (orgIndex) => {
-    const name = prompt("Client Name:");
-    const email = prompt("Client Email:");
-    const whatsapp = prompt("Client WhatsApp:");
-    if (name && email && whatsapp) {
-      const newOrgs = [...organizations];
-      const id = name.toLowerCase().replace(/\s+/g, "");
-      newOrgs[orgIndex].clients.push({ id, name, email, whatsapp });
-      setOrganizations(newOrgs);
-    }
+  const handleAddClient = (client) => {
+    const newOrgs = [...organizations];
+    const id = client.name.toLowerCase().replace(/\s+/g, "");
+    newOrgs[currentOrgIndex].clients.push({ id, ...client });
+    setOrganizations(newOrgs);
+    setShowAddClientModal(false);
+    setCurrentOrgIndex(null);
   };
 
-  const removeClient = (orgIndex) => {
+  const handleRemoveClient = (orgIndex, clientIndex) => {
+    const newOrgs = [...organizations];
+    newOrgs[orgIndex].clients.splice(clientIndex, 1);
+    setOrganizations(newOrgs);
+    setShowDeleteClientModal(false);
+    setClientToDelete(null);
+  };
+
+  const handleAddTeamMember = (member) => {
+    setTeam([...team, member]);
+    setShowAddTeamMemberModal(false);
+  };
+
+  const handleDeleteTeamMember = (indexToRemove) => {
+    setTeam(team.filter((_, index) => index !== indexToRemove));
+    setShowDeleteClientModal(false); // Reuse delete modal for team members
+    setTeamMemberToDelete(null);
+  };
+
+  const addClient = (orgIndex) => {
+    setCurrentOrgIndex(orgIndex);
+    setShowAddClientModal(true);
+  };
+
+  const removeClient = (orgIndex, clientName) => {
+    // Find the client object to pass its name to the modal
     const org = organizations[orgIndex];
-    const profileNames = org.clients.map(c => c.name);
-    const toDelete = prompt(`Select profile to delete:\n${profileNames.join("\n")}`);
-    if (toDelete) {
-      const clientIndex = org.clients.findIndex(c => c.name === toDelete);
-      if (clientIndex > -1) {
-        const newOrgs = [...organizations];
-        newOrgs[orgIndex].clients.splice(clientIndex, 1);
-        setOrganizations(newOrgs);
-      }
+    const client = org.clients.find(c => c.name === clientName);
+    if (client) {
+      setCurrentOrgIndex(orgIndex);
+      setClientToDelete(client);
+      setShowDeleteClientModal(true);
     }
   };
 
   const addTeamMember = () => {
-    const name = prompt("Team Member Name:");
-    const email = prompt("Email:");
-    const whatsapp = prompt("WhatsApp:");
-    if (name && email && whatsapp) setTeam([...team, { name, email, whatsapp }]);
+    setShowAddTeamMemberModal(true);
+  };
+
+  const removeTeamMember = (teamMemberName) => {
+    const member = team.find(t => t.name === teamMemberName);
+    if (member) {
+      setTeamMemberToDelete(member);
+      setShowDeleteClientModal(true); // Reuse delete modal for team members
+    }
   };
 
   const goToCustomerProfile = (id) => {
@@ -111,12 +142,20 @@ export default function Contacts() {
       </div>
 
       {/* View Switch */}
-      <div style={{ display: "flex", gap: LAYOUT.smallGap, marginBottom: LAYOUT.smallGap }}>
+      <div style={{ display: "flex", gap: LAYOUT.smallGap, marginBottom: LAYOUT.smallGap, border: `1px solid ${COLORS.lightBorder}`, borderRadius: LAYOUT.borderRadius }}>
         <button
           onClick={() => setView("clients")}
           style={{ 
-            ...(view === "clients" ? BUTTON_STYLES.primary : BUTTON_STYLES.secondary),
-            flex: 1
+            ...BUTTON_STYLES.flat,
+            ...(view === "clients" ? { background: COLORS.primary, color: COLORS.buttonText, boxShadow: "0 2px 4px rgba(0,0,0,0.1)" } : { background: "transparent", color: COLORS.text }),
+            flex: 1,
+            padding: "8px 12px",
+            borderRadius: LAYOUT.borderRadius,
+            border: "none",
+            transition: "all 0.2s ease-in-out",
+            cursor: "pointer",
+            fontWeight: "bold",
+            fontSize: "14px"
           }}
         >
           Clients
@@ -124,8 +163,16 @@ export default function Contacts() {
         <button
           onClick={() => setView("team")}
           style={{
-            ...(view === "team" ? BUTTON_STYLES.primary : BUTTON_STYLES.secondary),
-            flex: 1
+            ...BUTTON_STYLES.flat,
+            ...(view === "team" ? { background: COLORS.primary, color: COLORS.buttonText, boxShadow: "0 2px 4px rgba(0,0,0,0.1)" } : { background: "transparent", color: COLORS.text }),
+            flex: 1,
+            padding: "8px 12px",
+            borderRadius: LAYOUT.borderRadius,
+            border: "none",
+            transition: "all 0.2s ease-in-out",
+            cursor: "pointer",
+            fontWeight: "bold",
+            fontSize: "14px"
           }}
         >
           Team
@@ -152,7 +199,7 @@ export default function Contacts() {
                   </span>
                   <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
                     <button onClick={() => addClient(idx)} style={{ ...BUTTON_STYLES.primary, padding: "2px 5px", fontSize: "9px" }}>+</button>
-                    <button onClick={() => removeClient(idx)} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "2px 5px", fontSize: "9px" }}>-</button>
+                    {/* Removed organization-level client removal button */}
                   </div>
                 </div>
                 {!org.collapsed && org.clients.map((c, i) => (
@@ -178,6 +225,7 @@ export default function Contacts() {
                     <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
                       <button onClick={(e) => { e.stopPropagation(); openWhatsApp(c.whatsapp); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "4px 8px", fontSize: "10px" }}>WhatsApp</button>
                       <button onClick={(e) => { e.stopPropagation(); openEmail(c.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", fontSize: "10px" }}>Email</button>
+                      <button onClick={(e) => { e.stopPropagation(); removeClient(idx, c.name); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "4px", fontSize: "10px" }}>Del</button>
                     </div>
                   </div>
                 ))}
@@ -199,8 +247,9 @@ export default function Contacts() {
                   <span style={{ fontSize: "12px", color: COLORS.lightText }}>{t.email}</span>
                 </div>
                 <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
-                  <button onClick={() => openWhatsApp(t.whatsapp)} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "4px 8px", fontSize: "10px" }}>WhatsApp</button>
-                  <button onClick={() => openEmail(t.email)} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", fontSize: "10px" }}>Email</button>
+                  <button onClick={(e) => { e.stopPropagation(); openWhatsApp(t.whatsapp); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "4px 8px", fontSize: "10px" }}>WhatsApp</button>
+                  <button onClick={(e) => { e.stopPropagation(); openEmail(t.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", fontSize: "10px" }}>Email</button>
+                  <button onClick={(e) => { e.stopPropagation(); removeTeamMember(t.name); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "4px", fontSize: "10px" }}>Del</button>
                 </div>
               </li>
             ))}
@@ -209,6 +258,51 @@ export default function Contacts() {
       {/* Modals */}
       {showAddOrg && <AddOrganization onClose={() => setShowAddOrg(false)} onSave={handleAddOrganization} />}
       {showDelOrg && <DelOrganization organizations={organizations} onDelete={handleDeleteOrganization} onClose={() => setShowDelOrg(false)} />}
+      {showAddClientModal && (
+        <AddProfileModal
+          isOpen={showAddClientModal}
+          onClose={() => setShowAddClientModal(false)}
+          onAddContact={handleAddClient}
+        />
+      )}
+      {showAddTeamMemberModal && (
+        <AddProfileModal
+          isOpen={showAddTeamMemberModal}
+          onClose={() => setShowAddTeamMemberModal(false)}
+          onAddContact={handleAddTeamMember}
+        />
+      )}
+      {showDeleteClientModal && (clientToDelete || teamMemberToDelete) && (
+        <DeleteProfileModal
+          isOpen={showDeleteClientModal}
+          onClose={() => {
+            setShowDeleteClientModal(false);
+            setClientToDelete(null);
+            setTeamMemberToDelete(null);
+          }}
+          onDeleteConfirm={() => {
+            if (clientToDelete) { 
+              const orgIndex = organizations.findIndex(org => 
+                org.clients.some(client => client.id === clientToDelete.id)
+              );
+              if (orgIndex !== -1) {
+                const clientIndex = organizations[orgIndex].clients.findIndex(client => 
+                  client.id === clientToDelete.id
+                );
+                if (clientIndex !== -1) {
+                  handleRemoveClient(orgIndex, clientIndex);
+                }
+              }
+            } else if (teamMemberToDelete) {
+              const memberIndex = team.findIndex(member => member.name === teamMemberToDelete.name);
+              if (memberIndex !== -1) {
+                handleDeleteTeamMember(memberIndex);
+              }
+            }
+          }}
+          contactName={clientToDelete?.name || teamMemberToDelete?.name || ""}
+        />
+      )}
     </Card>
   );
 }

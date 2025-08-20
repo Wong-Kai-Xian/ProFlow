@@ -1,33 +1,30 @@
 import React, { useState } from "react";
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES, CARD_STYLES } from "./profile-component/constants";
+import DeleteConfirmationModal from "./profile-component/DeleteConfirmationModal"; // Import the new modal
 
 export default function DelOrganization({ organizations, onDelete, onClose }) {
   const [selectedOrg, setSelectedOrg] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
+  const [showConfirmModal, setShowConfirmModal] = useState(false); // New state for confirmation modal
 
-  const handleSearch = (value) => {
-    setSelectedOrg(value);
-    if (value.length > 0) {
-      const filtered = organizations
-        .map(org => org.name)
-        .filter(name => name.toLowerCase().includes(value.toLowerCase()));
-      setSuggestions(filtered);
-    } else {
-      setSuggestions([]);
-    }
-  };
+  // availableOrgs is already derived from organizations prop
 
-  const handleSelect = (name) => {
-    setSelectedOrg(name);
-    setSuggestions([]);
+  const handleSelect = (e) => {
+    setSelectedOrg(e.target.value);
   };
 
   const handleDelete = () => {
     if (selectedOrg) {
-      if (window.confirm(`Are you sure you want to delete "${selectedOrg}" and all its profiles?`)) {
-        onDelete(selectedOrg);
-      }
+      setShowConfirmModal(true); // Show confirmation modal
+    } else {
+      alert("Please select an organization to delete."); // Basic validation
     }
+  };
+
+  const handleConfirmDelete = () => {
+    if (selectedOrg) {
+      onDelete(selectedOrg);
+    }
+    setShowConfirmModal(false);
     onClose();
   };
 
@@ -46,43 +43,36 @@ export default function DelOrganization({ organizations, onDelete, onClose }) {
       <div
         style={{
           ...CARD_STYLES.base,
-          width: "400px",
+          width: "90%",
+          maxWidth: "400px",
+          boxSizing: "border-box", // Ensure proper box model
         }}
       >
         <h2 style={{ marginBottom: LAYOUT.smallGap, color: COLORS.text }}>Delete Organization</h2>
-        <input
-          type="text"
+        <select
           value={selectedOrg}
-          onChange={(e) => handleSearch(e.target.value)}
-          placeholder="Select organization to delete"
+          onChange={handleSelect}
           style={{
             ...INPUT_STYLES.base,
             width: "100%",
-            marginBottom: LAYOUT.smallGap
-          }}
-        />
-        {suggestions.length > 0 && (
-          <ul style={{
-            maxHeight: "150px",
-            overflowY: "auto",
-            border: `1px solid ${COLORS.border}`,
-            borderRadius: LAYOUT.smallBorderRadius,
             marginBottom: LAYOUT.smallGap,
-            background: COLORS.light,
-            listStyle: "none",
-            padding: LAYOUT.smallGap
-          }}>
-            {suggestions.map((s, i) => (
-              <li
-                key={i}
-                onClick={() => handleSelect(s)}
-                style={{ padding: "5px", cursor: "pointer", color: COLORS.text }}
-              >
-                {s}
-              </li>
-            ))}
-          </ul>
-        )}
+            boxSizing: "border-box",
+            height: "38px", // Standard height for input fields
+            appearance: "none", // Remove default select arrow
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='${encodeURIComponent(COLORS.text)}'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")`, // Custom arrow
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "right 12px center",
+            paddingRight: "30px", // Make space for arrow
+          }}
+        >
+          <option value="">-- Select an organization --</option>
+          {organizations.map((org, index) => (
+            <option key={index} value={org.name}>
+              {org.name}
+            </option>
+          ))}
+        </select>
+
         <div style={{ display: "flex", justifyContent: "flex-end", gap: LAYOUT.smallGap }}>
           <button onClick={onClose} style={{ ...BUTTON_STYLES.secondary }}>
             Cancel
@@ -95,6 +85,15 @@ export default function DelOrganization({ organizations, onDelete, onClose }) {
           </button>
         </div>
       </div>
+      {showConfirmModal && (
+        <DeleteConfirmationModal
+          isOpen={showConfirmModal}
+          onClose={() => setShowConfirmModal(false)}
+          onDeleteConfirm={handleConfirmDelete}
+          itemToDelete={selectedOrg}
+          message={`Are you sure you want to delete the organization "${selectedOrg}" and all its associated clients? This action cannot be undone.`}
+        />
+      )}
     </div>
   );
 }
