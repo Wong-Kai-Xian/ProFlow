@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import LocationModal from "./LocationModal";
+import MeetingModal from "./MeetingModal";
 
 export default function Discussion() {
   const [postText, setPostText] = useState('');
@@ -7,6 +9,10 @@ export default function Discussion() {
   const [commentInputs, setCommentInputs] = useState({});
   const [showCommentInput, setShowCommentInput] = useState({});
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedMeeting, setSelectedMeeting] = useState(null);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showMeetingModal, setShowMeetingModal] = useState(false);
 
   useEffect(() => {
     // Mock posts data
@@ -69,6 +75,8 @@ export default function Discussion() {
       setPosts([newPost, ...posts]);
       setPostText('');
       setSelectedFiles([]);
+      setSelectedLocation('');
+      setSelectedMeeting(null);
     }
   };
 
@@ -161,6 +169,22 @@ export default function Discussion() {
       setSelectedFiles(prev => [...prev, ...files]);
     };
     input.click();
+  };
+
+  const handleLocationSave = (location) => {
+    setSelectedLocation(location);
+  };
+
+  const handleMeetingSave = (meetingData) => {
+    setSelectedMeeting(meetingData);
+  };
+
+  const clearLocation = () => {
+    setSelectedLocation('');
+  };
+
+  const clearMeeting = () => {
+    setSelectedMeeting(null);
   };
 
   const getPostTypeLabel = (type) => {
@@ -257,6 +281,75 @@ export default function Discussion() {
             </div>
           </div>
         )}
+
+        {/* Selected Location Display */}
+        {selectedLocation && (
+          <div style={{
+            marginTop: '10px',
+            padding: '10px',
+            backgroundColor: '#E8F8F5',
+            borderRadius: '5px',
+            border: '1px solid #27AE60',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ fontSize: '12px', color: '#27AE60' }}>
+              📍 Location: {selectedLocation}
+            </div>
+            <button
+              onClick={clearLocation}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#27AE60',
+                cursor: 'pointer',
+                fontSize: '16px',
+                padding: '2px'
+              }}
+              title="Remove location"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Selected Meeting Display */}
+        {selectedMeeting && (
+          <div style={{
+            marginTop: '10px',
+            padding: '10px',
+            backgroundColor: '#FEF9E7',
+            borderRadius: '5px',
+            border: '1px solid #F39C12',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ fontSize: '12px', color: '#F39C12' }}>
+              📅 Meeting: {selectedMeeting.type} on {selectedMeeting.fullDateTime} ({selectedMeeting.duration})
+              {selectedMeeting.description && (
+                <div style={{ marginTop: '4px', fontSize: '11px', color: '#D68910' }}>
+                  {selectedMeeting.description}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={clearMeeting}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#F39C12',
+                cursor: 'pointer',
+                fontSize: '16px',
+                padding: '2px'
+              }}
+              title="Remove meeting"
+            >
+              ×
+            </button>
+          </div>
+        )}
         
         <div style={{ 
           display: 'flex', 
@@ -282,7 +375,7 @@ export default function Discussion() {
               📎 Attachment
             </button>
             <button 
-              onClick={() => console.log("Schedule meeting clicked")}
+              onClick={() => setShowMeetingModal(true)}
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
@@ -290,7 +383,7 @@ export default function Discussion() {
               📅 Schedule Meeting
             </button>
             <button 
-              onClick={() => console.log("Share location clicked")}
+              onClick={() => setShowLocationModal(true)}
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
@@ -495,6 +588,20 @@ export default function Discussion() {
           );
         })}
       </div>
+
+      {/* Location Modal */}
+      <LocationModal
+        isOpen={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
+        onSave={handleLocationSave}
+      />
+
+      {/* Meeting Modal */}
+      <MeetingModal
+        isOpen={showMeetingModal}
+        onClose={() => setShowMeetingModal(false)}
+        onSave={handleMeetingSave}
+      />
     </div>
   );
 }
