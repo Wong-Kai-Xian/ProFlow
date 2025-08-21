@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "./profile-component/constants";
 
 // Get initials from forum name
 const getInitials = (name) =>
@@ -17,21 +18,22 @@ const stringToColor = (str) => {
   return "#" + "00000".substring(0, 6 - c.length) + c;
 };
 
-export default function ForumList({ onForumSelect }) {
+export default function ForumList({ onForumSelect, onEditForum, customForums }) {
   const [forums, setForums] = useState([]);
   const [sortBy, setSortBy] = useState("alphabetic");
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     // Mock forum data - in real app this would come from backend
-    setForums([
+    const defaultForums = [
       {
         id: 1,
         name: "Project Alpha Discussion",
         memberCount: 24,
         description: "Main discussion forum for Project Alpha development and updates",
         notifications: 5,
-        lastActivity: "2025-01-20 14:30"
+        lastActivity: "2025-01-20 14:30",
+        members: ["Alice", "Bob", "Charlie", "David"]
       },
       {
         id: 2,
@@ -39,7 +41,8 @@ export default function ForumList({ onForumSelect }) {
         memberCount: 18,
         description: "Centralized location for client feedback and responses",
         notifications: 2,
-        lastActivity: "2025-01-20 10:15"
+        lastActivity: "2025-01-20 10:15",
+        members: ["Eve", "Frank", "Grace"]
       },
       {
         id: 3,
@@ -47,7 +50,8 @@ export default function ForumList({ onForumSelect }) {
         memberCount: 32,
         description: "Daily standups, announcements, and team coordination",
         notifications: 8,
-        lastActivity: "2025-01-20 16:45"
+        lastActivity: "2025-01-20 16:45",
+        members: ["Henry", "Iris", "Jack", "Kate", "Liam"]
       },
       {
         id: 4,
@@ -55,7 +59,8 @@ export default function ForumList({ onForumSelect }) {
         memberCount: 15,
         description: "Technical issues, bug reports, and troubleshooting",
         notifications: 0,
-        lastActivity: "2025-01-19 09:20"
+        lastActivity: "2025-01-19 09:20",
+        members: ["Mia", "Noah", "Olivia"]
       },
       {
         id: 5,
@@ -63,7 +68,8 @@ export default function ForumList({ onForumSelect }) {
         memberCount: 12,
         description: "UI/UX discussions, design feedback, and creative reviews",
         notifications: 3,
-        lastActivity: "2025-01-20 11:30"
+        lastActivity: "2025-01-20 11:30",
+        members: ["Paul", "Quinn", "Rose"]
       },
       {
         id: 6,
@@ -71,10 +77,15 @@ export default function ForumList({ onForumSelect }) {
         memberCount: 8,
         description: "Marketing campaigns, social media, and promotional activities",
         notifications: 1,
-        lastActivity: "2025-01-18 15:00"
+        lastActivity: "2025-01-18 15:00",
+        members: ["Sam", "Tina"]
       }
-    ]);
-  }, []);
+    ];
+
+    // Combine default forums with custom forums
+    const allForums = [...defaultForums, ...(customForums || [])];
+    setForums(allForums);
+  }, [customForums]);
 
   // Filter and sort forums
   const getFilteredAndSortedForums = () => {
@@ -105,33 +116,24 @@ export default function ForumList({ onForumSelect }) {
   const filteredAndSortedForums = getFilteredAndSortedForums();
 
   return (
-    <div style={{ 
-      background: '#F8F9F9', 
-      padding: '15px', 
-      borderRadius: '10px', 
-      display: "flex", 
-      flexDirection: "column", 
-      height: "100%", 
-      overflowY: "auto"
-    }}>
-      {/* Title + Controls */}
+    <div>
+      {/* Header */}
       <div style={{ 
         display: "flex", 
         justifyContent: "space-between", 
         alignItems: "center", 
-        marginBottom: "15px",
-        flexWrap: "wrap",
-        gap: "10px"
+        marginBottom: "30px"
       }}>
-        <h3 style={{ margin: 0, color: '#2C3E50' }}>Your Forums</h3>
         
         {/* Sort Buttons */}
-        <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "8px" }}>
           <button 
             style={{ 
-              ...filterButtonStyle, 
-              background: sortBy === "alphabetic" ? "#3498DB" : "#E0E0E0", 
-              color: sortBy === "alphabetic" ? "#fff" : "#000" 
+              ...BUTTON_STYLES.secondary,
+              backgroundColor: sortBy === "alphabetic" ? COLORS.primary : COLORS.light,
+              color: sortBy === "alphabetic" ? COLORS.white : COLORS.dark,
+              padding: "8px 16px",
+              fontSize: "14px"
             }}
             onClick={() => setSortBy("alphabetic")}
           >
@@ -139,9 +141,11 @@ export default function ForumList({ onForumSelect }) {
           </button>
           <button 
             style={{ 
-              ...filterButtonStyle, 
-              background: sortBy === "notifications" ? "#3498DB" : "#E0E0E0", 
-              color: sortBy === "notifications" ? "#fff" : "#000" 
+              ...BUTTON_STYLES.secondary,
+              backgroundColor: sortBy === "notifications" ? COLORS.primary : COLORS.light,
+              color: sortBy === "notifications" ? COLORS.white : COLORS.dark,
+              padding: "8px 16px",
+              fontSize: "14px"
             }}
             onClick={() => setSortBy("notifications")}
           >
@@ -149,9 +153,11 @@ export default function ForumList({ onForumSelect }) {
           </button>
           <button 
             style={{ 
-              ...filterButtonStyle, 
-              background: sortBy === "recent" ? "#3498DB" : "#E0E0E0", 
-              color: sortBy === "recent" ? "#fff" : "#000" 
+              ...BUTTON_STYLES.secondary,
+              backgroundColor: sortBy === "recent" ? COLORS.primary : COLORS.light,
+              color: sortBy === "recent" ? COLORS.white : COLORS.dark,
+              padding: "8px 16px",
+              fontSize: "14px"
             }}
             onClick={() => setSortBy("recent")}
           >
@@ -161,139 +167,174 @@ export default function ForumList({ onForumSelect }) {
       </div>
 
       {/* Search Bar */}
-      <div style={{ marginBottom: "20px" }}>
+      <div style={{ marginBottom: "30px" }}>
         <input
           type="text"
           placeholder="Search forums..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{
+            ...INPUT_STYLES.base,
             width: "100%",
-            padding: "10px 15px",
+            maxWidth: "400px",
+            padding: "12px 16px",
+            fontSize: "16px",
             borderRadius: "8px",
-            border: "1px solid #BDC3C7",
-            fontSize: "14px",
-            outline: "none",
-            boxSizing: "border-box"
+            border: `2px solid ${COLORS.border}`,
+            transition: "border-color 0.3s ease"
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = COLORS.primary;
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = COLORS.border;
           }}
         />
       </div>
 
-      {/* Forums Grid - 4 per row */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-        gap: "15px",
-        flex: 1
-      }}>
-        {filteredAndSortedForums.length === 0 ? (
-          <div style={{
-            gridColumn: "1 / -1",
-            textAlign: "center",
-            color: "#7F8C8D",
-            fontSize: "14px",
-            fontStyle: "italic",
-            padding: "40px 20px"
-          }}>
-            {searchTerm ? `No forums found matching "${searchTerm}"` : "No forums available"}
-          </div>
-        ) : (
-          filteredAndSortedForums.map((forum) => {
-          const bgColor = stringToColor(forum.name);
-          return (
-            <div
-              key={forum.id}
-              onClick={() => handleForumClick(forum)}
-              style={{
-                position: "relative",
-                backgroundColor: "white",
-                borderRadius: "8px",
-                padding: "15px",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                cursor: "pointer",
-                transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                display: "flex",
-                flexDirection: "column",
-                minHeight: "140px"
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
-              }}
-            >
-              {/* Notification Badge */}
-              {forum.notifications > 0 && (
+      {/* Forums Grid */}
+      {filteredAndSortedForums.length === 0 ? (
+        <div style={{
+          textAlign: "center",
+          padding: "60px 20px",
+          color: COLORS.lightText,
+          fontSize: "18px"
+        }}>
+          {searchTerm ? `No forums found matching "${searchTerm}"` : "No forums available"}
+        </div>
+      ) : (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+          gap: "24px",
+          marginBottom: "30px"
+        }}>
+          {filteredAndSortedForums.map((forum) => {
+            const bgColor = stringToColor(forum.name);
+            return (
+              <div
+                key={forum.id}
+                onClick={() => handleForumClick(forum)}
+                style={{
+                  position: "relative",
+                  backgroundColor: COLORS.white,
+                  borderRadius: "12px",
+                  padding: "24px",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+                  border: `1px solid ${COLORS.border}`,
+                  cursor: "pointer",
+                  transition: "all 0.3s ease"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 8px 25px rgba(0, 0, 0, 0.12)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.08)";
+                }}
+              >
+                {/* Edit Button */}
+                {onEditForum && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditForum(forum);
+                    }}
+                    style={{
+                      position: "absolute",
+                      top: "16px",
+                      right: "16px",
+                      background: COLORS.light,
+                      border: "none",
+                      borderRadius: "6px",
+                      padding: "6px 8px",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      color: COLORS.dark,
+                      transition: "all 0.2s ease",
+                      zIndex: 1
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.backgroundColor = COLORS.primary;
+                      e.target.style.color = COLORS.white;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.backgroundColor = COLORS.light;
+                      e.target.style.color = COLORS.dark;
+                    }}
+                  >
+                    Edit
+                  </button>
+                )}
+                {/* Notification Badge */}
+                {forum.notifications > 0 && (
+                  <div style={{
+                    position: "absolute",
+                    top: "16px",
+                    right: onEditForum ? "60px" : "16px",
+                    fontSize: "12px",
+                    color: COLORS.white,
+                    background: COLORS.danger,
+                    borderRadius: "50%",
+                    width: "24px",
+                    height: "24px",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    fontWeight: "700"
+                  }}>
+                    {forum.notifications}
+                  </div>
+                )}
+
+                {/* Forum Icon */}
                 <div style={{
-                  position: "absolute",
-                  top: "10px",
-                  right: "10px",
-                  fontSize: "12px",
-                  color: "white",
-                  background: "#E74C3C",
-                  borderRadius: "50%",
-                  width: "20px",
-                  height: "20px",
+                  width: "80px",
+                  height: "80px",
+                  borderRadius: "12px",
+                  backgroundColor: bgColor,
                   display: "flex",
-                  justifyContent: "center",
                   alignItems: "center",
-                  fontWeight: "bold"
+                  justifyContent: "center",
+                  fontSize: "32px",
+                  fontWeight: "700",
+                  color: COLORS.white,
+                  marginBottom: "20px"
                 }}>
-                  {forum.notifications}
+                  {getInitials(forum.name)}
                 </div>
-              )}
 
-              {/* Forum Icon */}
-              <div style={{
-                width: "50px",
-                height: "50px",
-                borderRadius: "8px",
-                backgroundColor: bgColor,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "18px",
-                fontWeight: "bold",
-                color: "#fff",
-                marginBottom: "10px"
-              }}>
-                {getInitials(forum.name)}
-              </div>
-
-              {/* Forum Content */}
-              <div style={{ flex: 1 }}>
-                {/* Forum Name */}
-                <h4 style={{
+                {/* Forum Content */}
+                <h3 style={{
                   margin: "0 0 8px 0",
-                  color: "#2C3E50",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  lineHeight: "1.2"
+                  color: COLORS.dark,
+                  fontSize: "20px",
+                  fontWeight: "700",
+                  lineHeight: "1.3"
                 }}>
                   {forum.name}
-                </h4>
+                </h3>
 
                 {/* Member Count */}
                 <div style={{
                   display: "flex",
                   alignItems: "center",
-                  color: "#7F8C8D",
-                  fontSize: "12px",
-                  marginBottom: "6px"
+                  color: COLORS.lightText,
+                  fontSize: "14px",
+                  marginBottom: "12px",
+                  fontWeight: "600"
                 }}>
-                  <span style={{ marginRight: "4px" }}>👥</span>
+                  <span style={{ marginRight: "6px", fontSize: "16px" }}>👥</span>
                   <span>{forum.memberCount} members</span>
                 </div>
 
                 {/* Description */}
                 <p style={{
-                  color: "#95A5A6",
-                  fontSize: "11px",
-                  margin: "0 0 8px 0",
-                  lineHeight: "1.3",
+                  color: COLORS.lightText,
+                  fontSize: "15px",
+                  margin: "0 0 16px 0",
+                  lineHeight: "1.4",
                   display: "-webkit-box",
                   WebkitLineClamp: 2,
                   WebkitBoxOrient: "vertical",
@@ -304,27 +345,20 @@ export default function ForumList({ onForumSelect }) {
 
                 {/* Last Activity */}
                 <div style={{
-                  fontSize: "10px",
-                  color: "#BDC3C7",
-                  marginTop: "auto"
+                  fontSize: "13px",
+                  color: COLORS.lightText,
+                  padding: "8px 12px",
+                  backgroundColor: COLORS.light,
+                  borderRadius: "6px",
+                  fontWeight: "500"
                 }}>
                   Last activity: {new Date(forum.lastActivity).toLocaleDateString()}
                 </div>
               </div>
-            </div>
-          );
-        })
-        )}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
-
-// Button styles (matching ProjectsTab)
-const filterButtonStyle = {
-  padding: "5px 10px",
-  border: "none",
-  borderRadius: "5px",
-  cursor: "pointer",
-  fontSize: "12px"
-};

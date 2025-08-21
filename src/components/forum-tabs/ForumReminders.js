@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { COLORS } from '../profile-component/constants';
 
 export default function ForumReminders() {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -79,15 +80,15 @@ export default function ForumReminders() {
       }} onClick={() => setIsExpanded(!isExpanded)}>
         <h3 style={{ 
           margin: 0, 
-          color: '#2C3E50', 
-          fontSize: '16px',
-          fontWeight: '600'
+          color: COLORS.dark, 
+          fontSize: '18px',
+          fontWeight: '700'
         }}>
           Reminders
         </h3>
         <span style={{ 
-          color: '#7F8C8D', 
-          fontSize: '12px',
+          color: COLORS.lightText, 
+          fontSize: '14px',
           transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.3s ease'
         }}>
@@ -99,8 +100,8 @@ export default function ForumReminders() {
         <div>
           {reminders.length === 0 ? (
             <p style={{ 
-              fontSize: '12px', 
-              color: '#7F8C8D', 
+              fontSize: '15px', 
+              color: COLORS.lightText, 
               textAlign: 'center',
               fontStyle: 'italic',
               margin: '10px 0'
@@ -120,23 +121,23 @@ export default function ForumReminders() {
                 borderLeft: `3px solid ${getPriorityColor(reminder.priority)}`
               }}>
                 <span style={{ 
-                  fontSize: '14px', 
-                  marginRight: '8px' 
+                  fontSize: '16px', 
+                  marginRight: '10px' 
                 }}>
                   {getTypeIcon(reminder.type)}
                 </span>
                 <div style={{ flex: 1 }}>
                   <div style={{ 
-                    fontSize: '12px', 
+                    fontSize: '15px', 
                     fontWeight: '600', 
-                    color: '#2C3E50',
-                    marginBottom: '2px'
+                    color: COLORS.dark,
+                    marginBottom: '3px'
                   }}>
                     {reminder.title}
                   </div>
                   <div style={{ 
-                    fontSize: '11px', 
-                    color: '#7F8C8D' 
+                    fontSize: '13px', 
+                    color: COLORS.lightText 
                   }}>
                     {formatDate(reminder.date)} at {reminder.time}
                   </div>

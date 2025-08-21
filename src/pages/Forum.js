@@ -8,6 +8,8 @@ import TrendingPosts from "../components/forum-tabs/TrendingPosts";
 import ActiveUsers from "../components/forum-tabs/ActiveUsers";
 import FloatingCreateButton from "../components/forum-tabs/FloatingCreateButton";
 import CreatePostModal from "../components/forum-tabs/CreatePostModal";
+import ManageMembersModal from "../components/forum-component/ManageMembersModal";
+import { COLORS, BUTTON_STYLES } from "../components/profile-component/constants";
 
 export default function Forum() {
   const { id } = useParams();
@@ -15,6 +17,8 @@ export default function Forum() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [posts, setPosts] = useState([]);
   const [projectDetails, setProjectDetails] = useState(null);
+  const [showMemberModal, setShowMemberModal] = useState(false);
+  const [forumMembers, setForumMembers] = useState([]);
 
   useEffect(() => {
     // Mock forum data - in real app this would come from backend based on ID
@@ -76,6 +80,12 @@ export default function Forum() {
       },
       description: forum.description
     });
+
+    // Mock forum members
+    setForumMembers([
+      "Alice Johnson", "Bob Smith", "Charlie Brown", "Diana Prince", 
+      "Edward Norton", "Fiona Green", "George Miller", "Helen Clark"
+    ]);
   }, [id]);
 
   const handlePostSubmit = (newPost) => {
@@ -97,18 +107,28 @@ export default function Forum() {
       }, 2000);
     }
   };
+
+  const handleAddMember = (newMember) => {
+    if (newMember.trim() && !forumMembers.includes(newMember.trim())) {
+      setForumMembers([...forumMembers, newMember.trim()]);
+    }
+  };
+
+  const handleRemoveMember = (memberToRemove) => {
+    setForumMembers(forumMembers.filter(member => member !== memberToRemove));
+  };
   return (
     <div style={{ fontFamily: 'Arial, sans-serif' }}>
       <TopBar />
       <div style={{
         display: "grid",
-        gridTemplateColumns: "280px 1fr 200px",
+        gridTemplateColumns: "280px 1fr 280px",
         gridTemplateRows: "auto 1fr",
         gap: "20px",
         padding: "10px",
         minHeight: "90vh"
       }}>
-        {/* Left column: Project Details + Reminders + Trending Posts */}
+        {/* Left column: Project Details + Reminders */}
         <div style={{ gridColumn: 1, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
           {projectDetails && (
             <ProjectDetails 
@@ -117,17 +137,57 @@ export default function Forum() {
             />
           )}
           <ForumReminders />
-          <TrendingPosts onPostClick={handleTrendingPostClick} />
         </div>
 
         {/* Middle Column - Tabbed Content (Posts Focus) */}
         <div style={{ gridColumn: 2, gridRow: "1 / span 2" }}>
+          {/* Forum Header with Manage Members Button */}
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "20px",
+            padding: "16px 20px",
+            backgroundColor: COLORS.white,
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)"
+          }}>
+            <div>
+              <h2 style={{ 
+                margin: "0 0 4px 0", 
+                color: COLORS.dark, 
+                fontSize: "20px", 
+                fontWeight: "700" 
+              }}>
+                {forumData?.name}
+              </h2>
+              <p style={{ 
+                margin: 0, 
+                color: COLORS.lightText, 
+                fontSize: "14px" 
+              }}>
+                {forumMembers.length} members
+              </p>
+            </div>
+            <button
+              onClick={() => setShowMemberModal(true)}
+              style={{
+                ...BUTTON_STYLES.primary,
+                padding: "10px 16px",
+                fontSize: "14px",
+                fontWeight: "600"
+              }}
+            >
+              Manage Members
+            </button>
+          </div>
           <ForumTabs forumData={forumData} />
         </div>
 
-        {/* Right column: Online Members - Bottom Only */}
-        <div style={{ gridColumn: 3, gridRow: 2, display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto", alignSelf: "start" }}>
+        {/* Right column: Online Members + Trending Posts */}
+        <div style={{ gridColumn: 3, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
           <ActiveUsers />
+          <TrendingPosts onPostClick={handleTrendingPostClick} />
         </div>
       </div>
 
@@ -139,6 +199,15 @@ export default function Forum() {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSubmit={handlePostSubmit}
+      />
+
+      {/* Manage Members Modal */}
+      <ManageMembersModal
+        isOpen={showMemberModal}
+        onClose={() => setShowMemberModal(false)}
+        members={forumMembers}
+        onAddMember={handleAddMember}
+        onRemoveMember={handleRemoveMember}
       />
     </div>
   );

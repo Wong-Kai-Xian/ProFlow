@@ -3,6 +3,9 @@ import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-componen
 
 export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, onAddExistingForum }) {
   const [newForumName, setNewForumName] = useState('');
+  const [forumDescription, setForumDescription] = useState('');
+  const [forumMembers, setForumMembers] = useState([]);
+  const [newMember, setNewMember] = useState('');
   const [selectedForumId, setSelectedForumId] = useState('');
 
   // Mock existing forums for demonstration
@@ -14,10 +17,28 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
 
   if (!isOpen) return null;
 
+  const handleAddMember = () => {
+    if (newMember.trim() && !forumMembers.includes(newMember.trim())) {
+      setForumMembers([...forumMembers, newMember.trim()]);
+      setNewMember('');
+    }
+  };
+
+  const handleRemoveMember = (memberToRemove) => {
+    setForumMembers(forumMembers.filter(member => member !== memberToRemove));
+  };
+
   const handleCreateClick = () => {
     if (newForumName.trim()) {
-      onCreateNewForum(newForumName.trim());
+      onCreateNewForum({
+        name: newForumName.trim(),
+        description: forumDescription.trim(),
+        members: forumMembers
+      });
       setNewForumName('');
+      setForumDescription('');
+      setForumMembers([]);
+      setNewMember('');
       onClose();
     }
   };
@@ -57,24 +78,157 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
         <h3 style={{ margin: "0 0 10px 0", color: COLORS.text }}>Add Group Forum</h3>
 
         {/* Create New Forum Section */}
-        <div style={{ border: `1px solid ${COLORS.lightBorder}`, borderRadius: LAYOUT.smallBorderRadius, padding: LAYOUT.smallGap, marginBottom: LAYOUT.smallGap }}>
-          <h4 style={{ margin: "0 0 10px 0", color: COLORS.text }}>Create New Forum</h4>
-          <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
+        <div style={{ 
+          border: `1px solid ${COLORS.lightBorder}`, 
+          borderRadius: LAYOUT.smallBorderRadius, 
+          padding: LAYOUT.gap, 
+          marginBottom: LAYOUT.smallGap 
+        }}>
+          <h4 style={{ margin: "0 0 15px 0", color: COLORS.dark, fontSize: "16px", fontWeight: "600" }}>Create New Forum</h4>
+          
+          {/* Forum Name */}
+          <div style={{ marginBottom: "12px" }}>
+            <label style={{ 
+              display: 'block', 
+              marginBottom: '6px', 
+              color: COLORS.dark,
+              fontSize: '14px',
+              fontWeight: '500'
+            }}>
+              Forum Name *
+            </label>
             <input
               type="text"
-              placeholder="New forum name"
+              placeholder="Enter forum name"
               value={newForumName}
               onChange={(e) => setNewForumName(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleCreateClick()}
               style={{
                 ...INPUT_STYLES.base,
-                flex: 1,
+                width: "100%",
+                fontSize: '14px'
               }}
             />
-            <button onClick={handleCreateClick} style={BUTTON_STYLES.primary}>
-              Create
-            </button>
           </div>
+
+          {/* Description */}
+          <div style={{ marginBottom: "12px" }}>
+            <label style={{ 
+              display: 'block', 
+              marginBottom: '6px', 
+              color: COLORS.dark,
+              fontSize: '14px',
+              fontWeight: '500'
+            }}>
+              Description
+            </label>
+            <textarea
+              placeholder="Enter forum description"
+              value={forumDescription}
+              onChange={(e) => setForumDescription(e.target.value)}
+              style={{
+                ...INPUT_STYLES.textarea,
+                width: "100%",
+                minHeight: "60px",
+                fontSize: '14px',
+                resize: 'vertical'
+              }}
+            />
+          </div>
+
+          {/* Members */}
+          <div style={{ marginBottom: "15px" }}>
+            <label style={{ 
+              display: 'block', 
+              marginBottom: '6px', 
+              color: COLORS.dark,
+              fontSize: '14px',
+              fontWeight: '500'
+            }}>
+              Forum Members
+            </label>
+            
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+              <input
+                type="text"
+                value={newMember}
+                onChange={(e) => setNewMember(e.target.value)}
+                placeholder="Add member"
+                style={{
+                  ...INPUT_STYLES.base,
+                  flex: 1,
+                  fontSize: '14px'
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddMember();
+                  }
+                }}
+              />
+              <button
+                onClick={handleAddMember}
+                style={{
+                  ...BUTTON_STYLES.secondary,
+                  padding: '6px 12px',
+                  fontSize: '12px'
+                }}
+              >
+                Add
+              </button>
+            </div>
+
+            {/* Display Added Members */}
+            {forumMembers.length > 0 && (
+              <div style={{ 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: '6px',
+                marginTop: '8px'
+              }}>
+                {forumMembers.map((member, index) => (
+                  <div key={index} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: COLORS.light,
+                    padding: '4px 8px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    color: COLORS.dark
+                  }}>
+                    <span>{member}</span>
+                    <button
+                      onClick={() => handleRemoveMember(member)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        marginLeft: '4px',
+                        cursor: 'pointer',
+                        color: COLORS.danger,
+                        fontSize: '14px',
+                        padding: '0',
+                        lineHeight: '1'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button 
+            onClick={handleCreateClick} 
+            disabled={!newForumName.trim()}
+            style={{
+              ...BUTTON_STYLES.primary,
+              width: "100%",
+              opacity: !newForumName.trim() ? 0.5 : 1,
+              cursor: !newForumName.trim() ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Create Forum
+          </button>
         </div>
 
         {/* Add from Existing Forum Section */}

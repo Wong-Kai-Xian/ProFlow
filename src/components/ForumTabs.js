@@ -106,7 +106,8 @@ export default function ForumTabs({ forumData }) {
         display: 'flex', 
         backgroundColor: '#FFFFFF',
         borderBottom: '2px solid #ECF0F1',
-        padding: '0 15px'
+        padding: '0 15px',
+        marginTop: '15px'
       }}>
         {tabs.map((tab) => (
           <button

@@ -7,6 +7,7 @@ export default function TopBar() {
       <Link to="/" style={{ margin: '0 10px', color: 'white', textDecoration: 'none' }}>Home</Link>
       <Link to="/project" style={{ margin: '0 10px', color: 'white', textDecoration: 'none' }}>Project</Link>
       <Link to="/forum" style={{ margin: '0 10px', color: 'white', textDecoration: 'none' }}>Forum</Link>
+      <Link to="/customer-profiles" style={{ margin: '0 10px', color: 'white', textDecoration: 'none' }}>Customer Profile</Link>
       <Link to="/quote" style={{ margin: '0 10px', color: 'white', textDecoration: 'none' }}>Quote</Link>
     </nav>
   );
