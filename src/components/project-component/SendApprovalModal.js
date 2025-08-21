@@ -7,21 +7,18 @@ export default function SendApprovalModal({
   onSendApproval,
   defaultProject = null,
   defaultStatus = "",
-  allProjects = [] // For CustomerProfile to select from all available projects
 }) {
   const [message, setMessage] = useState("");
   const [file, setFile] = useState(null);
-  const [selectedProject, setSelectedProject] = useState(defaultProject ? defaultProject.id : '');
-  const [selectedStatus, setSelectedStatus] = useState(defaultStatus);
+  const [selectedAdmin, setSelectedAdmin] = useState("all"); // New state for admin selection
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false); // New state for confirmation modal
 
-  useEffect(() => {
-    if (defaultProject) {
-      setSelectedProject(defaultProject.id);
-    }
-    if (defaultStatus) {
-      setSelectedStatus(defaultStatus);
-    }
-  }, [defaultProject, defaultStatus]);
+  // Mock list of admins
+  const admins = [
+    { id: "all", name: "Everyone" },
+    { id: "admin1", name: "Admin One" },
+    { id: "admin2", name: "Admin Two" },
+  ];
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
@@ -32,21 +29,17 @@ export default function SendApprovalModal({
       alert("Please enter a message or upload a file.");
       return;
     }
-    if (!selectedProject || !selectedStatus) {
-      alert("Please select a project and status.");
-      return;
-    }
 
     onSendApproval({
-      projectId: selectedProject,
-      status: selectedStatus,
+      projectId: defaultProject ? defaultProject.id : null,
+      status: defaultStatus,
       message: message.trim(),
       file: file,
+      toAdmin: selectedAdmin, // Include selected admin
     });
     setMessage("");
     setFile(null);
-    setSelectedProject(defaultProject ? defaultProject.id : '');
-    setSelectedStatus(defaultStatus);
+    setSelectedAdmin("all"); // Reset selected admin
     onClose();
   };
 
@@ -67,95 +60,132 @@ export default function SendApprovalModal({
     }}>
       <div style={{
         backgroundColor: COLORS.white,
-        padding: LAYOUT.padding,
+        padding: "30px", // Increased padding
         borderRadius: LAYOUT.borderRadius,
-        width: "90%",
-        maxWidth: "500px",
-        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+        width: "95%", // Slightly increased width percentage
+        maxWidth: "800px", // Keep max width the same for now
+        maxHeight: "95vh", // Increased max height to give more vertical space
+        overflowY: "auto", // Ensure scrolling is still available if content overflows
+        boxShadow: "0 8px 30px rgba(0, 0, 0, 0.2)",
         display: "flex",
         flexDirection: "column",
-        gap: LAYOUT.gap,
+        gap: "20px", // Increased gap between elements
       }}>
-        <h2 style={{ margin: 0, color: COLORS.dark }}>Send Approval</h2>
+        <h2 style={{ margin: 0, color: COLORS.dark, fontSize: "22px", marginBottom: "15px" }}>Send Approval</h2> {/* Increased marginBottom */}
         
-        <div>
-          <label style={{ ...INPUT_STYLES.label, marginBottom: "5px" }}>Message:</label>
+        {/* Admin selection dropdown */}
+        <div style={{ marginBottom: "15px" }}> {/* Added marginBottom */}
+          <label style={{ ...INPUT_STYLES.label, marginBottom: "10px", fontSize: "15px" }}>Send to Admin:</label> {/* Increased font size and margin */}
+          <select
+            value={selectedAdmin}
+            onChange={(e) => setSelectedAdmin(e.target.value)}
+            style={{
+              ...INPUT_STYLES.base,
+              width: "100%",
+              padding: "12px", // Increased padding
+              fontSize: "15px", // Increased font size
+            }}
+          >
+            {admins.map(admin => (
+              <option key={admin.id} value={admin.id}>{admin.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ marginBottom: "20px" }}> {/* Added marginBottom */}
+          <label style={{ ...INPUT_STYLES.label, marginBottom: "10px", fontSize: "15px" }}>Message:</label> {/* Increased font size and margin */}
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Enter your approval message..."
-            rows="4"
+            rows="7" // Increased rows for more visible text area
             style={{
               ...INPUT_STYLES.base,
               width: "100%",
               resize: "vertical",
+              minHeight: "120px", // Ensure a minimum height
+              padding: "12px", // Increased padding
+              fontSize: "15px",
             }}
           />
         </div>
 
-        <div>
-          <label style={{ ...INPUT_STYLES.label, marginBottom: "5px" }}>Upload File:</label>
+        <div style={{ marginBottom: "10px" }}> {/* Added marginBottom for consistency */}
+          <label style={{ ...INPUT_STYLES.label, marginBottom: "10px", fontSize: "15px" }}>Upload File:</label> {/* Increased font size and margin */}
           <input
             type="file"
             onChange={handleFileChange}
             style={{
               ...INPUT_STYLES.base,
-              padding: "10px",
+              width: "100%",
+              padding: "12px", // Increased padding
               border: `1px solid ${COLORS.border}`,
+              fontSize: "15px",
             }}
           />
         </div>
 
-        {allProjects.length > 0 && (
-          <div>
-            <label style={{ ...INPUT_STYLES.label, marginBottom: "5px" }}>Select Project:</label>
-            <select
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              style={{
-                ...INPUT_STYLES.base,
-                width: "100%",
-              }}
-            >
-              <option value="">Select a project</option>
-              {allProjects.map(proj => (
-                <option key={proj.id} value={proj.id}>{proj.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        <div>
-          <label style={{ ...INPUT_STYLES.label, marginBottom: "5px" }}>Select Status:</label>
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            style={{
-              ...INPUT_STYLES.base,
-              width: "100%",
-            }}
-          >
-            <option value="">Select a status</option>
-            <option value="Approved">Approved</option>
-            <option value="Rejected">Rejected</option>
-            <option value="Pending">Pending</option>
-          </select>
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: LAYOUT.smallGap, marginTop: LAYOUT.gap }}>
+        {/* Moved Send Approval and Cancel buttons to the bottom */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "15px", marginTop: "20px" }}> {/* Adjusted margin */}
           <button
             onClick={onClose}
-            style={{ ...BUTTON_STYLES.secondary, padding: "10px 20px" }}
+            style={{ ...BUTTON_STYLES.secondary, padding: "12px 25px", fontSize: "15px" }}
           >
             Cancel
           </button>
           <button
-            onClick={handleSubmit}
-            style={{ ...BUTTON_STYLES.primary, padding: "10px 20px" }}
+            onClick={() => setShowConfirmationModal(true)} // Open confirmation modal
+            style={{ ...BUTTON_STYLES.primary, padding: "12px 25px", fontSize: "15px" }}
           >
             Send Approval
           </button>
         </div>
+
+        {/* Confirmation Modal */}
+        {showConfirmationModal && (
+          <div style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1001, // Higher z-index than main modal
+          }}>
+            <div style={{
+              backgroundColor: COLORS.white,
+              padding: "30px",
+              borderRadius: LAYOUT.borderRadius,
+              width: "90%",
+              maxWidth: "400px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "20px",
+              textAlign: "center",
+            }}>
+              <h3 style={{ margin: 0, color: COLORS.dark }}>Confirm Send Approval</h3>
+              <p style={{ margin: 0, color: COLORS.text }}>Are you sure you want to send this approval?</p>
+              <div style={{ display: "flex", justifyContent: "center", gap: "15px", marginTop: "10px" }}>
+                <button
+                  onClick={() => setShowConfirmationModal(false)}
+                  style={{ ...BUTTON_STYLES.secondary, padding: "10px 20px", fontSize: "14px" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { handleSubmit(); setShowConfirmationModal(false); }} // Proceed with submission
+                  style={{ ...BUTTON_STYLES.primary, padding: "10px 20px", fontSize: "14px" }}
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

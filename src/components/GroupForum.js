@@ -133,12 +133,12 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
             position: "relative",
             background: COLORS.cardBackground, 
             margin: LAYOUT.smallGap + " 0", 
-            padding: `${LAYOUT.gap} ${LAYOUT.smallGap}`, 
+            padding: `${LAYOUT.gap} 15px`, // Adjusted horizontal padding
             borderRadius: LAYOUT.borderRadius,
             borderLeft: `4px solid ${COLORS.primary}`,
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
+            flexDirection: 'column', // Change to column to stack elements
+            alignItems: 'flex-start', // Align items to the start
             boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
             transition: "all 0.2s ease",
             cursor: "pointer"
@@ -156,14 +156,16 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
               <strong style={{ color: COLORS.dark, fontSize: "14px", fontWeight: "600" }}>{forum.title}</strong>
               <br />
               <small style={{ color: COLORS.lightText, fontSize: "12px" }}>
-                {forum.posts} posts • Last activity: {forum.lastActivity}
+                {forum.posts} posts
+                <br /> {/* New line for last activity */}
+                Last activity: {forum.lastActivity}
               </small>
             </div>
             {forum.notifications > 0 && (
               <div style={{
                 position: "absolute",
-                top: "-8px", /* Adjust as needed for desired offset */
-                right: "-8px", /* Adjust as needed for desired offset */
+                top: "8px", // Adjusted position
+                right: "8px", // Adjusted position
                 background: COLORS.danger,
                 color: "white",
                 borderRadius: "50%",

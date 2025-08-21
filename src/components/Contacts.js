@@ -10,6 +10,7 @@ import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; // Import constants
 import AddProfileModal from "./profile-component/AddProfileModal"; // Import the new AddProfileModal
 import DeleteProfileModal from "./profile-component/DeleteProfileModal"; // Import the new DeleteProfileModal
+import customerDataArray from "./profile-component/customerData.js"; // Import customerDataArray
 
 export default function Contacts() {
   const navigate = useNavigate();
@@ -23,23 +24,27 @@ export default function Contacts() {
   const [showAddTeamMemberModal, setShowAddTeamMemberModal] = useState(false); // New state for add team member modal
   const [teamMemberToDelete, setTeamMemberToDelete] = useState(null); // To store team member to delete
 
-  const [organizations, setOrganizations] = useState([
-    {
-      name: "Acme Corp",
-      clients: [
-        { id: "johnsmith", name: "John Smith", email: "john@example.com", whatsapp: "+60123456789" },
-        { id: "sarahjohnson", name: "Sarah Johnson", email: "sarah@gmail.com", whatsapp: "+60198765432" },
-      ],
-      collapsed: false,
-    },
-    {
-      name: "Beta Ltd",
-      clients: [
-        { id: "mikechen", name: "Mike Chen", email: "mike@gmail.com", whatsapp: "+60111222333" }
-      ],
-      collapsed: true,
-    },
-  ]);
+  const [organizations, setOrganizations] = useState(
+    // Map over customerDataArray to create organizations structure
+    customerDataArray.reduce((acc, customer) => {
+      const companyName = customer.companyProfile.company;
+      let organization = acc.find(org => org.name === companyName);
+
+      if (!organization) {
+        organization = { name: companyName, clients: [], collapsed: false };
+        acc.push(organization);
+      }
+
+      organization.clients.push({
+        id: customer.id, // Use the numeric ID from customerData
+        name: customer.customerProfile.name,
+        email: customer.customerProfile.email,
+        whatsapp: customer.customerProfile.phone // Assuming phone can be used as whatsapp
+      });
+
+      return acc;
+    }, [])
+  );
 
   const [team, setTeam] = useState([
     { name: "Alice Wong", email: "alice@company.com", whatsapp: "+60112233445" },

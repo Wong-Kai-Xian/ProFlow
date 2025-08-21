@@ -140,12 +140,6 @@ export default function CustomerProfile() {
               />
             )}
           />
-          
-          <ActivityRecord 
-            activities={activities}
-            onAddActivity={handleAddActivity}
-            onDeleteActivity={handleDeleteActivity}
-          />
         </div>
 
         {/* Right Column */}
@@ -157,21 +151,21 @@ export default function CustomerProfile() {
           />
           
           <AttachedFiles files={files} onFileAdd={handleFileAdd} onFileRemove={handleFileRemove} onFileRename={handleFileRename} />
+          <button
+            onClick={() => setShowSendApprovalModal(true)}
+            style={{
+              ...BUTTON_STYLES.primary,
+              padding: "10px 20px",
+              fontSize: "16px",
+              marginTop: LAYOUT.gap, // Add margin to separate from AttachedFiles
+              alignSelf: "flex-end", // Align button to the right within the flex column
+            }}
+          >
+            Send Approval
+          </button>
         </div>
 
       </div>
-      <button
-        onClick={() => setShowSendApprovalModal(true)}
-        style={{
-          ...BUTTON_STYLES.primary,
-          padding: "10px 20px",
-          fontSize: "16px",
-          margin: LAYOUT.gap,
-          alignSelf: "flex-end", // Align button to the right if parent is flex container
-        }}
-      >
-        Send Approval
-      </button>
       <SendApprovalModal
         isOpen={showSendApprovalModal}
         onClose={() => setShowSendApprovalModal(false)}
