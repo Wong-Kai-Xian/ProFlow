@@ -32,12 +32,13 @@ export default function Home() {
       position: "relative",
       background: COLORS.background,
       minHeight: "100vh",
-      width: "100vw",
+      width: "100%", /* Changed to 100% */
       display: "flex",
       flexDirection: "column",
       margin: "0",
       padding: "0",
-      overflowX: "hidden"
+      overflowX: "hidden",
+      boxSizing: "border-box" /* Added boxSizing */
       // Removed overflowY: "auto" /* Enabled vertical scrolling for the main page */
     }}>
       <TopBar />
@@ -53,9 +54,9 @@ export default function Home() {
           flex: 1,
           minHeight: "calc(100vh - 100px)",
           overflowX: "hidden",
-          width: "100%",
-          maxWidth: "100vw",
-          boxSizing: "border-box"
+          width: "100%", /* Changed to 100% */
+          maxWidth: "100%", /* Changed to 100% */
+          boxSizing: "border-box" /* Added boxSizing */
         }}>
         {/* Left Panel */}
         <div
@@ -126,7 +127,8 @@ export default function Home() {
           gridRow: 1,
           height: "800px",
           maxWidth: "100%",
-          overflow: "hidden"
+          overflow: "hidden",
+          boxSizing: "border-box" /* Added boxSizing */
         }}>
           <Dashboard />
         </div>
@@ -206,7 +208,7 @@ export default function Home() {
         fontSize: "14px",
         width: "100%",
         margin: "0",
-        boxSizing: "border-box"
+        boxSizing: "border-box" /* Added boxSizing */
       }}>
         <div style={{ display: "flex", gap: "2rem" }}>
           <span style={{ cursor: "pointer" }}>Help</span>
