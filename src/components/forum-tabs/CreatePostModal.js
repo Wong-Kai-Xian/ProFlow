@@ -86,15 +86,16 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
   };
 
   const actionButtonStyle = {
-    padding: '8px 12px',
-    margin: '0 5px',
+    padding: '10px 16px',
+    margin: '0 8px',
     border: '1px solid #BDC3C7',
     backgroundColor: 'white',
-    borderRadius: '5px',
+    borderRadius: '8px',
     cursor: 'pointer',
-    fontSize: '12px',
+    fontSize: '16px',
     color: '#7F8C8D',
-    transition: 'all 0.3s ease'
+    transition: 'all 0.3s ease',
+    fontWeight: '500'
   };
 
   if (!isOpen) return null;

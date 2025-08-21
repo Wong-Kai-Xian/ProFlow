@@ -31,10 +31,12 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
     return sorted;
   };
 
-  const handleCreateNewForum = (forumName) => {
+  const handleCreateNewForum = (forumData) => {
     const newForum = {
       id: Date.now(),
-      title: forumName,
+      title: typeof forumData === 'string' ? forumData : forumData.name,
+      description: forumData.description || '',
+      members: forumData.members || [],
       posts: 0,
       lastActivity: "Just now",
       notifications: 0

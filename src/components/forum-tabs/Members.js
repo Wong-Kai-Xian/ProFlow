@@ -37,28 +37,28 @@ export default function Members() {
             textAlign: 'center'
           }}>
             <div style={{
-              width: '60px',
-              height: '60px',
+              width: '70px',
+              height: '70px',
               borderRadius: '50%',
-              backgroundColor: '#3498DB',
+              backgroundColor: COLORS.primary,
               color: 'white',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '24px',
-              margin: '0 auto 15px',
+              fontSize: '28px',
+              margin: '0 auto 18px',
               fontWeight: 'bold'
             }}>
               {member.name.split(' ').map(n => n[0]).join('')}
             </div>
             
-            <strong style={{ color: '#2C3E50', fontSize: '16px' }}>{member.name}</strong>
+            <strong style={{ color: COLORS.dark, fontSize: '18px', fontWeight: '600' }}>{member.name}</strong>
             
             <div style={{ 
-              fontSize: '12px', 
-              color: '#7F8C8D', 
-              marginTop: '5px',
-              marginBottom: '10px'
+              fontSize: '15px', 
+              color: COLORS.lightText, 
+              marginTop: '6px',
+              marginBottom: '12px'
             }}>
               {member.role}
             </div>
@@ -67,18 +67,19 @@ export default function Members() {
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
-              gap: '5px',
-              marginBottom: '10px'
+              gap: '6px',
+              marginBottom: '12px'
             }}>
               <span style={{ 
                 color: getStatusColor(member.status),
-                fontSize: '12px'
+                fontSize: '14px',
+                fontWeight: '600'
               }}>
                 ● {member.status}
               </span>
             </div>
             
-            <div style={{ fontSize: '11px', color: '#7F8C8D' }}>
+            <div style={{ fontSize: '13px', color: COLORS.lightText }}>
               Joined {member.joinDate}
             </div>
           </div>

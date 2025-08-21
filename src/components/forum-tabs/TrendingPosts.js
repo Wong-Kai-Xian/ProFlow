@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { COLORS } from '../profile-component/constants';
 
 export default function TrendingPosts({ onPostClick }) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -63,15 +64,15 @@ export default function TrendingPosts({ onPostClick }) {
       }} onClick={() => setIsExpanded(!isExpanded)}>
         <h3 style={{ 
           margin: 0, 
-          color: '#2C3E50', 
-          fontSize: '16px',
-          fontWeight: '600'
+          color: COLORS.dark, 
+          fontSize: '18px',
+          fontWeight: '700'
         }}>
           🔥 Trending Posts
         </h3>
         <span style={{ 
-          color: '#7F8C8D', 
-          fontSize: '12px',
+          color: COLORS.lightText, 
+          fontSize: '14px',
           transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.3s ease'
         }}>
@@ -83,8 +84,8 @@ export default function TrendingPosts({ onPostClick }) {
         <div>
           {trendingPosts.length === 0 ? (
             <p style={{ 
-              fontSize: '12px', 
-              color: '#7F8C8D', 
+              fontSize: '15px', 
+              color: COLORS.lightText, 
               textAlign: 'center',
               fontStyle: 'italic',
               margin: '10px 0'
@@ -120,19 +121,19 @@ export default function TrendingPosts({ onPostClick }) {
                   gap: '8px'
                 }}>
                   <span style={{
-                    fontSize: '12px',
+                    fontSize: '14px',
                     fontWeight: 'bold',
-                    color: '#3498DB',
-                    minWidth: '16px'
+                    color: COLORS.primary,
+                    minWidth: '20px'
                   }}>
                     #{index + 1}
                   </span>
                   <div style={{ flex: 1 }}>
                     <div style={{ 
-                      fontSize: '12px', 
+                      fontSize: '15px', 
                       fontWeight: '600', 
-                      color: '#2C3E50',
-                      marginBottom: '3px',
+                      color: COLORS.dark,
+                      marginBottom: '4px',
                       lineHeight: '1.3',
                       display: '-webkit-box',
                       WebkitLineClamp: 2,
@@ -142,17 +143,17 @@ export default function TrendingPosts({ onPostClick }) {
                       {post.title}
                     </div>
                     <div style={{ 
-                      fontSize: '10px', 
-                      color: '#7F8C8D',
-                      marginBottom: '3px'
+                      fontSize: '13px', 
+                      color: COLORS.lightText,
+                      marginBottom: '4px'
                     }}>
                       by {post.author} • {post.timestamp}
                     </div>
                     <div style={{
                       display: 'flex',
-                      gap: '10px',
-                      fontSize: '10px',
-                      color: '#95A5A6'
+                      gap: '12px',
+                      fontSize: '13px',
+                      color: COLORS.lightText
                     }}>
                       <span>👍 {post.likes}</span>
                       <span>💬 {post.comments}</span>

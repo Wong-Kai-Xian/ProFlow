@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { COLORS } from '../profile-component/constants';
 
 export default function ActiveUsers() {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -76,15 +77,15 @@ export default function ActiveUsers() {
       }} onClick={() => setIsExpanded(!isExpanded)}>
         <h3 style={{ 
           margin: 0, 
-          color: '#2C3E50', 
-          fontSize: '14px',
-          fontWeight: '600'
+          color: COLORS.dark, 
+          fontSize: '18px',
+          fontWeight: '700'
         }}>
           Online Members ({onlineUsers.length})
         </h3>
         <span style={{ 
-          color: '#7F8C8D', 
-          fontSize: '10px',
+          color: COLORS.lightText, 
+          fontSize: '14px',
           transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.3s ease'
         }}>
@@ -107,14 +108,14 @@ export default function ActiveUsers() {
                 marginRight: '8px'
               }}>
                 <div style={{
-                  width: '32px',
-                  height: '32px',
+                  width: '36px',
+                  height: '36px',
                   borderRadius: '50%',
                   backgroundColor: getAvatarColor(user.name),
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '12px',
+                  fontSize: '14px',
                   fontWeight: 'bold',
                   color: 'white'
                 }}>
@@ -135,16 +136,16 @@ export default function ActiveUsers() {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ 
-                  fontSize: '11px', 
-                  fontWeight: '500', 
-                  color: '#2C3E50',
-                  marginBottom: '1px'
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  color: COLORS.dark,
+                  marginBottom: '2px'
                 }}>
                   {user.name}
                 </div>
                 <div style={{ 
-                  fontSize: '9px', 
-                  color: user.isOnline ? '#27AE60' : '#7F8C8D'
+                  fontSize: '12px', 
+                  color: user.isOnline ? COLORS.success : COLORS.lightText
                 }}>
                   {user.isOnline ? 'Online' : `Last seen ${user.lastSeen}`}
                 </div>
@@ -156,8 +157,8 @@ export default function ActiveUsers() {
           {offlineUsers.length > 0 && (
             <>
               <div style={{
-                fontSize: '10px',
-                color: '#7F8C8D',
+                fontSize: '13px',
+                color: COLORS.lightText,
                 fontWeight: '600',
                 margin: '10px 0 5px 0',
                 textTransform: 'uppercase'
@@ -176,14 +177,14 @@ export default function ActiveUsers() {
                     marginRight: '8px'
                   }}>
                     <div style={{
-                      width: '28px',
-                      height: '28px',
+                      width: '32px',
+                      height: '32px',
                       borderRadius: '50%',
                       backgroundColor: getAvatarColor(user.name),
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '10px',
+                      fontSize: '12px',
                       fontWeight: 'bold',
                       color: 'white',
                       opacity: 0.8
@@ -193,16 +194,16 @@ export default function ActiveUsers() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ 
-                      fontSize: '10px', 
+                      fontSize: '13px', 
                       fontWeight: '500', 
-                      color: '#2C3E50',
-                      marginBottom: '1px'
+                      color: COLORS.dark,
+                      marginBottom: '2px'
                     }}>
                       {user.name}
                     </div>
                     <div style={{ 
-                      fontSize: '8px', 
-                      color: '#7F8C8D'
+                      fontSize: '11px', 
+                      color: COLORS.lightText
                     }}>
                       {user.lastSeen}
                     </div>
