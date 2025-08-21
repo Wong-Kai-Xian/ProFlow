@@ -38,9 +38,9 @@ export default function CustomerProfile() {
       ? customerData.files.map(file => ({ name: file, type: 'document', description: '', url: '', size: 0, uploadTime: '' }))
       : []
   );
-  const [currentStage, setCurrentStage] = useState(customerData?.currentStage || "Working");
-  const [stageData, setStageData] = useState(customerData?.stageData || {
-    Working: { 
+  const [currentStage, setCurrentStage] = useState(STAGES[0]); // Set to first stage initially
+  const [stageData, setStageData] = useState({
+    Proposal: { 
       notes: ["Initial contact established. Client interested in our services."], 
       tasks: [
         { name: "Send proposal", done: true },
@@ -48,12 +48,12 @@ export default function CustomerProfile() {
       ],
       completed: false
     },
-    Qualified: { 
+    Negotiation: { 
       notes: [], 
       tasks: [],
       completed: false
     },
-    Converted: { 
+    Complete: { 
       notes: [], 
       tasks: [],
       completed: false
