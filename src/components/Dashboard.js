@@ -83,7 +83,7 @@ export default function Dashboard() {
 
   return (
     <Card style={{
-      maxHeight: "600px", // Set a maximum height for the dashboard card
+      height: "93%",
       overflowY: "auto",
       display: "flex",
       flexDirection: "column",
@@ -116,22 +116,22 @@ export default function Dashboard() {
           {dashboardWidgets.map(widget => (
             <Widget key={widget.id} onRemove={() => handleRemoveWidget(widget.id)} isEditing={editMode}>
               {widget.type === 'metrics' && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: LAYOUT.gap }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: LAYOUT.smallGap }}>
                   <div style={{ background: COLORS.cardBackground, padding: LAYOUT.gap, borderRadius: LAYOUT.borderRadius, textAlign: 'center', boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                    <h3 style={{ margin: '0 0 ' + LAYOUT.smallGap + ' 0', color: COLORS.primary, fontSize: "16px" }}>Total Projects</h3>
-                    <p style={{ fontSize: '28px', fontWeight: 'bold', margin: 0, color: COLORS.text }}>{data.totalProjects}</p>
+                    <h3 style={{ margin: '0 0 ' + LAYOUT.smallGap + ' 0', color: COLORS.primary, fontSize: "12px" }}>Total Projects</h3>
+                    <p style={{ fontSize: '20px', fontWeight: 'bold', margin: 0, color: COLORS.text }}>{data.totalProjects}</p>
                   </div>
                   <div style={{ background: COLORS.cardBackground, padding: LAYOUT.gap, borderRadius: LAYOUT.borderRadius, textAlign: 'center', boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                    <h3 style={{ margin: '0 0 ' + LAYOUT.smallGap + ' 0', color: COLORS.success, fontSize: "16px" }}>Active Projects</h3>
-                    <p style={{ fontSize: '28px', fontWeight: 'bold', margin: 0, color: COLORS.text }}>{data.activeProjects}</p>
+                    <h3 style={{ margin: '0 0 ' + LAYOUT.smallGap + ' 0', color: COLORS.success, fontSize: "12px" }}>Active Projects</h3>
+                    <p style={{ fontSize: '20px', fontWeight: 'bold', margin: 0, color: COLORS.text }}>{data.activeProjects}</p>
                   </div>
                   <div style={{ background: COLORS.cardBackground, padding: LAYOUT.gap, borderRadius: LAYOUT.borderRadius, textAlign: 'center', boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                    <h3 style={{ margin: '0 0 ' + LAYOUT.smallGap + ' 0', color: COLORS.danger, fontSize: "16px" }}>Total Clients</h3>
-                    <p style={{ fontSize: '28px', fontWeight: 'bold', margin: 0, color: COLORS.text }}>{data.totalClients}</p>
+                    <h3 style={{ margin: '0 0 ' + LAYOUT.smallGap + ' 0', color: COLORS.danger, fontSize: "12px" }}>Total Clients</h3>
+                    <p style={{ fontSize: '20px', fontWeight: 'bold', margin: 0, color: COLORS.text }}>{data.totalClients}</p>
                   </div>
                   <div style={{ background: COLORS.cardBackground, padding: LAYOUT.gap, borderRadius: LAYOUT.borderRadius, textAlign: 'center', boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                    <h3 style={{ margin: '0 0 ' + LAYOUT.smallGap + ' 0', color: COLORS.warning, fontSize: "16px" }}>Revenue</h3>
-                    <p style={{ fontSize: '28px', fontWeight: 'bold', margin: 0, color: COLORS.text }}>{data.revenue}</p>
+                    <h3 style={{ margin: '0 0 ' + LAYOUT.smallGap + ' 0', color: COLORS.warning, fontSize: "12px" }}>Revenue</h3>
+                    <p style={{ fontSize: '20px', fontWeight: 'bold', margin: 0, color: COLORS.text }}>{data.revenue}</p>
                   </div>
                 </div>
               )}
