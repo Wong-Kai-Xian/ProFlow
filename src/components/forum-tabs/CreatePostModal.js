@@ -230,19 +230,36 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
             <div style={{ fontSize: '12px', color: '#27AE60' }}>
               📍 Location: {selectedLocation}
             </div>
-            <button
-              onClick={clearLocation}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#27AE60',
-                cursor: 'pointer',
-                fontSize: '16px',
-                padding: '2px'
-              }}
-            >
-              ×
-            </button>
+            <div style={{ display: 'flex', gap: '5px' }}>
+              <button
+                onClick={() => setShowLocationModal(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#27AE60',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  padding: '2px'
+                }}
+                title="Edit location"
+              >
+                ✏️
+              </button>
+              <button
+                onClick={clearLocation}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#27AE60',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  padding: '2px'
+                }}
+                title="Remove location"
+              >
+                ×
+              </button>
+            </div>
           </div>
         )}
 
@@ -266,19 +283,36 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
                 </div>
               )}
             </div>
-            <button
-              onClick={clearMeeting}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#F39C12',
-                cursor: 'pointer',
-                fontSize: '16px',
-                padding: '2px'
-              }}
-            >
-              ×
-            </button>
+            <div style={{ display: 'flex', gap: '5px' }}>
+              <button
+                onClick={() => setShowMeetingModal(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#F39C12',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  padding: '2px'
+                }}
+                title="Edit meeting"
+              >
+                ✏️
+              </button>
+              <button
+                onClick={clearMeeting}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#F39C12',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  padding: '2px'
+                }}
+                title="Remove meeting"
+              >
+                ×
+              </button>
+            </div>
           </div>
         )}
 
