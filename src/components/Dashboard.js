@@ -116,7 +116,7 @@ export default function Dashboard() {
           {dashboardWidgets.map(widget => (
             <Widget key={widget.id} onRemove={() => handleRemoveWidget(widget.id)} isEditing={editMode}>
               {widget.type === 'metrics' && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: LAYOUT.smallGap }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: LAYOUT.smallGap }}>
                   <div style={{ background: COLORS.cardBackground, padding: LAYOUT.gap, borderRadius: LAYOUT.borderRadius, textAlign: 'center', boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
                     <h3 style={{ margin: '0 0 ' + LAYOUT.smallGap + ' 0', color: COLORS.primary, fontSize: "12px" }}>Total Projects</h3>
                     <p style={{ fontSize: '20px', fontWeight: 'bold', margin: 0, color: COLORS.text }}>{data.totalProjects}</p>

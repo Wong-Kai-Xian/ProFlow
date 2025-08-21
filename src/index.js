@@ -7,6 +7,7 @@ import ProjectList from "./pages/ProjectList";
 import ForumListPage from "./pages/ForumListPage";
 import CustomerProfile from "./pages/CustomerProfile";
 import ProjectDetail from "./pages/ProjectDetail";
+import CustomerProfileList from "./pages/CustomerProfileList";
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
@@ -18,6 +19,7 @@ root.render(
         <Route path="/project/:projectName" element={<ProjectDetail />} /> {/* New route for project details */}
         <Route path="/forum" element={<ForumListPage />} /> {/* forum list */}
         <Route path="/forum/:id" element={<Forum />} />     {/* single forum */}
+        <Route path="/customer-profiles" element={<CustomerProfileList />} />
         <Route path="/customer/:id" element={<CustomerProfile />} />
       </Routes>
     </BrowserRouter>

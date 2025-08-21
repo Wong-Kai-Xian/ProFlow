@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "../components/profile-component/constants";
+import customerDataArray from "../components/profile-component/customerData.js";
 
 // Get initials from customer name
 const getInitials = (name) =>
@@ -18,59 +19,48 @@ const stringToColor = (str) => {
   return "#" + "00000".substring(0, 6 - c.length) + c;
 };
 
-export default function CustomerProfileList() {
-  const [customers, setCustomers] = useState([
-    {
-      id: 1,
-      name: "John Smith",
-      company: "Tech Solutions Inc",
-      email: "john.smith@techsolutions.com",
-      phone: "+1 (555) 123-4567",
-      status: "Active",
-      projects: 3,
-      lastContact: "2024-01-20"
-    },
-    {
-      id: 2,
-      name: "Sarah Johnson",
-      company: "Digital Marketing Pro",
-      email: "sarah.j@digitalmarketing.com",
-      phone: "+1 (555) 234-5678",
-      status: "Active",
-      projects: 1,
-      lastContact: "2024-01-18"
-    },
-    {
-      id: 3,
-      name: "Michael Chen",
-      company: "Innovation Labs",
-      email: "m.chen@innovationlabs.com",
-      phone: "+1 (555) 345-6789",
-      status: "Inactive",
-      projects: 2,
-      lastContact: "2024-01-15"
-    },
-    {
-      id: 4,
-      name: "Emily Davis",
-      company: "Creative Studios",
-      email: "emily.davis@creativestudios.com",
-      phone: "+1 (555) 456-7890",
-      status: "Active",
-      projects: 4,
-      lastContact: "2024-01-22"
-    },
-    {
-      id: 5,
-      name: "David Wilson",
-      company: "Global Enterprises",
-      email: "d.wilson@globalent.com",
-      phone: "+1 (555) 567-8901",
-      status: "Active",
-      projects: 2,
-      lastContact: "2024-01-19"
+// Define the stages for progress tracking
+const STAGES = ["Working", "Qualified", "Converted"];
+
+// Calculate progress based on current stage and tasks completed within stages
+const getProgress = (customer) => {
+  const currentStageIndex = STAGES.indexOf(customer.currentStage);
+  if (currentStageIndex === -1) return 0; // Should not happen
+
+  let completedStages = 0;
+  let totalStages = STAGES.length;
+  let stageProgress = 0;
+
+  for (let i = 0; i < STAGES.length; i++) {
+    const stageName = STAGES[i];
+    const stage = customer.stageData?.[stageName];
+
+    if (stage && stage.completed) {
+      completedStages++;
+    } else if (stageName === customer.currentStage && stage && stage.tasks) {
+      const completedTasks = stage.tasks.filter(task => task.done).length;
+      const totalTasks = stage.tasks.length;
+      stageProgress = totalTasks > 0 ? (completedTasks / totalTasks) : 0;
+      // Add a fraction of a stage based on task completion
+      return ((completedStages + stageProgress) / totalStages) * 100;
     }
-  ]);
+  }
+  return (completedStages / totalStages) * 100;
+};
+
+export default function CustomerProfileList() {
+  const [customers, setCustomers] = useState(customerDataArray.map(customer => ({
+    id: customer.id,
+    name: customer.customerProfile.name,
+    company: customer.companyProfile.company,
+    email: customer.customerProfile.email,
+    phone: customer.customerProfile.phone,
+    status: customer.status || "Active", // Default to "Active" if not specified
+    projects: customer.projects || 0, // Default to 0 if not specified
+    lastContact: customer.lastContact || "N/A", // Default to "N/A" if not specified
+    currentStage: customer.currentStage || "Working",
+    stageData: customer.stageData || {} // Default to empty object if not specified
+  })));
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -208,6 +198,9 @@ export default function CustomerProfileList() {
           }}>
             {filteredCustomers.map((customer) => {
               const bgColor = stringToColor(customer.name);
+              const progress = getProgress(customer);
+              const currentStageName = customer.currentStage;
+              const currentStageColor = getStatusColor(customer.status); // Reusing status color for the stage
 
               return (
                 <div
@@ -220,7 +213,8 @@ export default function CustomerProfileList() {
                     border: `1px solid ${COLORS.border}`,
                     cursor: "pointer",
                     transition: "all 0.3s ease",
-                    position: "relative"
+                    position: "relative",
+                    overflow: "hidden" // To contain the progress bar animation
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = "translateY(-4px)";
@@ -232,7 +226,35 @@ export default function CustomerProfileList() {
                   }}
                   onClick={() => handleCustomerClick(customer)}
                 >
-                  {/* Status Badge */}
+                  {/* Creative Progress Bar at the top */}
+                  <div style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: `${progress}%`,
+                    height: "8px",
+                    backgroundColor: currentStageColor,
+                    borderRadius: "12px 12px 0 0",
+                    transition: "width 0.5s ease-in-out"
+                  }} />
+
+                  {/* Current Stage Indicator */}
+                  <div style={{
+                    position: "absolute",
+                    top: "16px",
+                    left: "24px",
+                    padding: "4px 10px",
+                    borderRadius: "12px",
+                    backgroundColor: `${currentStageColor}20`,
+                    color: currentStageColor,
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    zIndex: 1 // Ensure it's above the progress bar
+                  }}>
+                    {currentStageName}
+                  </div>
+
+                  {/* Status Badge - moved to top right */}
                   <div style={{
                     position: "absolute",
                     top: "16px",
@@ -242,7 +264,8 @@ export default function CustomerProfileList() {
                     backgroundColor: `${getStatusColor(customer.status)}20`,
                     color: getStatusColor(customer.status),
                     fontSize: "12px",
-                    fontWeight: "600"
+                    fontWeight: "600",
+                    zIndex: 1 // Ensure it's above the progress bar
                   }}>
                     {customer.status}
                   </div>
@@ -259,7 +282,8 @@ export default function CustomerProfileList() {
                     fontSize: "32px",
                     color: COLORS.white,
                     fontWeight: "700",
-                    marginBottom: "20px"
+                    marginBottom: "20px",
+                    marginTop: "30px" // Adjusted to give space for new elements
                   }}>
                     {getInitials(customer.name)}
                   </div>

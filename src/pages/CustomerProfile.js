@@ -9,52 +9,64 @@ import ActivityRecord from "../components/profile-component/ActivityRecord";
 import Reminders from "../components/profile-component/Reminders";
 import AttachedFiles from "../components/profile-component/AttachedFiles";
 import TaskManager from "../components/profile-component/TaskManager";
-import customerData from "../components/profile-component/customerData.json";
+import customerDataArray from "../components/profile-component/customerData.js";
 import { STAGES, COLORS, LAYOUT } from "../components/profile-component/constants";
 
 export default function CustomerProfile() {
   const { id } = useParams();
-  
-  // Initialize state with data from JSON
-  const [activities, setActivities] = useState([
-    { type: "Gmail", time: "2025-01-20 10:00", description: "Sent introduction email" },
-    { type: "Call", time: "2025-01-20 14:00", description: "Initial consultation call completed" },
-    ...customerData.activities
-  ]);
+
+  // Find the customer data based on the ID from the URL
+  const customerData = customerDataArray.find(cust => cust.id === parseInt(id));
+
+  // Initialize state variables with default values or from customerData if available
+  const [activities, setActivities] = useState(
+    customerData 
+      ? customerData.activities.map(activity => ({...activity, time: new Date(activity.time)}))
+      : []
+  );
   
   const [reminders, setReminders] = useState(
-    customerData.reminders.map(r => ({ text: r, deadline: "", description: "", link: "" })) // Initialize existing reminders with empty deadline, description, and link
+    customerData 
+      ? customerData.reminders.map(r => ({ text: r, deadline: "", description: "", link: "" }))
+      : []
   );
   
   const [files, setFiles] = useState(
-    customerData.files.map(file => ({ name: file, type: 'document', description: '', url: '', size: 0, uploadTime: '' }))
+    customerData 
+      ? customerData.files.map(file => ({ name: file, type: 'document', description: '', url: '', size: 0, uploadTime: '' }))
+      : []
   );
-  const [currentStage, setCurrentStage] = useState("Working");
-  const [stageData, setStageData] = useState({
+  const [currentStage, setCurrentStage] = useState(customerData?.currentStage || "Working");
+  const [stageData, setStageData] = useState(customerData?.stageData || {
     Working: { 
       notes: ["Initial contact established. Client interested in our services."], 
       tasks: [
         { name: "Send proposal", done: true },
         { name: "Schedule follow-up call", done: false }
       ],
-      completed: false // Added completion status
+      completed: false
     },
     Qualified: { 
       notes: [], 
       tasks: [],
-      completed: false // Added completion status
+      completed: false
     },
     Converted: { 
       notes: [], 
       tasks: [],
-      completed: false // Added completion status
+      completed: false
     },
   });
-  const [stages, setStages] = useState(STAGES); // Added state for stages
+  const [stages, setStages] = useState(STAGES);
 
-  const [customerProfile, setCustomerProfile] = useState(customerData.customerProfile); // Added state for customer profile
+  const [customerProfile, setCustomerProfile] = useState(customerData?.customerProfile || {});
 
-  const [companyProfile, setCompanyProfile] = useState(customerData.companyProfile); // Added state for company profile
+  const [companyProfile, setCompanyProfile] = useState(customerData?.companyProfile || {});
+
+  // If customerData is not found, you might want to redirect or show an error AFTER hooks are called
+  if (!customerData) {
+    return <div>Customer not found!</div>; // Or navigate to a 404 page
+  }
 
   const handleAddActivity = (activity) => {
     setActivities([activity, ...activities]);
@@ -65,7 +77,6 @@ export default function CustomerProfile() {
   };
 
   const handleAddReminder = (reminder) => {
-    // reminder is now an object { text, deadline, description, link }
     setReminders([reminder, ...reminders]);
   };
 
@@ -99,7 +110,7 @@ export default function CustomerProfile() {
         gridTemplateColumns: "1fr 2fr 1fr", 
         gap: LAYOUT.gap, 
         padding: "20px",
-        maxWidth: "1200px", // Adjusted max-width for a slightly tighter layout
+        maxWidth: "1200px",
         margin: "0 auto"
       }}>
         
@@ -113,8 +124,8 @@ export default function CustomerProfile() {
         {/* Middle Column */}
         <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap }}>
           <StatusPanel
-            stages={stages} // Pass stages from state
-            setStages={setStages} // Pass setStages function
+            stages={stages}
+            setStages={setStages}
             currentStage={currentStage}
             setCurrentStage={setCurrentStage}
             stageData={stageData}
@@ -131,7 +142,7 @@ export default function CustomerProfile() {
           <ActivityRecord 
             activities={activities}
             onAddActivity={handleAddActivity}
-            onDeleteActivity={handleDeleteActivity} // Pass the new delete handler
+            onDeleteActivity={handleDeleteActivity}
           />
         </div>
 

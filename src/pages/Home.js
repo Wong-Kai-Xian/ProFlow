@@ -44,7 +44,7 @@ export default function Home() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `${leftWidth}px minmax(300px, 1fr) ${rightWidth}px`,
+          gridTemplateColumns: `${leftWidth}px 1fr ${rightWidth}px`,
           gridTemplateRows: "1fr",
           gap: "10px",
           padding: "10px",
@@ -122,7 +122,6 @@ export default function Home() {
           gridColumn: 2, 
           gridRow: 1,
           height: "800px",
-          minWidth: "300px",
           maxWidth: "100%",
           overflow: "hidden"
         }}>

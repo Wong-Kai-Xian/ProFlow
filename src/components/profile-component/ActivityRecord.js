@@ -131,7 +131,7 @@ export default function ActivityRecord({ activities, onAddActivity, onDeleteActi
                   fontSize: "12px", 
                   color: COLORS.lightText 
                 }}>
-                  {activity.time}
+                  {new Date(activity.time).toLocaleString()}
                 </span>
                 <div style={{ 
                   fontSize: "14px", 
