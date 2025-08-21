@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import TopBar from "../components/TopBar";
-import GroupForum from "../components/GroupForum";
-import UpcomingEvents from "../components/UpcomingEvents";
 import ForumTabs from "../components/ForumTabs";
-import Contacts from "../components/Contacts";
-import ProjectsTab from "../components/ProjectsTab";
+import ForumProjectDetails from "../components/forum-tabs/ForumProjectDetails";
+import ForumReminders from "../components/forum-tabs/ForumReminders";
+import TrendingPosts from "../components/forum-tabs/TrendingPosts";
+import ActiveUsers from "../components/forum-tabs/ActiveUsers";
+import FloatingCreateButton from "../components/forum-tabs/FloatingCreateButton";
+import CreatePostModal from "../components/forum-tabs/CreatePostModal";
 
 export default function Forum() {
   const { id } = useParams();
   const [forumData, setForumData] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [posts, setPosts] = useState([]);
 
   useEffect(() => {
     // Mock forum data - in real app this would come from backend based on ID
@@ -61,6 +65,18 @@ export default function Forum() {
     const forum = forums.find(f => f.id === parseInt(id)) || forums[0];
     setForumData(forum);
   }, [id]);
+
+  const handlePostSubmit = (newPost) => {
+    const postWithId = {
+      ...newPost,
+      id: posts.length + 1,
+    };
+    setPosts([postWithId, ...posts]);
+  };
+
+  const handleTrendingPostClick = (post) => {
+    console.log("Navigate to trending post:", post);
+  };
   return (
     <div style={{ fontFamily: 'Arial, sans-serif' }}>
       <TopBar />
@@ -72,27 +88,33 @@ export default function Forum() {
         padding: "10px",
         minHeight: "90vh"
       }}>
-        {/* Left column: Projects + Contacts */}
-        <div style={{ gridColumn: 1, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <ProjectsTab />
-          <Contacts />
+        {/* Left column: Project Details + Reminders + Trending Posts */}
+        <div style={{ gridColumn: 1, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
+          <ForumProjectDetails forumData={forumData} />
+          <ForumReminders />
+          <TrendingPosts onPostClick={handleTrendingPostClick} />
         </div>
 
-        {/* Middle Column - Tabbed Content */}
+        {/* Middle Column - Tabbed Content (Posts Focus) */}
         <div style={{ gridColumn: 2, gridRow: "1 / span 2" }}>
           <ForumTabs forumData={forumData} />
         </div>
 
-        {/* Top-right: Upcoming Reminders */}
-        <div style={{ gridColumn: 3, gridRow: 1 }}>
-          <UpcomingEvents style={{ maxHeight: "200px", overflowY: "auto" }} />
-        </div>
-
-        {/* Bottom-right: Group Forum */}
-        <div style={{ gridColumn: 3, gridRow: 2, alignSelf: "start" }}>
-          <GroupForum />
+        {/* Right column: Online Members */}
+        <div style={{ gridColumn: 3, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
+          <ActiveUsers />
         </div>
       </div>
+
+      {/* Floating Create Button */}
+      <FloatingCreateButton onClick={() => setShowCreateModal(true)} />
+
+      {/* Create Post Modal */}
+      <CreatePostModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handlePostSubmit}
+      />
     </div>
   );
 }

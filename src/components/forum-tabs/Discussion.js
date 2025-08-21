@@ -1,18 +1,10 @@
 import React, { useState, useEffect } from "react";
-import LocationModal from "./LocationModal";
-import MeetingModal from "./MeetingModal";
 
-export default function Discussion() {
-  const [postText, setPostText] = useState('');
+export default function Discussion({ forumData }) {
   const [posts, setPosts] = useState([]);
   const [likedPosts, setLikedPosts] = useState(new Set());
   const [commentInputs, setCommentInputs] = useState({});
   const [showCommentInput, setShowCommentInput] = useState({});
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [selectedMeeting, setSelectedMeeting] = useState(null);
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  const [showMeetingModal, setShowMeetingModal] = useState(false);
 
   useEffect(() => {
     // Mock posts data
@@ -61,24 +53,7 @@ export default function Discussion() {
     ]);
   }, []);
 
-  const handlePostSubmit = () => {
-    if (postText.trim()) {
-      const newPost = {
-        id: posts.length + 1,
-        type: 'message',
-        author: 'Current User',
-        timestamp: 'Just now',
-        content: postText,
-        likes: 0,
-        comments: []
-      };
-      setPosts([newPost, ...posts]);
-      setPostText('');
-      setSelectedFiles([]);
-      setSelectedLocation('');
-      setSelectedMeeting(null);
-    }
-  };
+
 
   const handleLike = (postId) => {
     const newLikedPosts = new Set(likedPosts);
@@ -146,46 +121,9 @@ export default function Discussion() {
     }
   };
 
-  const handleImageUpload = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.multiple = true;
-    input.onchange = (e) => {
-      const files = Array.from(e.target.files);
-      console.log("Image files selected:", files);
-      setSelectedFiles(prev => [...prev, ...files]);
-    };
-    input.click();
-  };
 
-  const handleFileAttachment = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.multiple = true;
-    input.onchange = (e) => {
-      const files = Array.from(e.target.files);
-      console.log("Files selected:", files);
-      setSelectedFiles(prev => [...prev, ...files]);
-    };
-    input.click();
-  };
 
-  const handleLocationSave = (location) => {
-    setSelectedLocation(location);
-  };
 
-  const handleMeetingSave = (meetingData) => {
-    setSelectedMeeting(meetingData);
-  };
-
-  const clearLocation = () => {
-    setSelectedLocation('');
-  };
-
-  const clearMeeting = () => {
-    setSelectedMeeting(null);
-  };
 
   const getPostTypeLabel = (type) => {
     switch(type) {
@@ -212,219 +150,35 @@ export default function Discussion() {
 
   return (
     <div>
-      {/* Post Creation Section */}
-      <div style={{ 
-        backgroundColor: 'white', 
-        padding: '20px', 
-        borderRadius: '10px', 
-        marginBottom: '20px',
-        border: '1px solid #ECF0F1'
-      }}>
-        <textarea
-          value={postText}
-          onChange={(e) => setPostText(e.target.value)}
-          placeholder="Write a message..."
-          style={{
-            width: '100%',
-            minHeight: '80px',
-            padding: '12px',
-            border: '1px solid #BDC3C7',
-            borderRadius: '8px',
-            fontSize: '14px',
-            fontFamily: 'Arial, sans-serif',
-            resize: 'vertical',
-            outline: 'none',
-            boxSizing: 'border-box'
-          }}
-        />
-        
-        {/* Selected Files Display */}
-        {selectedFiles.length > 0 && (
+      {/* Discussion Feed */}
+      <div style={{ marginBottom: '20px' }}>
+        {posts.length === 0 ? (
           <div style={{
-            marginTop: '10px',
-            padding: '10px',
-            backgroundColor: '#F8F9F9',
-            borderRadius: '5px',
+            backgroundColor: 'white',
+            padding: '40px',
+            borderRadius: '10px',
+            textAlign: 'center',
             border: '1px solid #ECF0F1'
           }}>
-            <div style={{ fontSize: '12px', color: '#7F8C8D', marginBottom: '5px' }}>
-              Selected files ({selectedFiles.length}):
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-              {selectedFiles.map((file, index) => (
-                <span key={index} style={{
-                  fontSize: '11px',
-                  padding: '2px 6px',
-                  backgroundColor: '#3498DB',
-                  color: 'white',
-                  borderRadius: '3px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '3px'
-                }}>
-                  {file.name}
-                  <button
-                    onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== index))}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'white',
-                      cursor: 'pointer',
-                      fontSize: '10px',
-                      padding: '0'
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
+            <h3 style={{ color: '#7F8C8D', margin: '0 0 10px 0' }}>No posts yet</h3>
+            <p style={{ color: '#95A5A6', margin: 0 }}>
+              Be the first to start a discussion! Click the create button to get started.
+            </p>
           </div>
-        )}
-
-        {/* Selected Location Display */}
-        {selectedLocation && (
-          <div style={{
-            marginTop: '10px',
-            padding: '10px',
-            backgroundColor: '#E8F8F5',
-            borderRadius: '5px',
-            border: '1px solid #27AE60',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}>
-            <div style={{ fontSize: '12px', color: '#27AE60' }}>
-              📍 Location: {selectedLocation}
-            </div>
-            <button
-              onClick={clearLocation}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#27AE60',
-                cursor: 'pointer',
-                fontSize: '16px',
-                padding: '2px'
-              }}
-              title="Remove location"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
-        {/* Selected Meeting Display */}
-        {selectedMeeting && (
-          <div style={{
-            marginTop: '10px',
-            padding: '10px',
-            backgroundColor: '#FEF9E7',
-            borderRadius: '5px',
-            border: '1px solid #F39C12',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}>
-            <div style={{ fontSize: '12px', color: '#F39C12' }}>
-              📅 Meeting: {selectedMeeting.type} on {selectedMeeting.fullDateTime} ({selectedMeeting.duration})
-              {selectedMeeting.description && (
-                <div style={{ marginTop: '4px', fontSize: '11px', color: '#D68910' }}>
-                  {selectedMeeting.description}
-                </div>
-              )}
-            </div>
-            <button
-              onClick={clearMeeting}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#F39C12',
-                cursor: 'pointer',
-                fontSize: '16px',
-                padding: '2px'
-              }}
-              title="Remove meeting"
-            >
-              ×
-            </button>
-          </div>
-        )}
-        
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          marginTop: '15px' 
-        }}>
-          <div>
-            <button 
-              onClick={handleImageUpload}
-              style={actionButtonStyle}
-              onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-            >
-              📷 Picture
-            </button>
-            <button 
-              onClick={handleFileAttachment}
-              style={actionButtonStyle}
-              onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-            >
-              📎 Attachment
-            </button>
-            <button 
-              onClick={() => setShowMeetingModal(true)}
-              style={actionButtonStyle}
-              onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-            >
-              📅 Schedule Meeting
-            </button>
-            <button 
-              onClick={() => setShowLocationModal(true)}
-              style={actionButtonStyle}
-              onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-            >
-              📍 Location
-            </button>
-          </div>
-          
-          <button
-            onClick={handlePostSubmit}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#3498DB',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: '500'
-            }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = '#2980B9'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = '#3498DB'}
-          >
-            Post
-          </button>
-        </div>
-      </div>
-
-      {/* Posts List */}
-      <div>
-        {posts.map((post) => {
-          const typeLabel = getPostTypeLabel(post.type);
-          
-          return (
-            <div key={post.id} style={{
-              backgroundColor: 'white',
-              padding: '20px',
-              borderRadius: '10px',
-              marginBottom: '15px',
-              border: '1px solid #ECF0F1'
-            }}>
+        ) : (
+          posts.map((post) => {
+            const typeLabel = getPostTypeLabel(post.type);
+            
+            return (
+              <div key={post.id} style={{
+                backgroundColor: 'white',
+                padding: '25px',
+                borderRadius: '12px',
+                marginBottom: '20px',
+                border: '1px solid #ECF0F1',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                transition: 'all 0.2s ease'
+              }}>
               {/* Post Header */}
               <div style={{ 
                 display: 'flex', 
@@ -586,22 +340,9 @@ export default function Discussion() {
               )}
             </div>
           );
-        })}
+        })
+        )}
       </div>
-
-      {/* Location Modal */}
-      <LocationModal
-        isOpen={showLocationModal}
-        onClose={() => setShowLocationModal(false)}
-        onSave={handleLocationSave}
-      />
-
-      {/* Meeting Modal */}
-      <MeetingModal
-        isOpen={showMeetingModal}
-        onClose={() => setShowMeetingModal(false)}
-        onSave={handleMeetingSave}
-      />
     </div>
   );
 }

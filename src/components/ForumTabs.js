@@ -48,7 +48,7 @@ export default function ForumTabs({ forumData }) {
   const renderTabContent = () => {
     switch(activeTab) {
       case 'Discussion':
-        return <Discussion />;
+        return <Discussion forumData={currentForum} />;
       case 'Media':
         return <Media />;
       case 'Files':
@@ -58,7 +58,7 @@ export default function ForumTabs({ forumData }) {
       case 'About':
         return <About />;
       default:
-        return <Discussion />;
+        return <Discussion forumData={currentForum} />;
     }
   };
 
