@@ -2,6 +2,34 @@ import React, { useEffect, useState } from "react";
 import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT } from "./profile-component/constants"; // Import constants
 
+const SCROLLBAR_STYLES = `
+  /* Styles for scrollbar in Webkit browsers (Chrome, Safari, Edge, Opera) */
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 5px; /* width of the scrollbar */
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1; /* Light grey track */
+    border-radius: 10px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: #888; /* Darker grey thumb */
+    border-radius: 10px;
+  }
+
+  /* Handle on hover */
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #555; /* Even darker grey on hover */
+  }
+
+  /* Firefox scrollbar styles */
+  .thin-scrollbar {
+    scrollbar-width: thin; /* "auto" or "thin" */
+    scrollbar-color: #888 #f1f1f1; /* thumb and track color */
+  }
+`;
+
 export default function UpcomingEvents() {
   const [events, setEvents] = useState([]);
 
@@ -69,7 +97,8 @@ export default function UpcomingEvents() {
       minHeight: 0,
     }}>
       <h3 style={{ marginTop: 0, color: COLORS.text }}>Upcoming Events</h3>
-      <ul style={{ listStyle: 'none', padding: 0, overflowY: "auto", flexGrow: 1 }}> {/* Adjusted: Removed maxHeight */}
+      <style>{SCROLLBAR_STYLES}</style>
+      <ul className="thin-scrollbar" style={{ listStyle: 'none', padding: 0, overflowY: "auto", flexGrow: 1 }}> {/* Adjusted: Removed maxHeight */}
         {events.map((event, index) => (
           <li key={index} style={{ 
             background: COLORS.cardBackground, 

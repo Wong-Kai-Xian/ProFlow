@@ -4,6 +4,34 @@ import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; // Import constants
 import AddGroupForumModal from "./project-component/AddGroupForumModal";
 
+const SCROLLBAR_STYLES = `
+  /* Styles for scrollbar in Webkit browsers (Chrome, Safari, Edge, Opera) */
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 5px; /* width of the scrollbar */
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1; /* Light grey track */
+    border-radius: 10px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: #888; /* Darker grey thumb */
+    border-radius: 10px;
+  }
+
+  /* Handle on hover */
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #555; /* Even darker grey on hover */
+  }
+
+  /* Firefox scrollbar styles */
+  .thin-scrollbar {
+    scrollbar-width: thin; /* "auto" or "thin" */
+    scrollbar-color: #888 #f1f1f1; /* thumb and track color */
+  }
+`;
+
 export default function GroupForum({ forumsData, projectName, onForumsUpdate }) {
   const [forums, setForums] = useState([]);
   const [sortBy, setSortBy] = useState("recent"); // recent or notifications
@@ -127,7 +155,7 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
       </div>
 
       {/* Forum List */}
-      <ul style={{ listStyle: 'none', padding: 0, maxHeight: "250px", overflowY: "auto", flexGrow: 1 }}>
+      <ul style={{ listStyle: 'none', padding: 0, maxHeight: "250px", overflowY: "auto", flexGrow: 1 }} className="thin-scrollbar"> {/* Applied thin-scrollbar class */}
         {sortForums().map((forum, index) => (
           <li key={index} style={{ 
             position: "relative",
@@ -189,6 +217,9 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
           Forum for: <strong>{projectName}</strong>
         </div>
       )}
+
+      {/* Embed the scrollbar styles */}
+      <style>{SCROLLBAR_STYLES}</style>
 
       {/* Add Forum Modal */}
       <AddGroupForumModal

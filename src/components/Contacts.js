@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { FaWhatsapp } from 'react-icons/fa';
 import { MdEmail } from 'react-icons/md'; // Changed from SiGmail to MdEmail
 import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
+import { FaChevronDown, FaChevronUp } from 'react-icons/fa'; // Import chevron icons
 import AddOrganization from "./AddOrganization";
 import DelOrganization from "./DelOrganization";
 import Card from "./profile-component/Card"; // Corrected import path
@@ -11,6 +12,34 @@ import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; /
 import AddProfileModal from "./profile-component/AddProfileModal"; // Import the new AddProfileModal
 import DeleteProfileModal from "./profile-component/DeleteProfileModal"; // Import the new DeleteProfileModal
 import customerDataArray from "./profile-component/customerData.js"; // Import customerDataArray
+
+const SCROLLBAR_STYLES = `
+  /* Styles for scrollbar in Webkit browsers (Chrome, Safari, Edge, Opera) */
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 5px; /* width of the scrollbar */
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1; /* Light grey track */
+    border-radius: 10px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: #888; /* Darker grey thumb */
+    border-radius: 10px;
+  }
+
+  /* Handle on hover */
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #555; /* Even darker grey on hover */
+  }
+
+  /* Firefox scrollbar styles */
+  .thin-scrollbar {
+    scrollbar-width: thin; /* "auto" or "thin" */
+    scrollbar-color: #888 #f1f1f1; /* thumb and track color */
+  }
+`;
 
 export default function Contacts() {
   const navigate = useNavigate();
@@ -191,7 +220,7 @@ export default function Contacts() {
       </div>
 
       {/* List */}
-      <ul style={{ listStyle: "none", padding: 0, margin: 0, maxHeight: "400px", overflowY: "auto", flexGrow: 1 }}> {/* Added maxHeight and overflowY */}
+      <ul style={{ listStyle: "none", padding: 0, margin: 0, maxHeight: "400px", overflowY: "auto", flexGrow: 1 }} className="thin-scrollbar"> {/* Added maxHeight and overflowY, applied class */}
         {view === "clients"
           ? organizations.map((org, idx) => (
               <li key={idx} style={{ marginBottom: LAYOUT.smallGap }}>
@@ -205,8 +234,8 @@ export default function Contacts() {
                   fontWeight: "bold",
                   color: COLORS.text
                 }}>
-                  <span onClick={() => toggleCollapse(idx)} style={{ cursor: "pointer" }}>
-                    {org.name} {org.collapsed ? "+" : "-"}
+                  <span onClick={() => toggleCollapse(idx)} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}>
+                    {org.name} {org.collapsed ? <FaChevronDown /> : <FaChevronUp />}
                   </span>
                   <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
                     <button onClick={() => addClient(idx)} style={{ ...BUTTON_STYLES.primary, padding: "2px 5px", fontSize: "9px" }}>+</button>
@@ -223,20 +252,22 @@ export default function Contacts() {
                       margin: LAYOUT.smallGap + " 0",
                       borderRadius: LAYOUT.smallBorderRadius,
                       display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
+                      flexDirection: "column", // Changed to column to allow content to stack vertically
+                      alignItems: "flex-start", // Align content to the start
                       boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                      cursor: "pointer"
+                      cursor: "pointer",
+                      width: "100%", // Ensure it takes full available width
+                      boxSizing: "border-box", // Include padding in the width calculation
                     }}
                   >
-                    <div>
-                      <strong style={{ color: COLORS.text }}>{c.name}</strong><br/>
-                      <span style={{ fontSize: "12px", color: COLORS.lightText }}>{c.email}</span>
+                    <div style={{ marginBottom: "8px", width: "100%" }}> {/* Added margin-bottom and full width */}
+                      <strong style={{ color: COLORS.text, wordBreak: "break-word" }}>{c.name}</strong><br/> {/* Added word-break */}
+                      <span style={{ fontSize: "12px", color: COLORS.lightText, wordBreak: "break-word" }}>{c.email}</span> {/* Added word-break */}
                     </div>
-                    <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
-                      <button onClick={(e) => { e.stopPropagation(); openWhatsApp(c.whatsapp); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "4px 8px", fontSize: "14px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaWhatsapp /></button>
-                      <button onClick={(e) => { e.stopPropagation(); openEmail(c.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", fontSize: "14px", display: "flex", justifyContent: "center", alignItems: "center" }}><MdEmail /></button>
-                      <button onClick={(e) => { e.stopPropagation(); removeClient(idx, c.name); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "2px", fontSize: "10px", borderRadius: "3px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaTrash /></button>
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "flex-start", width: "100%", marginTop: "8px" }}> {/* Changed to flex-start, increased gap, added margin-top */}
+                      <button onClick={(e) => { e.stopPropagation(); openWhatsApp(c.whatsapp); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaWhatsapp /></button> {/* Increased size */}
+                      <button onClick={(e) => { e.stopPropagation(); openEmail(c.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><MdEmail /></button> {/* Increased size */}
+                      <button onClick={(e) => { e.stopPropagation(); removeClient(idx, c.name); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "6px 12px", fontSize: "16px", borderRadius: "3px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaTrash /></button> {/* Increased size */}
                     </div>
                   </div>
                 ))}
@@ -249,22 +280,25 @@ export default function Contacts() {
                 marginBottom: LAYOUT.smallGap,
                 borderRadius: LAYOUT.smallBorderRadius,
                 display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
+                flexDirection: "column", // Changed to column
+                alignItems: "flex-start", // Align to start
                 boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
               }}>
-                <div>
-                  <strong style={{ color: COLORS.text }}>{t.name}</strong><br/>
-                  <span style={{ fontSize: "12px", color: COLORS.lightText }}>{t.email}</span>
+                <div style={{ marginBottom: "8px", width: "100%" }}>
+                  <strong style={{ color: COLORS.text, wordBreak: "break-word" }}>{t.name}</strong><br/>
+                  <span style={{ fontSize: "12px", color: COLORS.lightText, wordBreak: "break-word" }}>{t.email}</span>
                 </div>
-                <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
-                  <button onClick={(e) => { e.stopPropagation(); openWhatsApp(t.whatsapp); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "4px 8px", fontSize: "14px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaWhatsapp /></button>
-                  <button onClick={(e) => { e.stopPropagation(); openEmail(t.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", fontSize: "14px", display: "flex", justifyContent: "center", alignItems: "center" }}><MdEmail /></button>
-                  <button onClick={(e) => { e.stopPropagation(); removeTeamMember(t.name); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "2px", fontSize: "10px", borderRadius: "3px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaTrash /></button>
+                <div style={{ display: "flex", gap: "8px", justifyContent: "flex-start", width: "100%", marginTop: "8px" }}>
+                  <button onClick={(e) => { e.stopPropagation(); openWhatsApp(t.whatsapp); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaWhatsapp /></button>
+                  <button onClick={(e) => { e.stopPropagation(); openEmail(t.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><MdEmail /></button>
+                  <button onClick={(e) => { e.stopPropagation(); removeTeamMember(t.name); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "6px 12px", fontSize: "16px", borderRadius: "3px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaTrash /></button>
                 </div>
               </li>
             ))}
       </ul>
+
+      {/* Embed the scrollbar styles */}
+      <style>{SCROLLBAR_STYLES}</style>
 
       {/* Modals */}
       {showAddOrg && <AddOrganization onClose={() => setShowAddOrg(false)} onSave={handleAddOrganization} />}

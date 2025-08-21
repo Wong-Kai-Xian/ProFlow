@@ -31,6 +31,7 @@ export default function TopBar() {
       <Link to="/project" style={getLinkStyle("/project")}>Project</Link>
       <Link to="/forum" style={getLinkStyle("/forum")}>Forum</Link>
       <Link to="/customer-profiles" style={getLinkStyle("/customer-profiles")}>Customer Profile</Link>
+      <Link to="/approvals" style={getLinkStyle("/approvals")}>Approval</Link> {/* New link for Approvals */}
       <Link to="/quote" style={getLinkStyle("/quote")}>Quote</Link>
 
       {/* User Profile and Logout */}

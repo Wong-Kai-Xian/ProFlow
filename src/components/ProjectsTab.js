@@ -5,6 +5,34 @@ import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; /
 import Switch from "./Switch"; // Import Switch component
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
 
+const SCROLLBAR_STYLES = `
+  /* Styles for scrollbar in Webkit browsers (Chrome, Safari, Edge, Opera) */
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 5px; /* width of the scrollbar */
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1; /* Light grey track */
+    border-radius: 10px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: #888; /* Darker grey thumb */
+    border-radius: 10px;
+  }
+
+  /* Handle on hover */
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #555; /* Even darker grey on hover */
+  }
+
+  /* Firefox scrollbar styles */
+  .thin-scrollbar {
+    scrollbar-width: thin; /* "auto" or "thin" */
+    scrollbar-color: #888 #f1f1f1; /* thumb and track color */
+  }
+`;
+
 export default function ProjectsTab() {
   const [projects, setProjects] = useState([]);
   const [collapseOngoing, setCollapseOngoing] = useState(false);
@@ -98,7 +126,7 @@ export default function ProjectsTab() {
         />
       </div>
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto" }} className="thin-scrollbar">
         {/* Ongoing Section */}
         <div>
           <button 
@@ -129,6 +157,9 @@ export default function ProjectsTab() {
           )}
         </div>
       </div>
+
+      {/* Embed the scrollbar styles */}
+      <style>{SCROLLBAR_STYLES}</style>
     </Card>
   );
 }
