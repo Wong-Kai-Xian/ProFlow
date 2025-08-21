@@ -4,12 +4,25 @@ import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-componen
 
 export default function ProjectDetails({ project, onSave }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editableProject, setEditableProject] = useState(project);
+  const [editableProject, setEditableProject] = useState(project || {});
 
   // Update editableProject when project prop changes
   useEffect(() => {
-    setEditableProject(project);
+    if (project) {
+      setEditableProject(project);
+    }
   }, [project]);
+
+  // Early return if no project data
+  if (!project) {
+    return (
+      <Card style={{ height: "250px", minHeight: "250px", maxHeight: "250px", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+          <p style={{ color: COLORS.lightText }}>Loading project details...</p>
+        </div>
+      </Card>
+    );
+  }
 
   const handleSave = () => {
     onSave(editableProject);
@@ -38,7 +51,7 @@ export default function ProjectDetails({ project, onSave }) {
   };
 
   return (
-    <Card style={{ height: "350px", minHeight: "350px", maxHeight: "350px", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <Card style={{ height: "250px", minHeight: "250px", maxHeight: "250px", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
         <h3 style={{ margin: 0, color: COLORS.dark, fontSize: "16px", fontWeight: "700" }}>Project Details</h3>
         {!isEditing ? (
@@ -65,7 +78,7 @@ export default function ProjectDetails({ project, onSave }) {
             {isEditing ? (
               <input type="text" name="name" value={editableProject.name || ''} onChange={handleChange} style={INPUT_STYLES.base} />
             ) : (
-              project.name
+              project.name || 'N/A'
             )}
           </span>
         </p>
@@ -102,7 +115,7 @@ export default function ProjectDetails({ project, onSave }) {
       </div>
 
       {/* Description at the bottom */}
-      <div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px", fontWeight: "600" }}>
           <strong>Description:</strong>
         </p>
@@ -111,12 +124,20 @@ export default function ProjectDetails({ project, onSave }) {
             name="description"
             value={editableProject.description || ''}
             onChange={handleChange}
-            style={{ ...INPUT_STYLES.textarea, width: "100%", minHeight: "80px" }}
+            style={{ ...INPUT_STYLES.textarea, width: "100%", flex: 1, resize: "none" }}
           />
         ) : (
-          <p style={{ margin: 0, color: COLORS.lightText, fontSize: "14px", lineHeight: "1.5", fontWeight: "400" }}>
+          <div style={{ 
+            flex: 1, 
+            color: COLORS.lightText, 
+            fontSize: "14px", 
+            lineHeight: "1.4", 
+            fontWeight: "400",
+            overflowY: "auto",
+            paddingRight: "5px"
+          }}>
             {project.description || 'No description provided.'}
-          </p>
+          </div>
         )}
       </div>
     </Card>
