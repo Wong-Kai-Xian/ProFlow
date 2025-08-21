@@ -44,7 +44,7 @@ export default function Home() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `${leftWidth}px 1fr ${rightWidth}px`,
+          gridTemplateColumns: `${leftCollapsed ? 40 : '1fr'} 4fr ${rightCollapsed ? 40 : '1fr'}`, /* Adjusted column widths */
           gridTemplateRows: "1fr",
           gap: "10px",
           padding: "10px",
@@ -55,8 +55,7 @@ export default function Home() {
           width: "100%",
           maxWidth: "100vw",
           boxSizing: "border-box"
-        }}
-      >
+        }}>
         {/* Left Panel */}
         <div
           style={{
@@ -66,19 +65,22 @@ export default function Home() {
             display: "flex",
             flexDirection: "column",
             gap: "12px",
-            height: "100%"
-          }}
-        >
+            height: "100%",
+            minWidth: leftCollapsed ? 'auto' : '200px', /* Ensure it can shrink */
+            maxWidth: leftCollapsed ? 'auto' : '300px' /* Optional: add max width */
+          }}>
           {!leftCollapsed && (
             <>
               <div style={{ 
                 height: "350px",
-                marginBottom: "45px"
+                marginBottom: "45px",
+                flexShrink: 0 /* Prevent shrinking */
               }}>
                 <ProjectsTab />
               </div>
               <div style={{ 
-                height: "340px"
+                height: "340px",
+                flexShrink: 0 /* Prevent shrinking */
               }}>
                 <Contacts onSelectCustomer={goToCustomerProfile} />
               </div>
@@ -136,19 +138,24 @@ export default function Home() {
             position: "relative",
             display: "flex",
             flexDirection: "column",
-            height: "100%"
+            gap: "12px",
+            height: "100%",
+            minWidth: rightCollapsed ? 'auto' : '200px', /* Ensure it can shrink */
+            maxWidth: rightCollapsed ? 'auto' : '300px' /* Optional: add max width */
           }}
         >
           <div style={{ 
             height: "320px",
-            marginBottom: "20px"
+            marginBottom: "20px",
+            flexShrink: 0 /* Prevent shrinking */
           }}>
             {!rightCollapsed && <UpcomingEvents />}
           </div>
 
           <div style={{ 
             height: "340px",
-            marginTop: "65px"
+            marginTop: "65px",
+            flexShrink: 0 /* Prevent shrinking */
           }}>
             {!rightCollapsed && <GroupForum />}
           </div>

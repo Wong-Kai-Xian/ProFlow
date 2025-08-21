@@ -8,17 +8,20 @@ import GroupForum from '../components/GroupForum';
 import { COLORS, LAYOUT, STAGES, INPUT_STYLES, BUTTON_STYLES } from '../components/profile-component/constants';
 import StageIndicator from '../components/project-component/StageIndicator'; // Import StageIndicator
 import ApprovalModal from '../components/project-component/ApprovalModal'; // Import ApprovalModal
+import SendApprovalModal from '../components/project-component/SendApprovalModal'; // Import SendApprovalModal
 
 
 export default function ProjectDetail() {
   const { projectName } = useParams();
   const [currentStage, setCurrentStage] = useState(STAGES[0]); // New state for current project stage
   const [showApprovalModal, setShowApprovalModal] = useState(false); // New state for approval modal
+  const [showSendApprovalModal, setShowSendApprovalModal] = useState(false); // New state for SendApprovalModal
 
 
   // Mock data for now - will need to fetch actual project data later
   const mockProjectData = {
     "Website Redesign": {
+      id: "website-redesign",
       companyInfo: { name: "Acme Corp", industry: "Tech", contact: "Jane Doe" },
       reminders: [{ id: 1, text: "Follow up with Jane Doe on design", timestamp: "2024-03-09, 10:00 AM" }], // Changed from events to reminders
       description: "A comprehensive redesign of the company website to improve user experience and visual appeal.", // New description field
@@ -43,6 +46,7 @@ export default function ProjectDetail() {
       forums: [{ title: "Website Design Feedback", posts: 5, lastActivity: "1 hour ago", notifications: 2 }],
     },
     "Mobile App Development": {
+      id: "mobile-app-development",
       companyInfo: { name: "Beta Ltd", industry: "Software", contact: "John Smith" },
       reminders: [{ id: 2, text: "Review backend API docs", timestamp: "2024-03-14, 02:00 PM" }], // Changed from events to reminders
       description: "Development of a new mobile application for iOS and Android platforms.", // New description field
@@ -59,6 +63,7 @@ export default function ProjectDetail() {
       forums: [{ title: "Mobile App Bug Reports", posts: 10, lastActivity: "30 mins ago", notifications: 5 }],
     },
     "Marketing Campaign": {
+      id: "marketing-campaign",
       companyInfo: { name: "Marketing Pro", industry: "Marketing", contact: "Sarah Lee" },
       reminders: [{ id: 3, text: "Prepare Q2 marketing report", timestamp: "2024-03-18, 09:00 AM" }], // Changed from events to reminders
       description: "Planning and execution of a new digital marketing campaign.", // New description field
@@ -167,7 +172,19 @@ export default function ProjectDetail() {
 
         {/* Right Column (spanning middle and right) */}
         <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap, gridColumn: 2, gridRow: 1 }}>
-          <h4 style={{ margin: "0 0 8px 0", color: COLORS.text, textAlign: "center" }}>Project Stages</h4> {/* New title */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <h4 style={{ margin: "0", color: COLORS.text }}>Project Stages</h4>
+            <button
+              onClick={() => setShowSendApprovalModal(true)}
+              style={{
+                ...BUTTON_STYLES.primary,
+                padding: "8px 16px",
+                fontSize: "14px",
+              }}
+            >
+              Send Approval
+            </button>
+          </div>
           <StageIndicator 
             currentStage={currentStage} 
             allStages={STAGES} 
@@ -190,7 +207,13 @@ export default function ProjectDetail() {
           onConfirm={handleConfirmAdvanceStage}
         />
       )}
-
+      <SendApprovalModal
+        isOpen={showSendApprovalModal}
+        onClose={() => setShowSendApprovalModal(false)}
+        onSendApproval={(data) => console.log("Approval data sent:", data)}
+        defaultProject={projectDetails} // Pass current project details
+        defaultStatus={currentStage} // Pass current stage as default status
+      />
     </div>
   );
 }

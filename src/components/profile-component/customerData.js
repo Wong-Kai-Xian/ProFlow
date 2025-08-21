@@ -44,7 +44,10 @@ const customerData = [
         "tasks": [],
         "completed": false
       }
-    }
+    },
+    "projects": [
+      { "id": "website-redesign", "name": "Website Redesign", "status": "Negotiation" }
+    ]
   },
   {
     "id": 2,
@@ -87,7 +90,10 @@ const customerData = [
         "tasks": [],
         "completed": false
       }
-    }
+    },
+    "projects": [
+      { "id": "mobile-app-development", "name": "Mobile App Development", "status": "Negotiation" }
+    ]
   },
   {
     "id": 3,
@@ -132,7 +138,10 @@ const customerData = [
         ],
         "completed": true
       }
-    }
+    },
+    "projects": [
+      { "id": "marketing-campaign", "name": "Marketing Campaign", "status": "Proposal" }
+    ]
   },
   {
     "id": 4,
@@ -174,7 +183,8 @@ const customerData = [
         "tasks": [],
         "completed": false
       }
-    }
+    },
+    "projects": []
   },
   {
     "id": 5,
@@ -216,7 +226,8 @@ const customerData = [
         "tasks": [],
         "completed": false
       }
-    }
+    },
+    "projects": []
   }
 ];
 

@@ -10,10 +10,12 @@ import Reminders from "../components/profile-component/Reminders";
 import AttachedFiles from "../components/profile-component/AttachedFiles";
 import TaskManager from "../components/profile-component/TaskManager";
 import customerDataArray from "../components/profile-component/customerData.js";
-import { STAGES, COLORS, LAYOUT } from "../components/profile-component/constants";
+import SendApprovalModal from "../components/project-component/SendApprovalModal"; // Import SendApprovalModal
+import { STAGES, COLORS, LAYOUT, BUTTON_STYLES } from "../components/profile-component/constants";
 
 export default function CustomerProfile() {
   const { id } = useParams();
+  const [showSendApprovalModal, setShowSendApprovalModal] = useState(false); // New state for SendApprovalModal
 
   // Find the customer data based on the ID from the URL
   const customerData = customerDataArray.find(cust => cust.id === parseInt(id));
@@ -158,6 +160,24 @@ export default function CustomerProfile() {
         </div>
 
       </div>
+      <button
+        onClick={() => setShowSendApprovalModal(true)}
+        style={{
+          ...BUTTON_STYLES.primary,
+          padding: "10px 20px",
+          fontSize: "16px",
+          margin: LAYOUT.gap,
+          alignSelf: "flex-end", // Align button to the right if parent is flex container
+        }}
+      >
+        Send Approval
+      </button>
+      <SendApprovalModal
+        isOpen={showSendApprovalModal}
+        onClose={() => setShowSendApprovalModal(false)}
+        onSendApproval={(data) => console.log("Customer Profile - Approval data sent:", data)}
+        allProjects={customerData.projects || []} // Pass customer's projects
+      />
     </div>
   );
 }

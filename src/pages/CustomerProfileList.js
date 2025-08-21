@@ -56,7 +56,7 @@ export default function CustomerProfileList() {
     email: customer.customerProfile.email,
     phone: customer.customerProfile.phone,
     status: customer.status || "Active", // Default to "Active" if not specified
-    projects: customer.projects || 0, // Default to 0 if not specified
+    projects: customer.projects ? customer.projects.length : 0, // Use length of projects array
     lastContact: customer.lastContact || "N/A", // Default to "N/A" if not specified
     currentStage: customer.currentStage || "Working",
     stageData: customer.stageData || {} // Default to empty object if not specified

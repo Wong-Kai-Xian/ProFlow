@@ -161,6 +161,9 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
             </div>
             {forum.notifications > 0 && (
               <div style={{
+                position: "absolute",
+                top: "-8px", /* Adjust as needed for desired offset */
+                right: "-8px", /* Adjust as needed for desired offset */
                 background: COLORS.danger,
                 color: "white",
                 borderRadius: "50%",
@@ -170,7 +173,8 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
                 alignItems: "center",
                 justifyContent: "center",
                 fontSize: "12px",
-                fontWeight: "bold"
+                fontWeight: "bold",
+                zIndex: 1 /* Ensure it's above other content */
               }}>
                 {forum.notifications}
               </div>
