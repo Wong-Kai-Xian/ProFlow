@@ -170,8 +170,8 @@ export default function Discussion({ forumData }) {
           posts.map((post) => {
             const typeLabel = getPostTypeLabel(post.type);
             
-            return (
-              <div key={post.id} style={{
+                          return (
+                <div key={post.id} id={`post-${post.id}`} style={{
                 backgroundColor: 'white',
                 padding: '25px',
                 borderRadius: '12px',

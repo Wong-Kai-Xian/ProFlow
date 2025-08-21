@@ -106,12 +106,12 @@ export default function TrendingPosts({ onPostClick }) {
                   border: '1px solid transparent'
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = '#E8F4FD';
-                  e.target.style.borderColor = '#3498DB';
+                  e.currentTarget.style.backgroundColor = '#E8F4FD';
+                  e.currentTarget.style.borderColor = '#3498DB';
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = '#F8F9FA';
-                  e.target.style.borderColor = 'transparent';
+                  e.currentTarget.style.backgroundColor = '#F8F9FA';
+                  e.currentTarget.style.borderColor = 'transparent';
                 }}
               >
                 <div style={{
