@@ -31,40 +31,55 @@ export default function Home() {
       fontFamily: "Arial, sans-serif",
       position: "relative",
       background: COLORS.background,
-      height: "100vh", // Changed from minHeight to height
-      display: "flex", // Added flex display
-      flexDirection: "column", // Added flex direction
+      minHeight: "100vh",
+      width: "100vw",
+      display: "flex",
+      flexDirection: "column",
+      margin: "0",
+      padding: "0",
+      overflowX: "hidden"
     }}>
       <TopBar />
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `${leftWidth}px 1fr ${rightWidth}px`,
-          gridTemplateRows: "auto 1fr",
-          gap: LAYOUT.gap,
-          padding: LAYOUT.gap,
-          flexGrow: 1, // Changed from minHeight to flexGrow
-          transition: "grid-template-columns 0.3s ease"
+          gridTemplateColumns: `${leftWidth}px minmax(300px, 1fr) ${rightWidth}px`,
+          gridTemplateRows: "1fr",
+          gap: "10px",
+          padding: "10px",
+          transition: "grid-template-columns 0.3s ease",
+          flex: 1,
+          minHeight: "calc(100vh - 100px)",
+          overflowX: "hidden",
+          width: "100%",
+          maxWidth: "100vw",
+          boxSizing: "border-box"
         }}
       >
         {/* Left Panel */}
         <div
           style={{
             gridColumn: 1,
-            gridRow: "1 / span 2",
+            gridRow: 1,
             position: "relative",
             display: "flex",
             flexDirection: "column",
-            gap: LAYOUT.smallGap
+            gap: "12px",
+            height: "100%"
           }}
         >
           {!leftCollapsed && (
             <>
-              <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+              <div style={{ 
+                height: "350px",
+                marginBottom: "45px"
+              }}>
                 <ProjectsTab />
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+              <div style={{ 
+                height: "340px"
+              }}>
                 <Contacts onSelectCustomer={goToCustomerProfile} />
               </div>
             </>
@@ -105,11 +120,11 @@ export default function Home() {
         {/* Middle Panel */}
         <div style={{
           gridColumn: 2, 
-          gridRow: "1 / span 2",
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto", // Enable scrolling for the middle panel
-          minHeight: 0 // Allow content to shrink and enable scrolling
+          gridRow: 1,
+          height: "800px",
+          minWidth: "300px",
+          maxWidth: "100%",
+          overflow: "hidden"
         }}>
           <Dashboard />
         </div>
@@ -118,18 +133,24 @@ export default function Home() {
         <div
           style={{
             gridColumn: 3,
-            gridRow: "1 / span 2",
+            gridRow: 1,
             position: "relative",
             display: "flex",
             flexDirection: "column",
-            gap: LAYOUT.smallGap
+            height: "100%"
           }}
         >
-          <div>
+          <div style={{ 
+            height: "320px",
+            marginBottom: "20px"
+          }}>
             {!rightCollapsed && <UpcomingEvents />}
           </div>
 
-          <div style={{ flexGrow: 1 }}>
+          <div style={{ 
+            height: "340px",
+            marginTop: "65px"
+          }}>
             {!rightCollapsed && <GroupForum />}
           </div>
 
@@ -163,6 +184,32 @@ export default function Home() {
           >
             {rightCollapsed ? "<" : ">"}
           </button>
+        </div>
+      </div>
+      
+      {/* Footer Bar */}
+      <div style={{
+        height: "40px",
+        backgroundColor: COLORS.secondary,
+        color: COLORS.white,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 2rem",
+        fontSize: "14px",
+        width: "100%",
+        margin: "0",
+        boxSizing: "border-box"
+      }}>
+        <div style={{ display: "flex", gap: "2rem" }}>
+          <span style={{ cursor: "pointer" }}>Help</span>
+          <span style={{ cursor: "pointer" }}>Support</span>
+          <span style={{ cursor: "pointer" }}>Documentation</span>
+        </div>
+        <div style={{ display: "flex", gap: "2rem" }}>
+          <span>© 2025 ProFlow</span>
+          <span style={{ cursor: "pointer" }}>Privacy</span>
+          <span style={{ cursor: "pointer" }}>Terms</span>
         </div>
       </div>
     </div>
