@@ -75,14 +75,22 @@ export default function Forum() {
   };
 
   const handleTrendingPostClick = (post) => {
-    console.log("Navigate to trending post:", post);
+    // Find post in current posts and scroll to it
+    const postElement = document.getElementById(`post-${post.id}`);
+    if (postElement) {
+      postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      postElement.style.backgroundColor = '#E8F4FD';
+      setTimeout(() => {
+        postElement.style.backgroundColor = 'white';
+      }, 2000);
+    }
   };
   return (
     <div style={{ fontFamily: 'Arial, sans-serif' }}>
       <TopBar />
       <div style={{
         display: "grid",
-        gridTemplateColumns: "1fr 2fr 1fr",
+        gridTemplateColumns: "280px 1fr 200px",
         gridTemplateRows: "auto 1fr",
         gap: "20px",
         padding: "10px",
@@ -100,8 +108,8 @@ export default function Forum() {
           <ForumTabs forumData={forumData} />
         </div>
 
-        {/* Right column: Online Members */}
-        <div style={{ gridColumn: 3, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
+        {/* Right column: Online Members - Bottom Only */}
+        <div style={{ gridColumn: 3, gridRow: 2, display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto", alignSelf: "start" }}>
           <ActiveUsers />
         </div>
       </div>
