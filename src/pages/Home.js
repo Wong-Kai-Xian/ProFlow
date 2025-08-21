@@ -38,6 +38,7 @@ export default function Home() {
       margin: "0",
       padding: "0",
       overflowX: "hidden"
+      // Removed overflowY: "auto" /* Enabled vertical scrolling for the main page */
     }}>
       <TopBar />
 

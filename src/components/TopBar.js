@@ -26,7 +26,8 @@ export default function TopBar() {
   };
 
   return (
-    <nav style={{ display: 'flex', padding: '10px', background: '#2C3E50', color: 'white', width: '100%', margin: '0', boxSizing: 'border-box', alignItems: 'center' }}>
+    <nav style={{ display: 'flex', padding: '10px', background: '#2C3E50', color: 'white', width: '100%', margin: '0', boxSizing: 'border-sizing', alignItems: 'center', gap: '10px' }}>
+      <img src="/proflow-logo.png" alt="ProFlow Logo" style={{ height: '45px', marginRight: '20px', flexShrink: 0 }} /> {/* Logo set to PNG */}
       <Link to="/" style={getLinkStyle("/")}>Home</Link>
       <Link to="/project" style={getLinkStyle("/project")}>Project</Link>
       <Link to="/forum" style={getLinkStyle("/forum")}>Forum</Link>
@@ -50,6 +51,7 @@ export default function TopBar() {
             fontWeight: 'bold',
             fontSize: '18px',
             color: 'white',
+            marginRight: '10px' /* Added margin-right for spacing */
           }}
         >
           U {/* Placeholder for User Initial/Logo */}
@@ -59,7 +61,7 @@ export default function TopBar() {
           <div style={{
             position: 'absolute',
             top: '50px',
-            right: '0',
+            right: '10px', /* Adjusted right position */
             backgroundColor: '#34495E',
             borderRadius: '5px',
             boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
