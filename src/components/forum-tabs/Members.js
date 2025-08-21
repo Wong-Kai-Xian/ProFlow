@@ -1,4 +1,5 @@
 import React from "react";
+import { COLORS } from "../profile-component/constants";
 
 export default function Members() {
   const members = [
@@ -20,7 +21,7 @@ export default function Members() {
 
   return (
     <div>
-      <h3 style={{ marginTop: 0, color: '#2C3E50' }}>Forum Members ({members.length})</h3>
+      <h3 style={{ marginTop: 0, color: COLORS.dark, fontSize: "16px", fontWeight: "700" }}>Forum Members ({members.length})</h3>
       
       <div style={{ 
         display: 'grid', 

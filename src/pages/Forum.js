@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import ForumTabs from "../components/ForumTabs";
-import ForumProjectDetails from "../components/forum-tabs/ForumProjectDetails";
+import ProjectDetails from "../components/project-component/ProjectDetails";
 import ForumReminders from "../components/forum-tabs/ForumReminders";
 import TrendingPosts from "../components/forum-tabs/TrendingPosts";
 import ActiveUsers from "../components/forum-tabs/ActiveUsers";
@@ -14,6 +14,7 @@ export default function Forum() {
   const [forumData, setForumData] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [posts, setPosts] = useState([]);
+  const [projectDetails, setProjectDetails] = useState(null);
 
   useEffect(() => {
     // Mock forum data - in real app this would come from backend based on ID
@@ -64,6 +65,17 @@ export default function Forum() {
     
     const forum = forums.find(f => f.id === parseInt(id)) || forums[0];
     setForumData(forum);
+    
+    // Mock project details for the forum
+    setProjectDetails({
+      name: forum.name,
+      companyInfo: { 
+        name: "Tech Solutions Inc", 
+        industry: "Software Development", 
+        contact: "john.doe@techsolutions.com" 
+      },
+      description: forum.description
+    });
   }, [id]);
 
   const handlePostSubmit = (newPost) => {
@@ -90,7 +102,12 @@ export default function Forum() {
       }}>
         {/* Left column: Project Details + Reminders + Trending Posts */}
         <div style={{ gridColumn: 1, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
-          <ForumProjectDetails forumData={forumData} />
+          {projectDetails && (
+            <ProjectDetails 
+              project={projectDetails} 
+              onSave={(updatedProject) => setProjectDetails(updatedProject)}
+            />
+          )}
           <ForumReminders />
           <TrendingPosts onPostClick={handleTrendingPostClick} />
         </div>

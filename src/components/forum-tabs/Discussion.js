@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { COLORS } from "../profile-component/constants";
 
 export default function Discussion({ forumData }) {
   const [posts, setPosts] = useState([]);
@@ -143,8 +144,8 @@ export default function Discussion({ forumData }) {
     backgroundColor: 'white',
     borderRadius: '5px',
     cursor: 'pointer',
-    fontSize: '12px',
-    color: '#7F8C8D',
+    fontSize: '14px',
+    color: COLORS.lightText,
     transition: 'all 0.3s ease'
   };
 
@@ -160,8 +161,8 @@ export default function Discussion({ forumData }) {
             textAlign: 'center',
             border: '1px solid #ECF0F1'
           }}>
-            <h3 style={{ color: '#7F8C8D', margin: '0 0 10px 0' }}>No posts yet</h3>
-            <p style={{ color: '#95A5A6', margin: 0 }}>
+            <h3 style={{ color: COLORS.lightText, margin: '0 0 10px 0', fontSize: '16px', fontWeight: '600' }}>No posts yet</h3>
+            <p style={{ color: COLORS.lightText, margin: 0, fontSize: '15px' }}>
               Be the first to start a discussion! Click the create button to get started.
             </p>
           </div>

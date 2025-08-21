@@ -4,6 +4,7 @@ import Media from "./forum-tabs/Media";
 import Files from "./forum-tabs/Files";
 import Members from "./forum-tabs/Members";
 import About from "./forum-tabs/About";
+import { COLORS } from "./profile-component/constants";
 
 export default function ForumTabs({ forumData }) {
   const [activeTab, setActiveTab] = useState('Discussion');
@@ -28,21 +29,21 @@ export default function ForumTabs({ forumData }) {
     cursor: 'pointer',
     borderRadius: '8px 8px 0 0',
     fontSize: '14px',
-    fontWeight: '500',
+    fontWeight: '600',
     transition: 'all 0.3s ease',
-    color: '#7F8C8D'
+    color: COLORS.lightText
   };
 
   const activeTabStyle = {
     ...tabStyle,
-    backgroundColor: '#3498DB',
-    color: 'white',
-    fontWeight: '600'
+    backgroundColor: COLORS.primary,
+    color: COLORS.white,
+    fontWeight: '700'
   };
 
   const hoverTabStyle = {
-    backgroundColor: '#ECF0F1',
-    color: '#2C3E50'
+    backgroundColor: COLORS.light,
+    color: COLORS.dark
   };
 
   const renderTabContent = () => {

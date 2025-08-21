@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; // Import constants
 import AddGroupForumModal from "./project-component/AddGroupForumModal";
@@ -7,6 +8,7 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
   const [forums, setForums] = useState([]);
   const [sortBy, setSortBy] = useState("recent"); // recent or notifications
   const [showAddForumModal, setShowAddForumModal] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const defaultForums = [
@@ -81,7 +83,7 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
     }}>
       {/* Header with top-right button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
-        <h3 style={{ margin: 0, color: COLORS.text }}>Group Forum</h3>
+        <h3 style={{ margin: 0, color: COLORS.dark, fontSize: "16px", fontWeight: "700" }}>Group Forum</h3>
         <div style={{ display: "flex", gap: LAYOUT.smallGap, alignItems: "center" }}>
           <button 
             onClick={() => setSortBy(sortBy === "recent" ? "notifications" : "recent")} 
@@ -139,6 +141,7 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
             transition: "all 0.2s ease",
             cursor: "pointer"
           }}
+          onClick={() => navigate('/forum/1')}
           onMouseEnter={(e) => {
             e.target.style.transform = "translateY(-1px)";
             e.target.style.boxShadow = "0 4px 16px rgba(0, 0, 0, 0.1)";
@@ -148,9 +151,9 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
             e.target.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.05)";
           }}>
             <div>
-              <strong style={{ color: COLORS.text }}>{forum.title}</strong>
+              <strong style={{ color: COLORS.dark, fontSize: "14px", fontWeight: "600" }}>{forum.title}</strong>
               <br />
-              <small style={{ color: COLORS.lightText }}>
+              <small style={{ color: COLORS.lightText, fontSize: "12px" }}>
                 {forum.posts} posts • Last activity: {forum.lastActivity}
               </small>
             </div>

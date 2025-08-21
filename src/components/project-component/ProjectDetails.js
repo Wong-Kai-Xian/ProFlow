@@ -38,9 +38,9 @@ export default function ProjectDetails({ project, onSave }) {
   };
 
   return (
-    <Card style={{ flexGrow: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+    <Card style={{ height: "350px", minHeight: "350px", maxHeight: "350px", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
-        <h3 style={{ margin: 0, color: COLORS.text }}>Project Details</h3>
+        <h3 style={{ margin: 0, color: COLORS.dark, fontSize: "16px", fontWeight: "700" }}>Project Details</h3>
         {!isEditing ? (
           <button onClick={() => setIsEditing(true)} style={BUTTON_STYLES.secondary}>
             Edit
@@ -59,39 +59,51 @@ export default function ProjectDetails({ project, onSave }) {
 
       {/* Editable Info at the top */}
       <div style={{ marginBottom: LAYOUT.smallGap }}>
-        <p style={{ margin: "0 0 5px 0", color: COLORS.text, fontSize: "14px" }}>
-          <strong>Project Name:</strong> {isEditing ? (
-            <input type="text" name="name" value={editableProject.name || ''} onChange={handleChange} style={INPUT_STYLES.base} />
-          ) : (
-            project.name
-          )}
+        <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
+          <strong style={{ fontWeight: "600" }}>Project Name:</strong> 
+          <span style={{ marginLeft: "8px", fontWeight: "400" }}>
+            {isEditing ? (
+              <input type="text" name="name" value={editableProject.name || ''} onChange={handleChange} style={INPUT_STYLES.base} />
+            ) : (
+              project.name
+            )}
+          </span>
         </p>
-        <p style={{ margin: "0 0 5px 0", color: COLORS.text, fontSize: "14px" }}>
-          <strong>Company:</strong> {isEditing ? (
-            <input type="text" name="companyInfo.name" value={editableProject.companyInfo?.name || ''} onChange={handleChange} style={INPUT_STYLES.base} />
-          ) : (
-            project.companyInfo?.name || 'N/A'
-          )}
+        <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
+          <strong style={{ fontWeight: "600" }}>Company:</strong> 
+          <span style={{ marginLeft: "8px", fontWeight: "400" }}>
+            {isEditing ? (
+              <input type="text" name="companyInfo.name" value={editableProject.companyInfo?.name || ''} onChange={handleChange} style={INPUT_STYLES.base} />
+            ) : (
+              project.companyInfo?.name || 'N/A'
+            )}
+          </span>
         </p>
-        <p style={{ margin: "0 0 5px 0", color: COLORS.text, fontSize: "14px" }}>
-          <strong>Industry:</strong> {isEditing ? (
-            <input type="text" name="companyInfo.industry" value={editableProject.companyInfo?.industry || ''} onChange={handleChange} style={INPUT_STYLES.base} />
-          ) : (
-            project.companyInfo?.industry || 'N/A'
-          )}
+        <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
+          <strong style={{ fontWeight: "600" }}>Industry:</strong> 
+          <span style={{ marginLeft: "8px", fontWeight: "400" }}>
+            {isEditing ? (
+              <input type="text" name="companyInfo.industry" value={editableProject.companyInfo?.industry || ''} onChange={handleChange} style={INPUT_STYLES.base} />
+            ) : (
+              project.companyInfo?.industry || 'N/A'
+            )}
+          </span>
         </p>
-        <p style={{ margin: "0", color: COLORS.text, fontSize: "14px" }}>
-          <strong>Contact:</strong> {isEditing ? (
-            <input type="text" name="companyInfo.contact" value={editableProject.companyInfo?.contact || ''} onChange={handleChange} style={INPUT_STYLES.base} />
-          ) : (
-            project.companyInfo?.contact || 'N/A'
-          )}
+        <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
+          <strong style={{ fontWeight: "600" }}>Contact:</strong> 
+          <span style={{ marginLeft: "8px", fontWeight: "400" }}>
+            {isEditing ? (
+              <input type="text" name="companyInfo.contact" value={editableProject.companyInfo?.contact || ''} onChange={handleChange} style={INPUT_STYLES.base} />
+            ) : (
+              project.companyInfo?.contact || 'N/A'
+            )}
+          </span>
         </p>
       </div>
 
       {/* Description at the bottom */}
       <div>
-        <p style={{ margin: "0 0 5px 0", color: COLORS.text, fontSize: "14px" }}>
+        <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px", fontWeight: "600" }}>
           <strong>Description:</strong>
         </p>
         {isEditing ? (
@@ -102,7 +114,7 @@ export default function ProjectDetails({ project, onSave }) {
             style={{ ...INPUT_STYLES.textarea, width: "100%", minHeight: "80px" }}
           />
         ) : (
-          <p style={{ margin: 0, color: COLORS.lightText, fontSize: "14px", lineHeight: "1.5" }}>
+          <p style={{ margin: 0, color: COLORS.lightText, fontSize: "14px", lineHeight: "1.5", fontWeight: "400" }}>
             {project.description || 'No description provided.'}
           </p>
         )}
