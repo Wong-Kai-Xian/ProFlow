@@ -6,7 +6,7 @@ import Members from "./forum-tabs/Members";
 import About from "./forum-tabs/About";
 import { COLORS } from "./profile-component/constants";
 
-export default function ForumTabs({ forumData }) {
+export default function ForumTabs({ forumData, posts, setPosts }) {
   const [activeTab, setActiveTab] = useState('Discussion');
   
   // Default forum data if none provided
@@ -49,7 +49,7 @@ export default function ForumTabs({ forumData }) {
   const renderTabContent = () => {
     switch(activeTab) {
       case 'Discussion':
-        return <Discussion forumData={currentForum} />;
+        return <Discussion forumData={currentForum} posts={posts} setPosts={setPosts} />;
       case 'Media':
         return <Media />;
       case 'Files':
@@ -59,7 +59,7 @@ export default function ForumTabs({ forumData }) {
       case 'About':
         return <About />;
       default:
-        return <Discussion forumData={currentForum} />;
+        return <Discussion forumData={currentForum} posts={posts} setPosts={setPosts} />;
     }
   };
 

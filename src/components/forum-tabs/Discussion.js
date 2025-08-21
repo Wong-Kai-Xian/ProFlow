@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "../profile-component/constants";
 
-export default function Discussion({ forumData }) {
-  const [posts, setPosts] = useState([]);
+export default function Discussion({ forumData, posts, setPosts }) {
   const [likedPosts, setLikedPosts] = useState(new Set());
   const [commentInputs, setCommentInputs] = useState({});
   const [showCommentInput, setShowCommentInput] = useState({});
+  const [editingPost, setEditingPost] = useState(null);
+  const [editContent, setEditContent] = useState("");
 
   useEffect(() => {
-    // Mock posts data
-    setPosts([
+    // Only set mock posts data if posts array is empty
+    if (!posts || posts.length === 0) {
+      setPosts([
       {
         id: 1,
         type: 'message',
@@ -51,8 +53,9 @@ export default function Discussion({ forumData }) {
           { author: 'John Smith', content: 'Thanks for sharing this!' }
         ]
       }
-    ]);
-  }, []);
+      ]);
+    }
+  }, [posts, setPosts]);
 
 
 
@@ -122,6 +125,25 @@ export default function Discussion({ forumData }) {
     }
   };
 
+  const handleEditPost = (post) => {
+    setEditingPost(post.id);
+    setEditContent(post.content);
+  };
+
+  const handleSaveEdit = (postId) => {
+    setPosts(posts.map(post => 
+      post.id === postId 
+        ? { ...post, content: editContent, edited: true }
+        : post
+    ));
+    setEditingPost(null);
+    setEditContent("");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPost(null);
+    setEditContent("");
+  };
 
 
 
@@ -209,11 +231,86 @@ export default function Discussion({ forumData }) {
 
               {/* Post Content */}
               <div style={{ marginBottom: '15px', color: '#2C3E50' }}>
-                {post.content}
+                {editingPost === post.id ? (
+                  <div style={{ marginBottom: '10px' }}>
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      style={{
+                        width: '100%',
+                        minHeight: '80px',
+                        padding: '10px',
+                        borderRadius: '5px',
+                        border: '1px solid #BDC3C7',
+                        fontSize: '14px',
+                        fontFamily: 'Arial, sans-serif',
+                        resize: 'vertical',
+                        outline: 'none'
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                      <button
+                        onClick={() => handleSaveEdit(post.id)}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#27AE60',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#95A5A6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {post.content}
+                    {post.edited && (
+                      <span style={{ 
+                        fontSize: '11px', 
+                        color: '#7F8C8D', 
+                        fontStyle: 'italic',
+                        marginLeft: '8px'
+                      }}>
+                        (edited)
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
+              {/* Location Details */}
+              {post.location && (
+                <div style={{
+                  backgroundColor: '#E8F8F5',
+                  padding: '10px',
+                  borderRadius: '5px',
+                  marginBottom: '15px',
+                  borderLeft: '4px solid #27AE60'
+                }}>
+                  <strong>📍 Location: {post.location}</strong>
+                </div>
+              )}
+
               {/* Meeting Details */}
-              {post.type === 'meeting' && post.meetingDetails && (
+              {post.meeting && (
                 <div style={{
                   backgroundColor: '#FEF9E7',
                   padding: '10px',
@@ -221,9 +318,13 @@ export default function Discussion({ forumData }) {
                   marginBottom: '15px',
                   borderLeft: '4px solid #F39C12'
                 }}>
-                  <strong>{post.meetingDetails.title}</strong><br/>
-                  <small>📅 {post.meetingDetails.date}</small><br/>
-                  <small>📍 {post.meetingDetails.location}</small>
+                  <strong>📅 Meeting: {post.meeting.type} on {post.meeting.fullDateTime}</strong><br/>
+                  <small>⏱️ Duration: {post.meeting.duration}</small><br/>
+                  {post.meeting.description && (
+                    <>
+                      <small>📝 {post.meeting.description}</small><br/>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -273,6 +374,18 @@ export default function Discussion({ forumData }) {
                   }}
                 >
                   💬 {post.comments.length} Comment{post.comments.length !== 1 ? 's' : ''}
+                </button>
+                <button 
+                  onClick={() => handleEditPost(post)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#7F8C8D',
+                    fontSize: '12px'
+                  }}
+                >
+                  ✏️ Edit
                 </button>
               </div>
 

@@ -181,7 +181,7 @@ export default function Forum() {
               Manage Members
             </button>
           </div>
-          <ForumTabs forumData={forumData} />
+          <ForumTabs forumData={forumData} posts={posts} setPosts={setPosts} />
         </div>
 
         {/* Right column: Online Members + Trending Posts */}
