@@ -68,7 +68,7 @@ export default function UpcomingEvents() {
       flexDirection: "column",
       minHeight: 0,
     }}>
-      <h3 style={{ marginTop: 0, color: COLORS.text }}>Upcoming Events</h3>
+      <h3 style={{ marginTop: 0, color: COLORS.text, fontSize: "18px" }}>Upcoming Events</h3>
       <ul style={{ listStyle: 'none', padding: 0, overflowY: "auto", flexGrow: 1 }}> {/* Adjusted: Removed maxHeight */}
         {events.map((event, index) => (
           <li key={index} style={{ 

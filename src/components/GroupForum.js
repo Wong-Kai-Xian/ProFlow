@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; // Import constants
 import AddGroupForumModal from "./project-component/AddGroupForumModal";
+import Switch from "./Switch"; // Import Switch component
 
 export default function GroupForum({ forumsData, projectName, onForumsUpdate }) {
   const [forums, setForums] = useState([]);
@@ -85,20 +86,16 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
     }}>
       {/* Header with top-right button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
-        <h3 style={{ margin: 0, color: COLORS.dark, fontSize: "16px", fontWeight: "700" }}>Group Forum</h3>
+        <h3 style={{ margin: 0, color: COLORS.dark, fontSize: "18px", fontWeight: "700", whiteSpace: "nowrap" }}>Group Forum</h3>
         <div style={{ display: "flex", gap: LAYOUT.smallGap, alignItems: "center" }}>
-          <button 
-            onClick={() => setSortBy(sortBy === "recent" ? "notifications" : "recent")} 
-            style={{
-              ...BUTTON_STYLES.tertiary,
-              padding: "4px 8px",
-              fontSize: "11px",
-              minWidth: "auto"
-            }}
-            title={`Currently sorting by: ${sortBy === "recent" ? "Recent" : "Notifications"}`}
-          >
-            🔄
-          </button>
+          <Switch
+            isOn={sortBy === "notifications"} // True if sorting by notifications
+            handleToggle={() => setSortBy(sortBy === "recent" ? "notifications" : "recent")} // Toggle sorting method
+            onColor={COLORS.primary}
+            offColor={COLORS.lightText}
+            labelText="" // No visible text
+            title={`Sort by: ${sortBy === "recent" ? "Notifications" : "Recent"}`} // Tooltip for sorting
+          />
           <button 
             onClick={() => setShowAddForumModal(true)} 
             style={{
@@ -121,7 +118,7 @@ export default function GroupForum({ forumsData, projectName, onForumsUpdate }) 
               e.target.style.boxShadow = "0 2px 8px rgba(39, 174, 96, 0.3)";
             }}
           >
-            Add Forum
+            Add
           </button>
         </div>
       </div>

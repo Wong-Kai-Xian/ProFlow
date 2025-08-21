@@ -88,7 +88,7 @@ export default function ProjectsTab() {
     }}>
       {/* Title + Filter */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
-        <h3 style={{ margin: 0, color: COLORS.text }}>Projects</h3>
+        <h3 style={{ margin: 0, color: COLORS.text, fontSize: "18px" }}>Projects</h3>
         <Switch
           isOn={filter === "notifications"}
           handleToggle={() => setFilter(filter === "deadline" ? "notifications" : "deadline")}

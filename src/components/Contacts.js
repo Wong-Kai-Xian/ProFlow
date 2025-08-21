@@ -139,7 +139,7 @@ export default function Contacts() {
     }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
-        <h3 style={{ margin: 0, color: COLORS.text }}>Contacts</h3>
+        <h3 style={{ margin: "0 auto 0 0", color: COLORS.text, fontSize: "18px" }}>Contacts</h3> {/* Adjusted margin for spacing */}
         <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
           {view === "clients" && (
             <>
@@ -148,7 +148,7 @@ export default function Contacts() {
             </>
           )}
           {view === "team" && (
-            <button onClick={addTeamMember} style={{ ...BUTTON_STYLES.primary, padding: "4px 8px", fontSize: "10px" }}>+ Team Contact</button>
+            <button onClick={addTeamMember} style={{ ...BUTTON_STYLES.primary, padding: "6px 12px", fontSize: "14px" }}>+ Team Contact</button>
           )}
         </div>
       </div>
@@ -207,11 +207,13 @@ export default function Contacts() {
                   color: COLORS.text
                 }}>
                   <span onClick={() => toggleCollapse(idx)} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}>
-                    {org.name} {org.collapsed ? <FaChevronDown /> : <FaChevronUp />}
+                    {org.name}
                   </span>
                   <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
-                    <button onClick={() => addClient(idx)} style={{ ...BUTTON_STYLES.primary, padding: "2px 5px", fontSize: "9px" }}>+</button>
-                    {/* Removed organization-level client removal button */}
+                    <button onClick={() => addClient(idx)} style={{ ...BUTTON_STYLES.primary, padding: "4px 8px", fontSize: "10px", borderRadius: "3px" }}>+</button>
+                    <button onClick={() => toggleCollapse(idx)} style={{ ...BUTTON_STYLES.secondary, padding: "4px 8px", fontSize: "10px", borderRadius: "3px", background: org.collapsed ? COLORS.primary : COLORS.danger, color: "white" }}>
+                      {org.collapsed ? "+" : "-"}
+                    </button>
                   </div>
                 </div>
                 {!org.collapsed && org.clients.map((c, i) => (

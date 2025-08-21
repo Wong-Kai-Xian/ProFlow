@@ -90,7 +90,7 @@ export default function Dashboard() {
       minHeight: 0,
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
-        <h2 style={{ margin: 0, color: COLORS.text }}>Company Dashboard</h2>
+        <h2 style={{ margin: 0, color: COLORS.text, fontSize: "18px" }}>Company Dashboard</h2>
         <button 
           onClick={() => setEditMode(!editMode)}
           style={{ ...BUTTON_STYLES.secondary, padding: "4px 8px", fontSize: "12px" }}
