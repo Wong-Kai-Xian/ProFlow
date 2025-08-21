@@ -9,13 +9,16 @@ import CustomerProfile from "./pages/CustomerProfile";
 import ProjectDetail from "./pages/ProjectDetail";
 import CustomerProfileList from "./pages/CustomerProfileList";
 import ApprovalList from "./pages/ApprovalList"; // Import the new ApprovalList component
+import Login from "./pages/Login"; // Import the new Login component
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Home />} /> {/* Default route now points to Home */}
+        {/* Removed <Route path="/home" element={<Home />} /> */}
+        <Route path="/login" element={<Login />} /> {/* Login page accessible via /login */}
         <Route path="/project" element={<ProjectList />} />
         <Route path="/project/:projectName" element={<ProjectDetail />} /> {/* New route for project details */}
         <Route path="/forum" element={<ForumListPage />} /> {/* forum list */}

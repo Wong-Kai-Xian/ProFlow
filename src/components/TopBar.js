@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 export default function TopBar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const getLinkStyle = (path) => ({
@@ -21,7 +22,8 @@ export default function TopBar() {
   };
 
   const handleLogout = () => {
-    console.log("Logout clicked");
+    // Redirect to login page on logout
+    navigate('/login'); 
     setIsDropdownOpen(false); // Close dropdown after selection
   };
 
