@@ -60,6 +60,10 @@ export default function CustomerProfile() {
     setActivities([activity, ...activities]);
   };
 
+  const handleDeleteActivity = (indexToDelete) => {
+    setActivities(activities.filter((_, index) => index !== indexToDelete));
+  };
+
   const handleAddReminder = (reminder) => {
     // reminder is now an object { text, deadline, description, link }
     setReminders([reminder, ...reminders]);
@@ -127,6 +131,7 @@ export default function CustomerProfile() {
           <ActivityRecord 
             activities={activities}
             onAddActivity={handleAddActivity}
+            onDeleteActivity={handleDeleteActivity} // Pass the new delete handler
           />
         </div>
 

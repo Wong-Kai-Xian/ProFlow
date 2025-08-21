@@ -3,12 +3,14 @@ import React, { useEffect, useState } from "react";
 import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; // Import constants
 import Switch from "./Switch"; // Import Switch component
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 
 export default function ProjectsTab() {
   const [projects, setProjects] = useState([]);
   const [collapseOngoing, setCollapseOngoing] = useState(false);
   const [collapseCompleted, setCollapseCompleted] = useState(true); // collapsed by default
   const [filter, setFilter] = useState("deadline"); // default sort
+  const navigate = useNavigate(); // Initialize useNavigate
 
   useEffect(() => {
     setProjects([
@@ -62,7 +64,7 @@ export default function ProjectsTab() {
           {project.notifications}
         </div>
       )}
-      <div>
+      <div onClick={() => navigate(`/project/${project.name}`)} style={{ cursor: "pointer" }}>
         <strong>{project.name}</strong>
         <br />
         <span style={{ fontSize: '12px', color: completed ? '#7F8C8D' : '#27AE60' }}>
@@ -81,7 +83,8 @@ export default function ProjectsTab() {
       overflowY: "auto",
       display: "flex",
       flexDirection: "column",
-      minHeight: 0, // Crucial for flex items
+      minHeight: 0,
+      maxHeight: "100%",
     }}>
       {/* Title + Filter */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
@@ -95,34 +98,36 @@ export default function ProjectsTab() {
         />
       </div>
 
-      {/* Ongoing Section */}
-      <div>
-        <button 
-          style={{ ...BUTTON_STYLES.secondary, width: "100%", justifyContent: "flex-start", textAlign: "left", marginBottom: LAYOUT.smallGap, color: COLORS.text, background: COLORS.light, border: `1px solid ${COLORS.border}` }}
-          onClick={() => setCollapseOngoing(!collapseOngoing)}
-        >
-          {collapseOngoing ? "▶ Ongoing Projects" : "▼ Ongoing Projects"}
-        </button>
-        {!collapseOngoing && (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: "200px", overflowY: "auto", flexGrow: 1 }}>
-            {ongoingProjects.map((p, idx) => <ProjectCard key={idx} project={p} completed={false} />)}
-          </ul>
-        )}
-      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto" }}>
+        {/* Ongoing Section */}
+        <div>
+          <button 
+            style={{ ...BUTTON_STYLES.secondary, width: "100%", justifyContent: "flex-start", textAlign: "left", marginBottom: LAYOUT.smallGap, color: COLORS.text, background: COLORS.light, border: `1px solid ${COLORS.border}` }}
+            onClick={() => setCollapseOngoing(!collapseOngoing)}
+          >
+            {collapseOngoing ? "▶ Ongoing Projects" : "▼ Ongoing Projects"}
+          </button>
+          {!collapseOngoing && (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {ongoingProjects.map((p, idx) => <ProjectCard key={idx} project={p} completed={false} />)}
+            </ul>
+          )}
+        </div>
 
-      {/* Completed Section */}
-      <div style={{ marginTop: LAYOUT.gap }}>
-        <button 
-          style={{ ...BUTTON_STYLES.secondary, width: "100%", justifyContent: "flex-start", textAlign: "left", marginBottom: LAYOUT.smallGap, color: COLORS.text, background: COLORS.light, border: `1px solid ${COLORS.border}` }}
-          onClick={() => setCollapseCompleted(!collapseCompleted)}
-        >
-          {collapseCompleted ? "▶ Completed Projects" : "▼ Completed Projects"}
-        </button>
-        {!collapseCompleted && (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: "200px", overflowY: "auto", flexGrow: 1 }}>
-            {completedProjects.map((p, idx) => <ProjectCard key={idx} project={p} completed={true} />)}
-          </ul>
-        )}
+        {/* Completed Section */}
+        <div style={{ marginTop: LAYOUT.gap }}>
+          <button 
+            style={{ ...BUTTON_STYLES.secondary, width: "100%", justifyContent: "flex-start", textAlign: "left", marginBottom: LAYOUT.smallGap, color: COLORS.text, background: COLORS.light, border: `1px solid ${COLORS.border}` }}
+            onClick={() => setCollapseCompleted(!collapseCompleted)}
+          >
+            {collapseCompleted ? "▶ Completed Projects" : "▼ Completed Projects"}
+          </button>
+          {!collapseCompleted && (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {completedProjects.map((p, idx) => <ProjectCard key={idx} project={p} completed={true} />)}
+            </ul>
+          )}
+        </div>
       </div>
     </Card>
   );

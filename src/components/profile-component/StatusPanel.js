@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Card from "./Card";
 import { COLORS, INPUT_STYLES, BUTTON_STYLES } from "./constants";
 import IncompleteStageModal from "./IncompleteStageModal"; // Import the new modal
+import { FaEdit } from 'react-icons/fa'; // Import FaEdit
 
 export default function StatusPanel({
   stages,
@@ -29,6 +30,19 @@ export default function StatusPanel({
       });
       setNewNote("");
     }
+  };
+
+  const handleDeleteNote = (indexToDelete) => {
+    setStageData(prevStageData => {
+      const updatedNotes = prevStageData[currentStage].notes.filter((_, index) => index !== indexToDelete);
+      return {
+        ...prevStageData,
+        [currentStage]: {
+          ...prevStageData[currentStage],
+          notes: updatedNotes,
+        },
+      };
+    });
   };
 
   const handleMarkComplete = () => {
@@ -305,9 +319,28 @@ export default function StatusPanel({
               borderRadius: "6px",
               marginBottom: "6px",
               fontSize: "14px",
-              color: COLORS.text
+              color: COLORS.text,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between", // Ensures content and button are spaced
+              gap: "8px" // Consistent gap
             }}>
               {note}
+              <button 
+                onClick={() => handleDeleteNote(index)}
+                style={{
+                  background: "none", // No background
+                  border: "none", // No border
+                  color: COLORS.danger, // Red color
+                  padding: "2px", // Consistent padding
+                  fontSize: "10px", // Consistent font size
+                  borderRadius: "3px", // Consistent border radius
+                  cursor: "pointer",
+                  flexShrink: 0 // Prevent button from shrinking
+                }}
+              >
+                X
+              </button>
             </li>
           ))}
         </ul>

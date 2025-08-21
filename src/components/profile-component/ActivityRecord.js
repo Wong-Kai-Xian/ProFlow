@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Card from "./Card";
 import { COLORS, BUTTON_STYLES, INPUT_STYLES, ACTIVITY_TYPES } from "./constants";
 
-export default function ActivityRecord({ activities, onAddActivity }) {
+export default function ActivityRecord({ activities, onAddActivity, onDeleteActivity }) {
   const [newActivity, setNewActivity] = useState("");
   const [newType, setNewType] = useState("Gmail");
 
@@ -100,16 +100,22 @@ export default function ActivityRecord({ activities, onAddActivity }) {
               style={{
                 background: "#f8f9fa",
                 borderRadius: "8px",
-                padding: "12px",
+                padding: "8px", // Consistent padding
+                marginBottom: "6px", // Consistent margin
                 border: `1px solid ${COLORS.lightBorder}`,
-                transition: "all 0.2s ease"
+                transition: "all 0.2s ease",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px", // Consistent gap
+                justifyContent: "space-between" // Ensure space between content and button
               }}
             >
               <div style={{ 
                 display: "flex",
-                justifyContent: "space-between",
+                flexDirection: "column", // Stack content vertically
                 alignItems: "flex-start",
-                marginBottom: "4px"
+                flexGrow: 1, // Allow content to take up space
+                marginRight: "10px" // Add some space before the button
               }}>
                 <span style={{
                   background: COLORS.primary,
@@ -127,14 +133,29 @@ export default function ActivityRecord({ activities, onAddActivity }) {
                 }}>
                   {activity.time}
                 </span>
+                <div style={{ 
+                  fontSize: "14px", 
+                  color: COLORS.text,
+                  lineHeight: "1.4"
+                }}>
+                  {activity.description}
+                </div>
               </div>
-              <div style={{ 
-                fontSize: "14px", 
-                color: COLORS.text,
-                lineHeight: "1.4"
-              }}>
-                {activity.description}
-              </div>
+              <button 
+                onClick={() => onDeleteActivity(index)}
+                style={{
+                  background: "none", // No background
+                  border: "none", // No border
+                  color: COLORS.danger, // Red color
+                  padding: "2px", // Consistent padding
+                  fontSize: "10px", // Consistent font size
+                  borderRadius: "3px", // Consistent border radius
+                  cursor: "pointer",
+                  flexShrink: 0 // Prevent button from shrinking
+                }}
+              >
+                X
+              </button>
             </li>
           ))}
         </ul>

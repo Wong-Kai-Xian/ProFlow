@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import TopBar from "../components/TopBar";
 import ConfirmModal from "../components/project-component/ConfirmModal"; // import ConfirmModal
+import { useNavigate } from "react-router-dom"; // Import useNavigate
 
 // Get initials from project name
 const getInitials = (name) =>
@@ -27,6 +28,7 @@ export default function Project() {
 
   const [newProjectName, setNewProjectName] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
+  const navigate = useNavigate(); // Initialize useNavigate
 
   const getProgress = (project) =>
     project.tasks === 0 ? 0 : Math.round((project.completedTasks / project.tasks) * 100);
@@ -116,6 +118,7 @@ export default function Project() {
                   opacity: isPending ? 0.6 : 1,
                   cursor: "pointer"
                 }}
+                onClick={() => navigate(`/project/${project.name}`)} // Add onClick to navigate
               >
                 {/* Project Logo */}
                 <div

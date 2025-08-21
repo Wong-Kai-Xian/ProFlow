@@ -14,7 +14,10 @@ export const COLORS = {
   lightBorder: "#eee",
   text: "#2C3E50",
   lightText: "#7F8C8D",
-  aiBackground: "#e8f0fe"
+  aiBackground: "#e8f0fe",
+  darkCardBackground: "#34495e",
+  white: "#ffffff",
+  gray: "#95a5a6"
 };
 
 export const BUTTON_STYLES = {
@@ -22,20 +25,69 @@ export const BUTTON_STYLES = {
     background: COLORS.primary,
     color: "white",
     border: "none",
+    padding: "8px 16px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: "500",
+    transition: "all 0.2s ease",
+    boxShadow: "0 2px 4px rgba(52, 152, 219, 0.2)"
+  },
+  secondary: {
+    background: COLORS.light,
+    color: COLORS.dark,
+    border: `1px solid ${COLORS.border}`,
+    padding: "8px 16px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "14px",
+    transition: "all 0.2s ease",
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)"
+  },
+  primarySmall: {
+    background: COLORS.primary,
+    color: "white",
+    border: "none",
     padding: "6px 12px",
     borderRadius: "6px",
     cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: "500"
+    fontSize: "12px",
+    fontWeight: "500",
+    transition: "all 0.2s ease",
+    boxShadow: "0 1px 3px rgba(52, 152, 219, 0.2)"
   },
-  secondary: {
+  secondarySmall: {
     background: COLORS.light,
     color: COLORS.dark,
     border: `1px solid ${COLORS.border}`,
     padding: "6px 12px",
     borderRadius: "6px",
     cursor: "pointer",
-    fontSize: "14px"
+    fontSize: "12px",
+    transition: "all 0.2s ease",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)"
+  },
+  tertiary: {
+    background: "transparent",
+    color: COLORS.lightText,
+    border: `1px solid ${COLORS.lightBorder}`,
+    padding: "8px 16px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "14px",
+    transition: "all 0.2s ease"
+  },
+  success: {
+    background: COLORS.success,
+    color: "white",
+    border: "none",
+    padding: "8px 16px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: "500",
+    transition: "all 0.2s ease",
+    boxShadow: "0 2px 4px rgba(39, 174, 96, 0.2)"
   }
 };
 
@@ -80,6 +132,6 @@ export const LAYOUT = {
   smallBorderRadius: "6px"
 };
 
-export const STAGES = ["Working", "Qualified", "Converted"];
+export const STAGES = ["Proposal", "Negotiation", "Complete"];
 
 export const ACTIVITY_TYPES = ["Call", "Gmail", "Meeting", "Note"];

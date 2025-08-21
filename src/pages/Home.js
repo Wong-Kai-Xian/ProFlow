@@ -27,7 +27,14 @@ export default function Home() {
   };
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", position: "relative", background: COLORS.background, minHeight: "100vh" }}>
+    <div style={{
+      fontFamily: "Arial, sans-serif",
+      position: "relative",
+      background: COLORS.background,
+      height: "100vh", // Changed from minHeight to height
+      display: "flex", // Added flex display
+      flexDirection: "column", // Added flex direction
+    }}>
       <TopBar />
 
       <div
@@ -37,7 +44,7 @@ export default function Home() {
           gridTemplateRows: "auto 1fr",
           gap: LAYOUT.gap,
           padding: LAYOUT.gap,
-          minHeight: "90vh",
+          flexGrow: 1, // Changed from minHeight to flexGrow
           transition: "grid-template-columns 0.3s ease"
         }}
       >
@@ -54,8 +61,12 @@ export default function Home() {
         >
           {!leftCollapsed && (
             <>
-              <ProjectsTab />
-              <Contacts onSelectCustomer={goToCustomerProfile} />
+              <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                <ProjectsTab />
+              </div>
+              <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                <Contacts onSelectCustomer={goToCustomerProfile} />
+              </div>
             </>
           )}
 
@@ -92,7 +103,14 @@ export default function Home() {
         </div>
 
         {/* Middle Panel */}
-        <div style={{ gridColumn: 2, gridRow: "1 / span 2" }}>
+        <div style={{
+          gridColumn: 2, 
+          gridRow: "1 / span 2",
+          display: "flex",
+          flexDirection: "column",
+          overflowY: "auto", // Enable scrolling for the middle panel
+          minHeight: 0 // Allow content to shrink and enable scrolling
+        }}>
           <Dashboard />
         </div>
 
@@ -107,11 +125,11 @@ export default function Home() {
             gap: LAYOUT.smallGap
           }}
         >
-          <div style={{ marginTop: rightCollapsed ? 0 : 0, maxHeight: 300, overflowY: "auto" }}>
+          <div>
             {!rightCollapsed && <UpcomingEvents />}
           </div>
 
-          <div style={{ marginTop: rightCollapsed ? 0 : LAYOUT.gap }}>
+          <div style={{ flexGrow: 1 }}>
             {!rightCollapsed && <GroupForum />}
           </div>
 

@@ -3,6 +3,7 @@ import React, { useState, useRef } from "react";
 import Card from "./Card";
 import FileUploadModal from "./FileUploadModal"; // Import the new modal component
 import { BUTTON_STYLES, COLORS, INPUT_STYLES, LAYOUT } from "./constants"; // Import constants
+import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa'; // Import FaPlus, FaEdit, FaTrash icons
 
 export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRename }) {
   const [expandedFile, setExpandedFile] = useState(null);
@@ -77,8 +78,12 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
     <Card style={{ minHeight: "250px" }}>
       <h3>Attached Files</h3>
       <div style={{ marginBottom: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
-        <button onClick={() => setShowModal(true)} style={{ ...BUTTON_STYLES.primary }}>
-          Add Files
+        <button onClick={() => setShowModal(true)} style={{ 
+          ...BUTTON_STYLES.primary, 
+          padding: "4px 8px", // Smaller padding
+          fontSize: "14px" // Adjust font size for the icon
+        }}>
+          <FaPlus />
         </button>
       </div>
       <ul style={{ 
@@ -123,16 +128,29 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
                 {editingFileIndex !== i && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); handleRenameClick(i, file.name); }} 
-                    style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", marginRight: "5px" }}
+                    style={{ 
+                      ...BUTTON_STYLES.primary, 
+                      background: COLORS.secondary, 
+                      padding: "4px 8px", // Consistent padding
+                      fontSize: "14px", // Consistent font size
+                      marginRight: "5px",
+                      borderRadius: "3px"
+                    }}
                   >
-                    Rename
+                    <FaEdit />
                   </button>
                 )}
                 <button 
                   onClick={(e) => { e.stopPropagation(); onFileRemove(i); }} 
-                  style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "4px 8px" }}
+                  style={{ 
+                    ...BUTTON_STYLES.primary, 
+                    background: COLORS.danger, 
+                    padding: "4px 8px", // Consistent padding
+                    fontSize: "14px", // Consistent font size
+                    borderRadius: "3px"
+                  }}
                 >
-                  Remove
+                  <FaTrash />
                 </button>
               </div>
             </div>

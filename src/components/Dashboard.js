@@ -82,7 +82,13 @@ export default function Dashboard() {
   };
 
   return (
-    <Card style={{ minHeight: '400px' }}>
+    <Card style={{
+      maxHeight: "600px", // Set a maximum height for the dashboard card
+      overflowY: "auto",
+      display: "flex",
+      flexDirection: "column",
+      minHeight: 0,
+    }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
         <h2 style={{ margin: 0, color: COLORS.text }}>Company Dashboard</h2>
         <button 

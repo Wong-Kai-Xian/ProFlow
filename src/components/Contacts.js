@@ -1,6 +1,9 @@
 // src/components/Contacts.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaWhatsapp } from 'react-icons/fa';
+import { MdEmail } from 'react-icons/md'; // Changed from SiGmail to MdEmail
+import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
 import AddOrganization from "./AddOrganization";
 import DelOrganization from "./DelOrganization";
 import Card from "./profile-component/Card"; // Corrected import path
@@ -226,9 +229,9 @@ export default function Contacts() {
                       <span style={{ fontSize: "12px", color: COLORS.lightText }}>{c.email}</span>
                     </div>
                     <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
-                      <button onClick={(e) => { e.stopPropagation(); openWhatsApp(c.whatsapp); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "4px 8px", fontSize: "10px" }}>WhatsApp</button>
-                      <button onClick={(e) => { e.stopPropagation(); openEmail(c.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", fontSize: "10px" }}>Email</button>
-                      <button onClick={(e) => { e.stopPropagation(); removeClient(idx, c.name); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "4px", fontSize: "10px" }}>Del</button>
+                      <button onClick={(e) => { e.stopPropagation(); openWhatsApp(c.whatsapp); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "4px 8px", fontSize: "14px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaWhatsapp /></button>
+                      <button onClick={(e) => { e.stopPropagation(); openEmail(c.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", fontSize: "14px", display: "flex", justifyContent: "center", alignItems: "center" }}><MdEmail /></button>
+                      <button onClick={(e) => { e.stopPropagation(); removeClient(idx, c.name); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "2px", fontSize: "10px", borderRadius: "3px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaTrash /></button>
                     </div>
                   </div>
                 ))}
@@ -250,9 +253,9 @@ export default function Contacts() {
                   <span style={{ fontSize: "12px", color: COLORS.lightText }}>{t.email}</span>
                 </div>
                 <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
-                  <button onClick={(e) => { e.stopPropagation(); openWhatsApp(t.whatsapp); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "4px 8px", fontSize: "10px" }}>WhatsApp</button>
-                  <button onClick={(e) => { e.stopPropagation(); openEmail(t.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", fontSize: "10px" }}>Email</button>
-                  <button onClick={(e) => { e.stopPropagation(); removeTeamMember(t.name); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "4px", fontSize: "10px" }}>Del</button>
+                  <button onClick={(e) => { e.stopPropagation(); openWhatsApp(t.whatsapp); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "4px 8px", fontSize: "14px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaWhatsapp /></button>
+                  <button onClick={(e) => { e.stopPropagation(); openEmail(t.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "4px 8px", fontSize: "14px", display: "flex", justifyContent: "center", alignItems: "center" }}><MdEmail /></button>
+                  <button onClick={(e) => { e.stopPropagation(); removeTeamMember(t.name); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "2px", fontSize: "10px", borderRadius: "3px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaTrash /></button>
                 </div>
               </li>
             ))}
