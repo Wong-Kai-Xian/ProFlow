@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'; // Import Link
 import { db } from '../../firebase'; // Import db
 import { collection, query, where, getDocs } from 'firebase/firestore'; // Import firestore functions
 
-export default function CreateProjectModal({ isOpen, onClose, onConfirm, editingProject }) {
+export default function CreateProjectModal({ isOpen, onClose, onConfirm, editingProject, customerProfile, companyProfile }) {
   const [projectName, setProjectName] = useState('');
   const [teamMembersEmails, setTeamMembersEmails] = useState([]); // Stores only emails
   const [teamMembers, setTeamMembers] = useState([]); // Stores enriched member objects {uid, email, displayName}
@@ -26,10 +26,11 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
       setProjectDescription(editingProject.description || ''); // Populate description
       setAllowJoinById(editingProject.allowJoinById !== undefined ? editingProject.allowJoinById : true); // Populate allowJoinById, default to true
     } else {
-      setProjectName('');
+      // For new projects, pre-fill from customerProfile and companyProfile if available
+      setProjectName(customerProfile?.name || '');
       setTeamMembersEmails(currentUser ? [currentUser.email] : []); // Add current user to team members for new projects
       setSelectedStage('Proposal');
-      setProjectDescription(''); // Reset description
+      setProjectDescription(companyProfile?.description || ''); // Use companyProfile.description or default
       setAllowJoinById(true); // Default to true for new projects
     }
     
@@ -60,7 +61,7 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
       setTeamMembers([]); // Clear if no emails
     }
 
-  }, [editingProject, currentUser, teamMembersEmails]); // Add currentUser and teamMembersEmails to dependency array
+  }, [editingProject, currentUser, teamMembersEmails, customerProfile, companyProfile]); // Add currentUser and teamMembersEmails to dependency array
 
   const handleAddMember = () => {
     if (newMember.trim() && !teamMembersEmails.includes(newMember.trim())) {
