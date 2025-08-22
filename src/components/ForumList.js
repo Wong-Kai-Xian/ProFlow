@@ -18,76 +18,27 @@ const stringToColor = (str) => {
   return "#" + "00000".substring(0, 6 - c.length) + c;
 };
 
-export default function ForumList({ onForumSelect, onEditForum, customForums }) {
-  const [forums, setForums] = useState([]);
+export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, forums, projects }) {
+  // `forums` prop is now directly from Firebase via ForumListPage
   const [sortBy, setSortBy] = useState("alphabetic");
   const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    // Mock forum data - in real app this would come from backend
-    const defaultForums = [
-      {
-        id: 1,
-        name: "Project Alpha Discussion",
-        memberCount: 24,
-        description: "Main discussion forum for Project Alpha development and updates",
-        notifications: 5,
-        lastActivity: "2025-01-20 14:30",
-        members: ["Alice", "Bob", "Charlie", "David"]
-      },
-      {
-        id: 2,
-        name: "Client Feedback Hub",
-        memberCount: 18,
-        description: "Centralized location for client feedback and responses",
-        notifications: 2,
-        lastActivity: "2025-01-20 10:15",
-        members: ["Eve", "Frank", "Grace"]
-      },
-      {
-        id: 3,
-        name: "Team Updates",
-        memberCount: 32,
-        description: "Daily standups, announcements, and team coordination",
-        notifications: 8,
-        lastActivity: "2025-01-20 16:45",
-        members: ["Henry", "Iris", "Jack", "Kate", "Liam"]
-      },
-      {
-        id: 4,
-        name: "Technical Support",
-        memberCount: 15,
-        description: "Technical issues, bug reports, and troubleshooting",
-        notifications: 0,
-        lastActivity: "2025-01-19 09:20",
-        members: ["Mia", "Noah", "Olivia"]
-      },
-      {
-        id: 5,
-        name: "Design Reviews",
-        memberCount: 12,
-        description: "UI/UX discussions, design feedback, and creative reviews",
-        notifications: 3,
-        lastActivity: "2025-01-20 11:30",
-        members: ["Paul", "Quinn", "Rose"]
-      },
-      {
-        id: 6,
-        name: "Marketing Strategy",
-        memberCount: 8,
-        description: "Marketing campaigns, social media, and promotional activities",
-        notifications: 1,
-        lastActivity: "2025-01-18 15:00",
-        members: ["Sam", "Tina"]
-      }
-    ];
+  // Helper function to get project name by ID
+  const getProjectName = (projectId) => {
+    const project = projects.find(p => p.id === projectId);
+    return project ? project.name : "Unknown Project";
+  };
 
-    // Combine default forums with custom forums
-    const allForums = [...defaultForums, ...(customForums || [])];
-    setForums(allForums);
-  }, [customForums]);
+  // Remove the useEffect for mock data as data now comes from props
+  // useEffect(() => {
+  //   const defaultForums = [
+  //     // ... mock data ...
+  //   ];
+  //   const allForums = [...defaultForums, ...(customForums || [])];
+  //   setForums(allForums);
+  // }, [customForums]);
 
-  // Filter and sort forums
+  // Filter and sort forums - use the `forums` prop directly
   const getFilteredAndSortedForums = () => {
     let filtered = forums.filter(forum =>
       forum.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -101,7 +52,8 @@ export default function ForumList({ onForumSelect, onEditForum, customForums }) 
       case "notifications":
         return filtered.sort((a, b) => b.notifications - a.notifications);
       case "recent":
-        return filtered.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
+        // Ensure lastActivity is a valid Date object for comparison
+        return filtered.sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
       default:
         return filtered;
     }
@@ -267,12 +219,46 @@ export default function ForumList({ onForumSelect, onEditForum, customForums }) 
                     Edit
                   </button>
                 )}
+
+                {/* Delete Button */}
+                {onDeleteForum && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteForum(forum.id);
+                    }}
+                    style={{
+                      position: "absolute",
+                      top: "16px",
+                      right: onEditForum ? "50px" : "16px", // Adjust position if Edit button is present
+                      background: COLORS.danger,
+                      border: "none",
+                      borderRadius: "6px",
+                      padding: "6px 8px",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      color: COLORS.white,
+                      transition: "all 0.2s ease",
+                      zIndex: 1
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.backgroundColor = "#c0392b";
+                      e.target.style.transform = "scale(1.05)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.backgroundColor = COLORS.danger;
+                      e.target.style.transform = "scale(1)";
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
                 {/* Notification Badge */}
                 {forum.notifications > 0 && (
                   <div style={{
                     position: "absolute",
                     top: "16px",
-                    right: onEditForum ? "60px" : "16px",
+                    right: (onEditForum || onDeleteForum) ? "94px" : "16px", // Adjust position if Edit/Delete button is present
                     fontSize: "12px",
                     color: COLORS.white,
                     background: COLORS.danger,
@@ -316,6 +302,21 @@ export default function ForumList({ onForumSelect, onEditForum, customForums }) 
                   {forum.name}
                 </h3>
 
+                {/* Project Name (if available) */}
+                {forum.projectId && (
+                  <div style={{
+                    color: COLORS.primary,
+                    fontSize: "13px",
+                    marginBottom: "8px",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                  }}>
+                    <span style={{ marginRight: "6px", fontSize: "16px" }}>📁</span>
+                    {getProjectName(forum.projectId)}
+                  </div>
+                )}
+
                 {/* Member Count */}
                 <div style={{
                   display: "flex",
@@ -326,7 +327,7 @@ export default function ForumList({ onForumSelect, onEditForum, customForums }) 
                   fontWeight: "600"
                 }}>
                   <span style={{ marginRight: "6px", fontSize: "16px" }}>👥</span>
-                  <span>{forum.memberCount} members</span>
+                  <span>{forum.members ? forum.members.length : 0} members</span> {/* Use forum.members.length */}
                 </div>
 
                 {/* Description */}
@@ -352,7 +353,7 @@ export default function ForumList({ onForumSelect, onEditForum, customForums }) 
                   borderRadius: "6px",
                   fontWeight: "500"
                 }}>
-                  Last activity: {new Date(forum.lastActivity).toLocaleDateString()}
+                  Last activity: {forum.lastActivity ? new Date(forum.lastActivity).toLocaleDateString() : 'N/A'}
                 </div>
               </div>
             );

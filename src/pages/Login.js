@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth'; // Import Firebase Auth functions
+import { app } from '../firebase'; // Assuming you have initialized Firebase app in firebase.js
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth"; // Import Google Auth Provider and signInWithPopup
+import { db } from "../firebase"; // Import Firestore instance
+import { doc, setDoc, getDoc } from "firebase/firestore"; // Import Firestore functions
 
 const BACKGROUND_ANIMATION_STYLES = `
   @keyframes gradientAnimation {
@@ -24,14 +29,62 @@ const BACKGROUND_ANIMATION_STYLES = `
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState(null); // State for error messages
+  const [loading, setLoading] = useState(false); // State for loading indicator
   const navigate = useNavigate();
+  const auth = getAuth(app); // Get Firebase Auth instance
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
+    setError(null); // Clear previous errors
+    setLoading(true); // Set loading to true
     console.log('Login attempt:', { email, password });
-    // Placeholder for actual authentication logic
-    // For now, redirect to home page on any input
-    navigate('/'); 
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      console.log("User logged in successfully!");
+      navigate('/'); // Redirect to home page on successful login
+    } catch (err) {
+      console.error("Login error:", err);
+      setError(err.message); // Set error message
+    } finally {
+      setLoading(false); // Set loading to false
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setLoading(true);
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // Check if user exists in Firestore, if not, create a new entry
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (!userDocSnap.exists()) {
+        await setDoc(userDocRef, {
+          uid: user.uid,
+          name: user.displayName,
+          email: user.email,
+          role: "user", // Default role for new Google sign-ins
+          createdAt: new Date(),
+        });
+        console.log("New Google user data saved to Firestore:", user);
+      } else {
+        console.log("Google user already exists in Firestore.");
+      }
+
+      console.log("Google user logged in successfully!");
+      navigate('/');
+    } catch (err) {
+      console.error("Google Sign-In error:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -40,7 +93,7 @@ export default function Login() {
       <div style={styles.loginBox}>
         <h2 style={styles.title}>Welcome Back!</h2>
         <p style={styles.subtitle}>Sign in to continue to ProFlow</p>
-        <img src="/proflow-logo.png" alt="ProFlow Logo" style={styles.logo} /> {/* Added ProFlow Logo */}
+        <img src="/proflow-logo.png" alt="ProFlow Logo" style={styles.logo} />
         <form onSubmit={handleLogin} style={styles.form}>
           <input
             type="email"
@@ -49,6 +102,7 @@ export default function Login() {
             onChange={(e) => setEmail(e.target.value)}
             style={styles.input}
             required
+            disabled={loading} // Disable input while loading
           />
           <input
             type="password"
@@ -57,12 +111,21 @@ export default function Login() {
             onChange={(e) => setPassword(e.target.value)}
             style={styles.input}
             required
+            disabled={loading} // Disable input while loading
           />
-          <button type="submit" style={styles.button}>
-            Login
+          {error && <p style={styles.errorText}>{error}</p>} {/* Display error message */}
+          <button type="submit" style={styles.button} disabled={loading}>
+            {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
-        <Link to="/forgot-password" style={styles.link}>Forgot Password?</Link>
+        <button 
+          onClick={handleGoogleSignIn} 
+          style={{ ...styles.button, backgroundColor: '#DB4437', marginTop: '0px', width: '100%' }} // Google red color, full width
+          disabled={loading}
+        >
+          Sign in with Google
+        </button>
+        <Link to="/forgot-password" style={{...styles.link, marginTop: '30px', display: 'block'}}>Forgot Password?</Link>
         <div style={styles.signupText}>
           Don't have an account? <Link to="/signup" style={styles.link}>Sign Up</Link>
         </div>
@@ -109,7 +172,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '15px',
-    marginBottom: '20px',
+    marginBottom: '10px',
   },
   input: {
     padding: '12px 15px',
@@ -169,3 +232,11 @@ const styles = {
     marginRight: 'auto',
   },
 };
+
+const errorText = {
+  color: '#ff4d4f', // A distinct error color
+  marginTop: '10px',
+  fontSize: '14px',
+};
+
+Object.assign(styles, { errorText });

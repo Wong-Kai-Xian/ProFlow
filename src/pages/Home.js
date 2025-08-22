@@ -1,18 +1,24 @@
 // src/pages/Home.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import Dashboard from "../components/Dashboard";
 import Contacts from "../components/Contacts"; 
 import UpcomingEvents from "../components/UpcomingEvents";
 import ProjectsTab from "../components/ProjectsTab";
-import GroupForum from "../components/GroupForum";
+import HomeGroupForum from "../components/HomeGroupForum"; // Use HomeGroupForum
 import { COLORS, LAYOUT, BUTTON_STYLES } from "../components/profile-component/constants"; // Import COLORS and LAYOUT
+import { db } from "../firebase"; // Import db
+import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore"; // Import Firestore functions
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
 export default function Home() {
   const navigate = useNavigate();
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  // Forums state is now managed within HomeGroupForum, so we can remove it here
+  // const [forums, setForums] = useState([]);
 
   // State for hover effects on collapse buttons
   const [leftButtonHovered, setLeftButtonHovered] = useState(false);
@@ -71,7 +77,7 @@ export default function Home() {
             minWidth: leftCollapsed ? 'auto' : '200px', /* Ensure it can shrink */
             maxWidth: leftCollapsed ? 'auto' : '300px' /* Optional: add max width */
           }}>
-          {!leftCollapsed && (
+          {!leftCollapsed && currentUser && (
             <>
               <div style={{ 
                 height: "350px",
@@ -147,21 +153,25 @@ export default function Home() {
             maxWidth: rightCollapsed ? 'auto' : '300px' /* Optional: add max width */
           }}
         >
-          <div style={{ 
-            height: "320px",
-            marginBottom: "20px",
-            flexShrink: 0 /* Prevent shrinking */
-          }}>
-            {!rightCollapsed && <UpcomingEvents />}
-          </div>
+          {!rightCollapsed && currentUser && (
+            <>
+              <div style={{ 
+                height: "320px",
+                marginBottom: "20px",
+                flexShrink: 0 /* Prevent shrinking */
+              }}>
+                <UpcomingEvents />
+              </div>
 
-          <div style={{ 
-            height: "340px",
-            marginTop: "65px",
-            flexShrink: 0 /* Prevent shrinking */
-          }}>
-            {!rightCollapsed && <GroupForum />}
-          </div>
+              <div style={{ 
+                height: "340px",
+                marginTop: "65px",
+                flexShrink: 0 /* Prevent shrinking */
+              }}>
+                <HomeGroupForum />
+              </div>
+            </>
+          )}
 
           {/* Right Collapse Button */}
           <button

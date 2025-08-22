@@ -2,24 +2,29 @@ import React, { useState } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES, CARD_STYLES } from './constants'; // Import constants
 
 const AddReminderModal = ({ isOpen, onClose, onAddReminder }) => {
-  const [reminderText, setReminderText] = useState('');
-  const [reminderDate, setReminderDate] = useState('');
+  const [title, setTitle] = useState(''); // Changed from reminderText
+  const [date, setDate] = useState(''); // Changed from reminderDate
+  const [time, setTime] = useState(''); // New state for time
   const [description, setDescription] = useState('');
   const [link, setLink] = useState('');
 
   const handleAdd = () => {
-    if (reminderText.trim() && reminderDate) {
+    if (title.trim() && date && time) { // Updated condition
       onAddReminder({
-        text: reminderText,
-        deadline: reminderDate,
+        title: title, // Changed from text
+        date: date, // Changed from deadline
+        time: time, // New time field
         description: description,
         link: link,
       });
-      setReminderText('');
-      setReminderDate('');
+      setTitle('');
+      setDate('');
+      setTime(''); // Reset time
       setDescription('');
       setLink('');
       onClose();
+    } else {
+      alert('Please fill in all required fields: Title, Date, and Time.');
     }
   };
 
@@ -51,16 +56,25 @@ const AddReminderModal = ({ isOpen, onClose, onAddReminder }) => {
         
         <input
           type="text"
-          placeholder="Reminder Text"
-          value={reminderText}
-          onChange={(e) => setReminderText(e.target.value)}
+          placeholder="Reminder Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
           style={{ ...INPUT_STYLES.base, width: '100%', boxSizing: 'border-box' }}
+          required
         />
         <input
           type="date"
-          value={reminderDate}
-          onChange={(e) => setReminderDate(e.target.value)}
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
           style={{ ...INPUT_STYLES.base, width: '100%', boxSizing: 'border-box' }}
+          required
+        />
+        <input
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          style={{ ...INPUT_STYLES.base, width: '100%', boxSizing: 'border-box' }}
+          required
         />
         <textarea
           placeholder="Description (optional)"

@@ -1,8 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "../components/profile-component/constants";
-import customerDataArray from "../components/profile-component/customerData.js";
+// import customerDataArray from "../components/profile-component/customerData.js"; // Remove mock data import
+import { db } from "../firebase"; // Import db
+import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore"; // Import Firestore functions
+import AddProfileModal from "../components/profile-component/AddProfileModal"; // Import AddProfileModal
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
+import DeleteProfileModal from '../components/profile-component/DeleteProfileModal'; // Import DeleteProfileModal
 
 // Get initials from customer name
 const getInitials = (name) =>
@@ -20,7 +26,7 @@ const stringToColor = (str) => {
 };
 
 // Define the stages for progress tracking
-const STAGES = ["Working", "Qualified", "Converted"];
+const STAGES = ["Proposal", "Working", "Qualified", "Converted"];
 
 // Calculate progress based on current stage and tasks completed within stages
 const getProgress = (customer) => {
@@ -49,27 +55,53 @@ const getProgress = (customer) => {
 };
 
 export default function CustomerProfileList() {
-  const [customers, setCustomers] = useState(customerDataArray.map(customer => ({
-    id: customer.id,
-    name: customer.customerProfile.name,
-    company: customer.companyProfile.company,
-    email: customer.customerProfile.email,
-    phone: customer.customerProfile.phone,
-    status: customer.status || "Active", // Default to "Active" if not specified
-    projects: customer.projects ? customer.projects.length : 0, // Use length of projects array
-    lastContact: customer.lastContact || "N/A", // Default to "N/A" if not specified
-    currentStage: customer.currentStage || "Working",
-    stageData: customer.stageData || {} // Default to empty object if not specified
-  })));
+  const [customers, setCustomers] = useState([]); // Initialize with empty array
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false); // New state for modal
+  const [showDeleteCustomerModal, setShowDeleteCustomerModal] = useState(false); // State for delete confirmation modal
+  const [customerToDelete, setCustomerToDelete] = useState(null); // State to hold the customer to be deleted
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
+
+  useEffect(() => {
+    if (!currentUser) {
+      setCustomers([]);
+      return;
+    }
+
+    const customerProfilesCollectionRef = collection(db, "customerProfiles");
+    const userCustomerProfilesQuery = query(customerProfilesCollectionRef, where("userId", "==", currentUser.uid));
+
+    const unsubscribe = onSnapshot(userCustomerProfilesQuery, (snapshot) => {
+      const customerList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        // Ensure nested objects are handled and default values are set
+        customerProfile: doc.data().customerProfile || {},
+        companyProfile: doc.data().companyProfile || {},
+        reputation: doc.data().reputation || {},
+        activities: doc.data().activities || [],
+        reminders: doc.data().reminders || [],
+        files: doc.data().files || [],
+        stageData: doc.data().stageData || {},
+        projects: doc.data().projects || [], // Ensure projects is an array
+        status: doc.data().status || "Active",
+        lastContact: doc.data().lastContact || "N/A",
+      }));
+      setCustomers(customerList);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]); // Add currentUser to dependency array
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const navigate = useNavigate();
 
   const filteredCustomers = customers.filter(customer => {
-    const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         customer.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         customer.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (
+      customer.customerProfile?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.companyProfile?.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.customerProfile?.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
     const matchesStatus = statusFilter === "All" || customer.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -77,13 +109,134 @@ export default function CustomerProfileList() {
   const getStatusColor = (status) => {
     switch (status) {
       case 'Active': return COLORS.success;
+      case 'Proposal': return COLORS.primary;
       case 'Inactive': return COLORS.lightText;
       default: return COLORS.lightText;
     }
   };
 
+  const handleCreateNewCustomerFromModal = async (clientData) => {
+    try {
+      const companyName = clientData.company || "Uncategorized Company"; // Default company name
+      const initialCustomerData = {
+        customerProfile: {
+          name: clientData.name,
+          email: clientData.email,
+          phone: clientData.phone,
+        },
+        companyProfile: {
+          company: companyName,
+          industry: "", // Default
+          location: "", // Default
+        },
+        reputation: { rating: 0, summary: "" },
+        activities: [],
+        reminders: [],
+        files: [],
+        currentStage: STAGES[0],
+        stageData: {
+          "Proposal": { notes: [], tasks: [], completed: false }, // New initial stage
+          "Working": { notes: [], tasks: [], completed: false },
+          "Qualified": { notes: [], tasks: [], completed: false },
+          "Converted": { notes: [], tasks: [], completed: false },
+        },
+        projects: [],
+        status: STAGES[0], // Default status now follows initial stage
+        lastContact: serverTimestamp(), // Set timestamp on first save
+        userId: currentUser.uid, // Associate customer profile with the current user
+      };
+      const newCustomerDocRef = await addDoc(collection(db, "customerProfiles"), initialCustomerData);
+      console.log("New customer profile created from modal with ID:", newCustomerDocRef.id);
+
+      // Link to Contacts (Organizations)
+      const newCustomerId = newCustomerDocRef.id;
+      const organizationsRef = collection(db, "organizations");
+      const q = query(organizationsRef, where("name", "==", clientData.company || ""), where("userId", "==", currentUser.uid)); // Filter by current user's organizations
+      const querySnapshot = await getDocs(q);
+
+      let targetOrgDoc = null;
+      if (!querySnapshot.empty) {
+        targetOrgDoc = querySnapshot.docs[0];
+      }
+
+      const clientToAdd = {
+        id: newCustomerId,
+        name: clientData.name,
+        email: clientData.email,
+        phone: clientData.phone,
+        company: clientData.company,
+      };
+
+      if (targetOrgDoc) {
+        const currentClients = targetOrgDoc.data().clients || [];
+        const updatedClients = [...currentClients, clientToAdd];
+        await updateDoc(doc(db, "organizations", targetOrgDoc.id), { clients: updatedClients });
+        console.log("New customer from modal added to existing organization:", targetOrgDoc.id);
+      } else {
+        const newOrganization = {
+          name: companyName, // Use the defaulted company name here
+          clients: [clientToAdd],
+          collapsed: false,
+          userId: currentUser.uid, // Associate new organization with the current user
+        };
+        await addDoc(organizationsRef, newOrganization);
+        console.log("New organization created from modal with new customer.");
+      }
+
+      setShowAddCustomerModal(false); // Close the modal
+      navigate(`/customer/${newCustomerDocRef.id}`); // Navigate to the new customer's full profile
+    } catch (error) {
+      console.error("Error creating new customer from modal: ", error);
+    }
+  };
+
   const handleCustomerClick = (customer) => {
     navigate(`/customer/${customer.id}`);
+  };
+
+  const handleDeleteCustomer = (customer) => {
+    console.log("handleDeleteCustomer called for customer:", customer);
+    setCustomerToDelete(customer);
+    setShowDeleteCustomerModal(true);
+    console.log("showDeleteCustomerModal set to true, customerToDelete set to:", customer);
+    console.log("Customer name passed to modal:", customer?.customerProfile?.name || customer?.companyProfile?.company);
+  };
+
+  const confirmDeleteCustomer = async () => {
+    console.log("confirmDeleteCustomer called.");
+    if (!customerToDelete || !currentUser) {
+      console.log("Deletion aborted: customerToDelete or currentUser is missing.", { customerToDelete, currentUser });
+      return; // Ensure customer is selected and user is logged in
+    }
+    console.log("Attempting to delete customer:", customerToDelete.id);
+
+    try {
+      // 1. Delete the customer profile document
+      await deleteDoc(doc(db, "customerProfiles", customerToDelete.id));
+      console.log("Customer profile deleted with ID:", customerToDelete.id);
+
+      // 2. Remove the reference from the associated organization's clients array
+      if (customerToDelete.companyProfile?.company) {
+        const organizationsRef = collection(db, "organizations");
+        const q = query(organizationsRef, where("name", "==", customerToDelete.companyProfile.company), where("userId", "==", currentUser.uid));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          const orgDoc = querySnapshot.docs[0];
+          const currentClients = orgDoc.data().clients || [];
+          const updatedClients = currentClients.filter(client => client.id !== customerToDelete.id);
+          await updateDoc(doc(db, "organizations", orgDoc.id), { clients: updatedClients });
+          console.log(`Customer ${customerToDelete.id} removed from organization ${orgDoc.id}.`);
+        }
+      }
+
+      // Close the modal after successful deletion
+      setShowDeleteCustomerModal(false);
+      setCustomerToDelete(null);
+    } catch (error) {
+      console.error("Error deleting customer profile:", error);
+      alert("Failed to delete customer profile.");
+    }
   };
 
   return (
@@ -105,82 +258,86 @@ export default function CustomerProfileList() {
           }}>
             Customer Profiles
           </h1>
-          <button
-            onClick={() => navigate('/customer/new')}
-            style={{
-              ...BUTTON_STYLES.primary,
-              padding: "12px 24px",
-              fontSize: "16px",
-              fontWeight: "600",
-              borderRadius: "8px",
-              boxShadow: "0 4px 12px rgba(52, 152, 219, 0.3)",
-              transition: "all 0.3s ease"
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.transform = "translateY(-2px)";
-              e.target.style.boxShadow = "0 6px 16px rgba(52, 152, 219, 0.4)";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = "translateY(0)";
-              e.target.style.boxShadow = "0 4px 12px rgba(52, 152, 219, 0.3)";
-            }}
-          >
-            Add New Customer
-          </button>
+          {currentUser && (
+            <button
+              onClick={() => setShowAddCustomerModal(true)}
+              style={{
+                ...BUTTON_STYLES.primary,
+                padding: "12px 24px",
+                fontSize: "16px",
+                fontWeight: "600",
+                borderRadius: "8px",
+                boxShadow: "0 4px 12px rgba(52, 152, 219, 0.3)",
+                transition: "all 0.3s ease"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 6px 16px rgba(52, 152, 219, 0.4)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "0 4px 12px rgba(52, 152, 219, 0.3)";
+              }}
+            >
+              Add New Customer
+            </button>
+          )}
         </div>
 
         {/* Filters */}
-        <div style={{ 
-          display: "flex", 
-          gap: "20px", 
-          marginBottom: "30px",
-          alignItems: "center"
-        }}>
-          {/* Search Bar */}
-          <input
-            type="text"
-            placeholder="Search customers..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              ...INPUT_STYLES.base,
-              width: "100%",
-              maxWidth: "400px",
-              padding: "12px 16px",
-              fontSize: "16px",
-              borderRadius: "8px",
-              border: `2px solid ${COLORS.border}`,
-              transition: "border-color 0.3s ease"
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = COLORS.primary;
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = COLORS.border;
-            }}
-          />
+        {currentUser && (
+          <div style={{ 
+            display: "flex", 
+            gap: "20px", 
+            marginBottom: "30px",
+            alignItems: "center"
+          }}>
+            {/* Search Bar */}
+            <input
+              type="text"
+              placeholder="Search customers..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                ...INPUT_STYLES.base,
+                width: "100%",
+                maxWidth: "400px",
+                padding: "12px 16px",
+                fontSize: "16px",
+                borderRadius: "8px",
+                border: `2px solid ${COLORS.border}`,
+                transition: "border-color 0.3s ease"
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = COLORS.primary;
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = COLORS.border;
+              }}
+            />
 
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              ...INPUT_STYLES.base,
-              padding: "12px 16px",
-              fontSize: "16px",
-              borderRadius: "8px",
-              border: `2px solid ${COLORS.border}`,
-              minWidth: "150px"
-            }}
-          >
-            <option value="All">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
-        </div>
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{
+                ...INPUT_STYLES.base,
+                padding: "12px 16px",
+                fontSize: "16px",
+                borderRadius: "8px",
+                border: `2px solid ${COLORS.border}`,
+                minWidth: "150px"
+              }}
+            >
+              <option value="All">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+        )}
 
         {/* Customer Grid */}
-        {filteredCustomers.length === 0 ? (
+        {filteredCustomers.length === 0 && currentUser ? (
           <div style={{
             textAlign: "center",
             padding: "60px 20px",
@@ -188,6 +345,15 @@ export default function CustomerProfileList() {
             fontSize: "18px"
           }}>
             {searchTerm ? `No customers found matching "${searchTerm}"` : "No customers yet. Add your first customer!"}
+          </div>
+        ) : filteredCustomers.length === 0 && !currentUser ? (
+          <div style={{
+            textAlign: "center",
+            padding: "60px 20px",
+            color: COLORS.danger,
+            fontSize: "18px"
+          }}>
+            Please log in to view and manage customer profiles.
           </div>
         ) : (
           <div style={{
@@ -197,7 +363,7 @@ export default function CustomerProfileList() {
             marginBottom: "30px"
           }}>
             {filteredCustomers.map((customer) => {
-              const bgColor = stringToColor(customer.name);
+              const bgColor = stringToColor(customer.customerProfile.name || ""); // Handle potentially undefined name
               const progress = getProgress(customer);
               const currentStageName = customer.currentStage;
               const currentStageColor = getStatusColor(customer.status); // Reusing status color for the stage
@@ -226,6 +392,30 @@ export default function CustomerProfileList() {
                   }}
                   onClick={() => handleCustomerClick(customer)}
                 >
+                  {/* Delete Button */}
+                  {currentUser && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent navigation to profile
+                        handleDeleteCustomer(customer);
+                      }}
+                      style={{
+                        position: "absolute",
+                        top: "16px",
+                        right: "24px", // Position on the right
+                        background: "none",
+                        border: "none",
+                        color: COLORS.danger,
+                        fontSize: "18px",
+                        cursor: "pointer",
+                        zIndex: 2, // Ensure it's above other elements
+                        padding: "5px",
+                      }}
+                    >
+                      <FaTrash />
+                    </button>
+                  )}
+
                   {/* Creative Progress Bar at the top */}
                   <div style={{
                     position: "absolute",
@@ -242,7 +432,7 @@ export default function CustomerProfileList() {
                   <div style={{
                     position: "absolute",
                     top: "16px",
-                    left: "24px",
+                    left: "16px", // Position on the left
                     padding: "4px 10px",
                     borderRadius: "12px",
                     backgroundColor: `${currentStageColor}20`,
@@ -254,11 +444,11 @@ export default function CustomerProfileList() {
                     {currentStageName}
                   </div>
 
-                  {/* Status Badge - moved to top right */}
+                  {/* Status Badge - moved to top left */}
                   <div style={{
                     position: "absolute",
                     top: "16px",
-                    right: "16px",
+                    left: "100px", // Position on the left, after the current stage
                     padding: "4px 10px",
                     borderRadius: "12px",
                     backgroundColor: `${getStatusColor(customer.status)}20`,
@@ -285,7 +475,7 @@ export default function CustomerProfileList() {
                     marginBottom: "20px",
                     marginTop: "30px" // Adjusted to give space for new elements
                   }}>
-                    {getInitials(customer.name)}
+                    {getInitials(customer.customerProfile.name || "")}
                   </div>
 
                   {/* Customer Info */}
@@ -296,7 +486,7 @@ export default function CustomerProfileList() {
                     fontWeight: "700",
                     lineHeight: "1.3"
                   }}>
-                    {customer.name}
+                    {customer.customerProfile.name}
                   </h3>
 
                   <p style={{
@@ -305,7 +495,7 @@ export default function CustomerProfileList() {
                     fontSize: "16px",
                     fontWeight: "500"
                   }}>
-                    {customer.company}
+                    {customer.companyProfile.company}
                   </p>
 
                   <div style={{ marginBottom: "16px" }}>
@@ -314,14 +504,14 @@ export default function CustomerProfileList() {
                       color: COLORS.lightText,
                       marginBottom: "4px"
                     }}>
-                      📧 {customer.email}
+                      📧 {customer.customerProfile.email}
                     </div>
                     <div style={{
                       fontSize: "14px",
                       color: COLORS.lightText,
                       marginBottom: "4px"
                     }}>
-                      📞 {customer.phone}
+                      📞 {customer.customerProfile.phone}
                     </div>
                   </div>
 
@@ -341,7 +531,7 @@ export default function CustomerProfileList() {
                         fontWeight: "700",
                         color: COLORS.primary
                       }}>
-                        {customer.projects}
+                        {customer.projects?.length || 0}
                       </div>
                       <div style={{
                         fontSize: "12px",
@@ -363,7 +553,7 @@ export default function CustomerProfileList() {
                         fontSize: "13px",
                         color: COLORS.lightText
                       }}>
-                        {new Date(customer.lastContact).toLocaleDateString()}
+                        {customer.lastContact !== "N/A" ? new Date(customer.lastContact).toLocaleDateString() : "N/A"}
                       </div>
                     </div>
                   </div>
@@ -373,6 +563,19 @@ export default function CustomerProfileList() {
           </div>
         )}
       </div>
+      {/* Add New Customer Modal */}
+      <AddProfileModal
+        isOpen={showAddCustomerModal}
+        onClose={() => setShowAddCustomerModal(false)}
+        onAddContact={handleCreateNewCustomerFromModal}
+      />
+      {/* Delete Confirmation Modal */}
+      <DeleteProfileModal
+        isOpen={showDeleteCustomerModal}
+        onClose={() => setShowDeleteCustomerModal(false)}
+        onDeleteConfirm={confirmDeleteCustomer}
+        contactName={customerToDelete?.customerProfile?.name || customerToDelete?.companyProfile?.company || "this customer"}
+      />
     </div>
   );
 }

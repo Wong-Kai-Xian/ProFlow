@@ -10,23 +10,104 @@ import ProjectDetail from "./pages/ProjectDetail";
 import CustomerProfileList from "./pages/CustomerProfileList";
 import ApprovalList from "./pages/ApprovalList"; // Import the new ApprovalList component
 import Login from "./pages/Login"; // Import the new Login component
+import Signup from "./pages/Signup"; // Import the new Signup component
+import UserProfile from "./pages/UserProfile"; // Import the new UserProfile component
+import Quote from "./pages/Quote"; // Import the new Quote component
+import { AuthProvider } from './contexts/AuthContext'; // Import AuthProvider
+import PrivateRoute from './components/PrivateRoute'; // Import PrivateRoute
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} /> {/* Default route now points to Home */}
-        {/* Removed <Route path="/home" element={<Home />} /> */}
-        <Route path="/login" element={<Login />} /> {/* Login page accessible via /login */}
-        <Route path="/project" element={<ProjectList />} />
-        <Route path="/project/:projectName" element={<ProjectDetail />} /> {/* New route for project details */}
-        <Route path="/forum" element={<ForumListPage />} /> {/* forum list */}
-        <Route path="/forum/:id" element={<Forum />} />     {/* single forum */}
-        <Route path="/customer-profiles" element={<CustomerProfileList />} />
-        <Route path="/customer/:id" element={<CustomerProfile />} />
-        <Route path="/approvals" element={<ApprovalList />} /> {/* New route for ApprovalList */}
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider> {/* Wrap the entire app with AuthProvider */}
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} /> {/* Add Signup route */}
+          
+          {/* Protected Routes */}
+          <Route 
+            path="/" 
+            element={
+              <PrivateRoute>
+                <Home />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/profile/:userId"
+            element={
+              <PrivateRoute>
+                <UserProfile />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/project" 
+            element={
+              <PrivateRoute>
+                <ProjectList />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/project/:projectId" 
+            element={
+              <PrivateRoute>
+                <ProjectDetail />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/forum" 
+            element={
+              <PrivateRoute>
+                <ForumListPage />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/forum/:id" 
+            element={
+              <PrivateRoute>
+                <Forum />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/customer-profiles" 
+            element={
+              <PrivateRoute>
+                <CustomerProfileList />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/customer/:id" 
+            element={
+              <PrivateRoute>
+                <CustomerProfile />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/approvals" 
+            element={
+              <PrivateRoute>
+                <ApprovalList />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/quote" 
+            element={
+              <PrivateRoute>
+                <Quote />
+              </PrivateRoute>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   </React.StrictMode>
 );

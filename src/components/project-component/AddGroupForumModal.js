@@ -1,19 +1,16 @@
 import React, { useState } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
 
-export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, onAddExistingForum }) {
+export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, projects, defaultProjectId }) {
   const [newForumName, setNewForumName] = useState('');
   const [forumDescription, setForumDescription] = useState('');
   const [forumMembers, setForumMembers] = useState([]);
   const [newMember, setNewMember] = useState('');
-  const [selectedForumId, setSelectedForumId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(defaultProjectId || '');
 
-  // Mock existing forums for demonstration
-  const mockExistingForums = [
-    { id: 'forum1', name: 'General Discussion' },
-    { id: 'forum2', name: 'Technical Support' },
-    { id: 'forum3', name: 'Feature Requests' },
-  ];
+  React.useEffect(() => {
+    setSelectedProjectId(defaultProjectId || '');
+  }, [defaultProjectId]);
 
   if (!isOpen) return null;
 
@@ -33,20 +30,14 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
       onCreateNewForum({
         name: newForumName.trim(),
         description: forumDescription.trim(),
-        members: forumMembers
+        members: forumMembers,
+        projectId: selectedProjectId === '' ? null : selectedProjectId, // Pass selected project ID
       });
       setNewForumName('');
       setForumDescription('');
       setForumMembers([]);
       setNewMember('');
-      onClose();
-    }
-  };
-
-  const handleAddExistingClick = () => {
-    if (selectedForumId) {
-      onAddExistingForum(selectedForumId);
-      setSelectedForumId('');
+      setSelectedProjectId(defaultProjectId || ''); // Reset to default on close
       onClose();
     }
   };
@@ -85,6 +76,35 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
           marginBottom: LAYOUT.smallGap 
         }}>
           <h4 style={{ margin: "0 0 15px 0", color: COLORS.dark, fontSize: "16px", fontWeight: "600" }}>Create New Forum</h4>
+          
+          {/* Project Selection */}
+          <div style={{ marginBottom: "12px" }}>
+            <label style={{ 
+              display: 'block', 
+              marginBottom: '6px', 
+              color: COLORS.dark,
+              fontSize: '14px',
+              fontWeight: '500'
+            }}>
+              Link to Project
+            </label>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              style={{
+                ...INPUT_STYLES.base,
+                width: "100%",
+                fontSize: '14px'
+              }}
+            >
+              <option value="">-- Select Project --</option>
+              {projects.map(project => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
           
           {/* Forum Name */}
           <div style={{ marginBottom: "12px" }}>
@@ -228,30 +248,6 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
             }}
           >
             Create Forum
-          </button>
-        </div>
-
-        {/* Add from Existing Forum Section */}
-        <div style={{ border: `1px solid ${COLORS.lightBorder}`, borderRadius: LAYOUT.smallBorderRadius, padding: LAYOUT.smallGap }}>
-          <h4 style={{ margin: "0 0 10px 0", color: COLORS.text }}>Add From Existing</h4>
-          <select
-            value={selectedForumId}
-            onChange={(e) => setSelectedForumId(e.target.value)}
-            style={{
-              ...INPUT_STYLES.base,
-              width: "100%",
-              marginBottom: LAYOUT.smallGap,
-            }}
-          >
-            <option value="">Select an existing forum</option>
-            {mockExistingForums.map(forum => (
-              <option key={forum.id} value={forum.id}>
-                {forum.name}
-              </option>
-            ))}
-          </select>
-          <button onClick={handleAddExistingClick} style={BUTTON_STYLES.secondary}>
-            Add Selected
           </button>
         </div>
 

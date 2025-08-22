@@ -1,57 +1,22 @@
 import React, { useState } from 'react';
 import { COLORS } from '../profile-component/constants';
 
-export default function ActiveUsers() {
+export default function ActiveUsers({ forumData }) {
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Mock active users data
-  const users = [
-    {
-      id: 1,
-      name: "John Smith",
-      avatar: "JS",
-      isOnline: true,
-      lastSeen: null
-    },
-    {
-      id: 2,
-      name: "Sarah Johnson",
-      avatar: "SJ",
-      isOnline: true,
-      lastSeen: null
-    },
-    {
-      id: 3,
-      name: "Mike Chen",
-      avatar: "MC",
-      isOnline: false,
-      lastSeen: "5 minutes ago"
-    },
-    {
-      id: 4,
-      name: "Alice Wong",
-      avatar: "AW",
-      isOnline: false,
-      lastSeen: "1 hour ago"
-    },
-    {
-      id: 5,
-      name: "Bob Lee",
-      avatar: "BL",
-      isOnline: true,
-      lastSeen: null
-    },
-    {
-      id: 6,
-      name: "Emma Davis",
-      avatar: "ED",
-      isOnline: false,
-      lastSeen: "2 hours ago"
-    }
-  ];
+  // Use members from forumData, or an empty array if not available
+  const members = forumData?.members || [];
 
-  const onlineUsers = users.filter(user => user.isOnline);
-  const offlineUsers = users.filter(user => !user.isOnline);
+  // For now, assign a random online status for demonstration
+  const usersWithStatus = members.map(member => ({
+    name: member,
+    avatar: member.split(' ').map(n => n[0]).join('').toUpperCase(),
+    isOnline: Math.random() > 0.5, // Randomly assign online status
+    lastSeen: Math.random() > 0.5 ? `${Math.floor(Math.random() * 10) + 1} minutes ago` : null // Random last seen
+  }));
+
+  const onlineUsers = usersWithStatus.filter(user => user.isOnline);
+  const offlineUsers = usersWithStatus.filter(user => !user.isOnline);
 
   const getAvatarColor = (name) => {
     const colors = ['#3498DB', '#E74C3C', '#27AE60', '#F39C12', '#9B59B6', '#E67E22'];
@@ -96,8 +61,8 @@ export default function ActiveUsers() {
       {isExpanded && (
         <div>
           {/* Online Users */}
-          {onlineUsers.map((user) => (
-            <div key={user.id} style={{
+          {onlineUsers.map((user, index) => (
+            <div key={user.name} style={{
               display: 'flex',
               alignItems: 'center',
               padding: '6px 0',
@@ -165,8 +130,8 @@ export default function ActiveUsers() {
               }}>
                 Recently Active
               </div>
-              {offlineUsers.slice(0, 3).map((user) => (
-                <div key={user.id} style={{
+              {offlineUsers.slice(0, 3).map((user, index) => (
+                <div key={user.name} style={{
                   display: 'flex',
                   alignItems: 'center',
                   padding: '4px 0',

@@ -93,22 +93,52 @@ export const BUTTON_STYLES = {
 
 export const INPUT_STYLES = {
   base: {
-    padding: "8px 12px",
-    borderRadius: "6px",
+    padding: "12px 15px", // Increased padding
+    borderRadius: "8px", // Slightly larger border radius
     border: `1px solid ${COLORS.border}`,
-    fontSize: "14px",
+    fontSize: "15px", // Slightly larger font size
     outline: "none",
-    fontFamily: "Arial, sans-serif"
+    fontFamily: "Arial, sans-serif",
+    transition: "border-color 0.2s ease, box-shadow 0.2s ease", // Add transition for hover/focus
+    "&:focus": {
+      borderColor: COLORS.primary,
+      boxShadow: `0 0 0 3px ${COLORS.primary}30`, // Light shadow on focus
+    },
   },
   textarea: {
-    padding: "8px 12px",
-    borderRadius: "6px",
+    padding: "12px 15px", // Increased padding
+    borderRadius: "8px", // Slightly larger border radius
     border: `1px solid ${COLORS.border}`,
-    fontSize: "14px",
+    fontSize: "15px", // Slightly larger font size
     outline: "none",
     fontFamily: "Arial, sans-serif",
     resize: "vertical",
-    minHeight: "60px"
+    minHeight: "80px", // Increased min-height
+    transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+    "&:focus": {
+      borderColor: COLORS.primary,
+      boxShadow: `0 0 0 3px ${COLORS.primary}30`,
+    },
+  },
+  select: {
+    padding: "12px 15px",
+    borderRadius: "8px",
+    border: `1px solid ${COLORS.border}`,
+    fontSize: "15px",
+    outline: "none",
+    fontFamily: "Arial, sans-serif",
+    backgroundColor: COLORS.white,
+    cursor: "pointer",
+    appearance: "none", // Remove default select arrow
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%237F8C8D'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 10px center",
+    backgroundSize: "16px",
+    transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+    "&:focus": {
+      borderColor: COLORS.primary,
+      boxShadow: `0 0 0 3px ${COLORS.primary}30`,
+    },
   }
 };
 

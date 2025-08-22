@@ -4,128 +4,160 @@ import TopBar from '../components/TopBar';
 import ProjectDetails from '../components/project-component/ProjectDetails'; // Import ProjectDetails
 import Reminders from '../components/project-component/Reminders'; // Import Reminders
 import ProjectTaskPanel from '../components/project-component/ProjectTaskPanel'; // Import ProjectTaskPanel
-import GroupForum from '../components/GroupForum';
+import ProjectGroupForum from '../components/ProjectGroupForum'; // Use ProjectGroupForum
 import { COLORS, LAYOUT, STAGES, INPUT_STYLES, BUTTON_STYLES } from '../components/profile-component/constants';
 import StageIndicator from '../components/project-component/StageIndicator'; // Import StageIndicator
 import ApprovalModal from '../components/project-component/ApprovalModal'; // Import ApprovalModal
 import SendApprovalModal from '../components/project-component/SendApprovalModal'; // Import SendApprovalModal
-
+import { db } from "../firebase";
+import { doc, getDoc, updateDoc, collection, query, where, onSnapshot } from "firebase/firestore"; // Import collection, query, where, onSnapshot
 
 export default function ProjectDetail() {
-  const { projectName } = useParams();
-  const [currentStage, setCurrentStage] = useState(STAGES[0]); // New state for current project stage
-  const [showApprovalModal, setShowApprovalModal] = useState(false); // New state for approval modal
-  const [showSendApprovalModal, setShowSendApprovalModal] = useState(false); // New state for SendApprovalModal
-
-
-  // Mock data for now - will need to fetch actual project data later
-  const mockProjectData = {
-    "Website Redesign": {
-      id: "website-redesign",
-      companyInfo: { name: "Acme Corp", industry: "Tech", contact: "Jane Doe" },
-      reminders: [{ id: 1, text: "Follow up with Jane Doe on design", timestamp: "2024-03-09, 10:00 AM" }], // Changed from events to reminders
-      description: "A comprehensive redesign of the company website to improve user experience and visual appeal.", // New description field
-      tasks: [
-        {
-          subtitle: "Phase 1: Planning",
-          stage: "Proposal", // Assign stage to subtitle/section
-          tasks: [
-            { id: 1, name: "Define Scope", assignedTo: "Alice", priority: "High", deadline: "2024-03-05", comment: "" , done: true, status: "complete"},
-            { id: 2, name: "Client Kick-off", assignedTo: "Bob", priority: "High", deadline: "2024-03-08", comment: "Prepare agenda", done: false, status: "working on" },
-          ],
-        },
-        {
-          subtitle: "Phase 2: Design",
-          stage: "Negotiation", // Assign stage to subtitle/section
-          tasks: [
-            { id: 3, name: "Create Wireframes", assignedTo: "Charlie", priority: "Medium", deadline: "2024-03-15", comment: "Use Figma", done: false, status: "stuck" },
-            { id: 4, name: "Design Mockups", assignedTo: "Alice", priority: "High", deadline: "2024-03-20", comment: "Get client approval", done: false, status: "working on" },
-          ],
-        },
-      ],
-      forums: [{ title: "Website Design Feedback", posts: 5, lastActivity: "1 hour ago", notifications: 2 }],
-    },
-    "Mobile App Development": {
-      id: "mobile-app-development",
-      companyInfo: { name: "Beta Ltd", industry: "Software", contact: "John Smith" },
-      reminders: [{ id: 2, text: "Review backend API docs", timestamp: "2024-03-14, 02:00 PM" }], // Changed from events to reminders
-      description: "Development of a new mobile application for iOS and Android platforms.", // New description field
-      tasks: [
-        {
-          subtitle: "Sprint 1",
-          stage: "Negotiation", // Assign stage to subtitle/section
-          tasks: [
-            { id: 5, name: "Set up Backend", assignedTo: "David", priority: "High", deadline: "2024-03-10", comment: "Node.js", done: false, status: "working on" },
-            { id: 6, name: "Implement User Auth", assignedTo: "Eve", priority: "High", deadline: "2024-03-18", comment: "OAuth 2.0", done: false, status: "working on" },
-          ],
-        },
-      ],
-      forums: [{ title: "Mobile App Bug Reports", posts: 10, lastActivity: "30 mins ago", notifications: 5 }],
-    },
-    "Marketing Campaign": {
-      id: "marketing-campaign",
-      companyInfo: { name: "Marketing Pro", industry: "Marketing", contact: "Sarah Lee" },
-      reminders: [{ id: 3, text: "Prepare Q2 marketing report", timestamp: "2024-03-18, 09:00 AM" }], // Changed from events to reminders
-      description: "Planning and execution of a new digital marketing campaign.", // New description field
-      tasks: [
-        {
-          subtitle: "Campaign Setup",
-          stage: "Proposal", // Assign stage to subtitle/section
-          tasks: [
-            { id: 7, name: "Audience Research", assignedTo: "Frank", priority: "Medium", deadline: "2024-03-07", comment: "Identify target demographics", done: false, status: "working on" },
-            { id: 8, name: "Ad Copywriting", assignedTo: "Grace", priority: "High", deadline: "2024-03-12", comment: "" , done: false, status: "stuck"},
-          ],
-        },
-      ],
-      forums: [{ title: "Campaign Performance Discussion", posts: 8, lastActivity: "1 day ago", notifications: 1 }],
-    },
-  };
-
-  const projectData = React.useMemo(() => mockProjectData[projectName] || {}, [projectName]);
-
-  const [projectTasks, setProjectTasks] = useState([]); // Initialize empty, will filter in useEffect
-  const [projectReminders, setProjectReminders] = useState(projectData.reminders || []); // Changed from projectEvents to projectReminders
-  const [projectForums, setProjectForums] = useState(projectData.forums || []);
-  const [projectDetails, setProjectDetails] = useState(projectData);
+  const { projectId } = useParams(); // Changed from projectName to projectId
+  const [projectData, setProjectData] = useState(null);
+  const [currentStage, setCurrentStage] = useState(STAGES[0]);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [showSendApprovalModal, setShowSendApprovalModal] = useState(false);
+  const [projectForums, setProjectForums] = useState([]); // State to hold project-specific forums
+  // Mock currentUser - replace with actual authenticated user in a real application
+  const [currentUser, setCurrentUser] = useState({ id: 'user123', name: 'Test User', role: 'admin' }); // Set role to 'admin' for testing
+  const [currentApproval, setCurrentApproval] = useState(null); // State to hold the current approval request
 
   useEffect(() => {
+    const fetchProject = async () => {
+      console.log("Fetching project with projectId:", projectId); // Added console.log
+      if (projectId) {
+        const docRef = doc(db, "projects", projectId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const data = { id: docSnap.id, ...docSnap.data() };
+          setProjectData(data);
+          setCurrentStage(data.stage || STAGES[0]);
+        } else {
+          console.log("No such project document!");
+          setProjectData(null);
+        }
+      }
+    };
+
+    fetchProject();
+  }, [projectId]);
+
+  // Fetch project-specific forums in real-time
+  useEffect(() => {
+    if (projectId) {
+      const forumsCollectionRef = collection(db, "forums");
+      const q = query(forumsCollectionRef, where("projectId", "==", projectId));
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const forumsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setProjectForums(forumsData);
+      });
+
+      return () => unsubscribe();
+    }
+  }, [projectId]);
+
+  // Fetch approval requests for the current project and stage in real-time
+  useEffect(() => {
+    if (projectId && currentStage) {
+      const approvalsCollectionRef = collection(db, "approvalRequests");
+      const q = query(
+        approvalsCollectionRef,
+        where("projectId", "==", projectId),
+        where("status", "==", "pending") // Only interested in pending approvals for the current stage
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const pendingApprovals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Assuming only one pending approval at a time for simplicity of stage advancement
+        setCurrentApproval(pendingApprovals.length > 0 ? pendingApprovals[0] : null);
+      });
+
+      return () => unsubscribe();
+    }
+  }, [projectId, currentStage]);
+
+  useEffect(() => {
+    if (projectData) {
     // Filter tasks based on the current stage
     const filteredTasks = (projectData.tasks || []).filter(section => section.stage === currentStage);
     setProjectTasks(filteredTasks);
-    setProjectReminders(projectData.reminders || []); // Changed from setProjectEvents to setProjectReminders
-    setProjectForums(projectData.forums || []);
-    setProjectDetails(projectData); // Update project details when project or stage changes
-  }, [projectName, projectData, currentStage]); // Add currentStage to dependencies
+      setProjectReminders(projectData.reminders || []);
+      setProjectDetails(projectData); // This will be the main projectData from Firestore
+    }
+  }, [projectData, currentStage]);
 
-  const handleAdvanceStage = () => {
+  // Initialize states with projectData or empty arrays if projectData is null
+  const [projectTasks, setProjectTasks] = useState([]);
+  const [projectReminders, setProjectReminders] = useState([]);
+  const [projectDetails, setProjectDetails] = useState(null);
+
+  const handleAdvanceStage = async () => {
     const currentStageIndex = STAGES.indexOf(currentStage);
     if (currentStageIndex < STAGES.length - 1) {
       const allTasksCompleteInCurrentStage = projectTasks.every(section => 
         section.tasks.every(task => task.status === 'complete')
       );
+
       if (allTasksCompleteInCurrentStage) {
-        setShowApprovalModal(true); // Open approval modal
+        // Check if approval is required for the next stage (e.g., if current stage is 'Review')
+        // For simplicity, let's assume approval is always required to advance to the next stage after 'Development'
+        const nextStage = STAGES[currentStageIndex + 1];
+        const isApprovalRequired = nextStage === "Review" || nextStage === "Completion"; // Example: require approval for Review and Completion stages
+
+        if (isApprovalRequired) {
+          if (currentApproval && currentApproval.status === 'pending') {
+            alert("Cannot advance stage. Awaiting admin approval.");
+            return;
+          } else if (currentApproval && currentApproval.status === 'rejected') {
+            alert("Cannot advance stage. Previous approval request was rejected. Please resubmit.");
+            return;
+          } else if (!currentApproval) {
+            alert("Approval required to advance to the next stage. Please send an approval request.");
+            return;
+          }
+        }
+        setShowApprovalModal(true);
       } else {
         alert("All tasks in the current stage must be marked as 'Complete' before advancing.");
       }
     }
   };
 
-  const handleConfirmAdvanceStage = () => {
+  const handleConfirmAdvanceStage = async () => {
     const currentStageIndex = STAGES.indexOf(currentStage);
-    setCurrentStage(STAGES[currentStageIndex + 1]);
+    const nextStage = STAGES[currentStageIndex + 1];
+    if (projectData && projectData.id) {
+      const projectRef = doc(db, "projects", projectData.id);
+      await updateDoc(projectRef, { stage: nextStage });
+      setCurrentStage(nextStage);
     setShowApprovalModal(false);
-    alert(`Advancing to next stage: ${STAGES[currentStageIndex + 1]}`); // Optional: confirm advance
+      // alert(`Advancing to next stage: ${nextStage}`);
+    }
   };
 
-  const handleStageSelect = (stage) => {
+  const handleStageSelect = async (stage) => {
+    if (projectData && projectData.id) {
+      const projectRef = doc(db, "projects", projectData.id);
+      await updateDoc(projectRef, { stage: stage });
     setCurrentStage(stage);
+    }
   };
 
-  const handleGoBackStage = () => {
+  const handleGoBackStage = async () => {
     const currentStageIndex = STAGES.indexOf(currentStage);
     if (currentStageIndex > 0) {
-      setCurrentStage(STAGES[currentStageIndex - 1]);
+      const prevStage = STAGES[currentStageIndex - 1];
+      if (projectData && projectData.id) {
+        const projectRef = doc(db, "projects", projectData.id);
+        await updateDoc(projectRef, { stage: prevStage });
+        setCurrentStage(prevStage);
+      }
     }
   };
 
@@ -133,13 +165,25 @@ export default function ProjectDetail() {
     section.tasks.every(task => task.status === 'complete')
   );
 
-  const handleSaveEditedProjectDetails = (updatedProject) => {
-    mockProjectData[projectName] = { ...mockProjectData[projectName], ...updatedProject };
-    setProjectDetails(updatedProject);
-    alert("Project details saved!");
+  // Determine if the 'Advance Stage' button should be enabled
+  const canAdvanceStage = 
+    isCurrentStageTasksComplete && 
+    STAGES.indexOf(currentStage) < STAGES.length - 1 &&
+    (!currentApproval || currentApproval.status === 'approved'); // Only if there is no pending approval or it's approved
+
+  const handleSaveEditedProjectDetails = async (updatedDetails) => {
+    if (projectData && projectData.id) {
+      const projectRef = doc(db, "projects", projectData.id);
+      // Ensure that only fields expected by Firestore are passed
+      const { id, ...dataToUpdate } = updatedDetails; // Exclude 'id' if it's already part of the doc reference
+      await updateDoc(projectRef, dataToUpdate);
+      setProjectData(prevData => ({ ...prevData, ...updatedDetails })); // Update local state with merged data
+    }
   };
 
-
+  if (!projectData) {
+    return <div style={{ textAlign: "center", padding: "50px", color: COLORS.lightText }}>Loading project details...</div>; // Loading state
+  }
 
   return (
     <div style={{ fontFamily: "Arial, sans-serif", background: COLORS.background, minHeight: "100vh" }}>
@@ -158,14 +202,13 @@ export default function ProjectDetail() {
             project={projectDetails} 
             onSave={handleSaveEditedProjectDetails}
           />
-          <div style={{ flexGrow: 2 }}>
-            <Reminders reminders={projectReminders} setReminders={setProjectReminders} /> 
+          <div style={{ flexGrow: 0 }}>
+            <Reminders projectId={projectId} /> 
           </div>
           <div style={{ flexGrow: 1 }}>
-            <GroupForum 
-              forumsData={projectForums} 
-              projectName={projectName} 
-              onForumsUpdate={setProjectForums}
+            <ProjectGroupForum 
+              projectId={projectId} 
+              forums={projectForums} // Pass project-specific forums to GroupForum
             />
           </div>
         </div>
@@ -192,11 +235,14 @@ export default function ProjectDetail() {
             onGoBackStage={handleGoBackStage} 
             isCurrentStageTasksComplete={isCurrentStageTasksComplete}
             onStageSelect={handleStageSelect} // New prop for direct stage selection
+            canAdvance={canAdvanceStage} // Pass the new prop
           />
           <ProjectTaskPanel 
             projectTasks={projectTasks}
             setProjectTasks={setProjectTasks}
             currentStage={currentStage} 
+            projectId={projectId}
+            setProjectData={setProjectData} // Pass setProjectData down
           />
         </div>
       </div>
@@ -213,6 +259,7 @@ export default function ProjectDetail() {
         onSendApproval={(data) => console.log("Approval data sent:", data)}
         defaultProject={projectDetails} // Pass current project details
         defaultStatus={currentStage} // Pass current stage as default status
+        currentUser={currentUser} // Pass currentUser to the modal
       />
     </div>
   );

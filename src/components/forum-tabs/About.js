@@ -1,7 +1,36 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { COLORS } from "../profile-component/constants";
+import { db } from "../../firebase";
+import { collection, query, onSnapshot, doc } from "firebase/firestore";
 
-export default function About() {
+export default function About({ forumData }) {
+  const [filesSharedCount, setFilesSharedCount] = useState(0);
+  const [meetingsScheduledCount, setMeetingsScheduledCount] = useState(0);
+
+  useEffect(() => {
+    if (!forumData?.id) return;
+
+    const postsCollectionRef = collection(doc(db, "forums", forumData.id), "posts");
+    const unsubscribe = onSnapshot(postsCollectionRef, (snapshot) => {
+      let totalFiles = 0;
+      let totalMeetings = 0;
+
+      snapshot.docs.forEach(postDoc => {
+        const postData = postDoc.data();
+        if (postData.files && postData.files.length > 0) {
+          totalFiles += postData.files.length;
+        }
+        if (postData.meeting) {
+          totalMeetings += 1;
+        }
+      });
+      setFilesSharedCount(totalFiles);
+      setMeetingsScheduledCount(totalMeetings);
+    });
+
+    return () => unsubscribe();
+  }, [forumData?.id]);
+
   return (
     <div>
       <h3 style={{ marginTop: 0, color: COLORS.dark, fontSize: "16px", fontWeight: "700" }}>About This Forum</h3>
@@ -13,10 +42,9 @@ export default function About() {
         border: '1px solid #ECF0F1',
         marginBottom: '20px'
       }}>
-        <h4 style={{ color: COLORS.dark, marginTop: 0, fontSize: "15px", fontWeight: "600" }}>Project Alpha Discussion</h4>
+        <h4 style={{ color: COLORS.dark, marginTop: 0, fontSize: "15px", fontWeight: "600" }}>{forumData?.name || 'N/A'}</h4>
         <p style={{ color: COLORS.lightText, lineHeight: '1.6', fontSize: "15px" }}>
-          This forum is dedicated to discussions, updates, and collaboration for Project Alpha. 
-          Here you can share ideas, ask questions, schedule meetings, and keep track of project progress.
+          {forumData?.description || 'No description provided.'}
         </p>
       </div>
 
@@ -30,19 +58,19 @@ export default function About() {
         <h4 style={{ color: COLORS.dark, marginTop: 0, fontSize: "15px", fontWeight: "600" }}>Forum Statistics</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: COLORS.primary }}>127</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold', color: COLORS.primary }}>{forumData?.posts || 0}</div>
             <div style={{ fontSize: '14px', color: COLORS.lightText }}>Total Posts</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: COLORS.success }}>5</div>
-            <div style={{ fontSize: '14px', color: COLORS.lightText }}>Active Members</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold', color: COLORS.success }}>{forumData?.members?.length || 0}</div>
+            <div style={{ fontSize: '14px', color: COLORS.lightText }}>Total Members</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: COLORS.warning }}>23</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold', color: COLORS.warning }}>{filesSharedCount}</div>
             <div style={{ fontSize: '14px', color: COLORS.lightText }}>Files Shared</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: COLORS.danger }}>8</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold', color: COLORS.danger }}>{meetingsScheduledCount}</div>
             <div style={{ fontSize: '14px', color: COLORS.lightText }}>Meetings Scheduled</div>
           </div>
         </div>

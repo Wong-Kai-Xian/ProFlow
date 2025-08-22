@@ -1,14 +1,8 @@
 import React from "react";
 import { COLORS } from "../profile-component/constants";
 
-export default function Members() {
-  const members = [
-    { id: 1, name: 'John Smith', role: 'Project Manager', status: 'online', joinDate: 'January 2024' },
-    { id: 2, name: 'Sarah Johnson', role: 'Lead Developer', status: 'online', joinDate: 'January 2024' },
-    { id: 3, name: 'Mike Chen', role: 'UI/UX Designer', status: 'away', joinDate: 'February 2024' },
-    { id: 4, name: 'Emily Davis', role: 'QA Engineer', status: 'offline', joinDate: 'February 2024' },
-    { id: 5, name: 'Alex Wilson', role: 'Backend Developer', status: 'online', joinDate: 'March 2024' }
-  ];
+export default function Members({ forumData }) {
+  const members = forumData?.members || [];
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -49,10 +43,10 @@ export default function Members() {
               margin: '0 auto 18px',
               fontWeight: 'bold'
             }}>
-              {member.name.split(' ').map(n => n[0]).join('')}
+              {member && member.name ? member.name.split(' ').map(n => n[0]).join('') : (member ? member.charAt(0) : 'U')}
             </div>
             
-            <strong style={{ color: COLORS.dark, fontSize: '18px', fontWeight: '600' }}>{member.name}</strong>
+            <strong style={{ color: COLORS.dark, fontSize: '18px', fontWeight: '600' }}>{member && member.name ? member.name : member || 'Unknown Member'}</strong>
             
             <div style={{ 
               fontSize: '15px', 
@@ -60,7 +54,7 @@ export default function Members() {
               marginTop: '6px',
               marginBottom: '12px'
             }}>
-              {member.role}
+              {member && member.role ? member.role : 'Member'}
             </div>
             
             <div style={{ 
@@ -71,16 +65,16 @@ export default function Members() {
               marginBottom: '12px'
             }}>
               <span style={{ 
-                color: getStatusColor(member.status),
+                color: getStatusColor(member && member.status ? member.status : 'offline'),
                 fontSize: '14px',
                 fontWeight: '600'
               }}>
-                ● {member.status}
+                ● {member && member.status ? member.status : 'offline'}
               </span>
             </div>
             
             <div style={{ fontSize: '13px', color: COLORS.lightText }}>
-              Joined {member.joinDate}
+              Joined {member && member.joinDate ? member.joinDate : 'N/A'}
             </div>
           </div>
         ))}

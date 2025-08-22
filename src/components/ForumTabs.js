@@ -4,9 +4,10 @@ import Media from "./forum-tabs/Media";
 import Files from "./forum-tabs/Files";
 import Members from "./forum-tabs/Members";
 import About from "./forum-tabs/About";
+import ForumReminders from "./forum-tabs/ForumReminders"; // Import ForumReminders
 import { COLORS } from "./profile-component/constants";
 
-export default function ForumTabs({ forumData, posts, setPosts }) {
+export default function ForumTabs({ forumData, posts, setPosts, forumId, updateForumLastActivity, updateForumPostCount, currentUser }) {
   const [activeTab, setActiveTab] = useState('Discussion');
   
   // Default forum data if none provided
@@ -19,7 +20,7 @@ export default function ForumTabs({ forumData, posts, setPosts }) {
   
   const currentForum = forumData || defaultForum;
 
-  const tabs = ['Discussion', 'Media', 'Files', 'Members', 'About'];
+  const tabs = ['Discussion', 'Media', 'Files', 'Members', 'About']; // Removed Reminders tab
 
   const tabStyle = {
     padding: '12px 20px',
@@ -49,17 +50,17 @@ export default function ForumTabs({ forumData, posts, setPosts }) {
   const renderTabContent = () => {
     switch(activeTab) {
       case 'Discussion':
-        return <Discussion forumData={currentForum} posts={posts} setPosts={setPosts} />;
+        return <Discussion forumData={currentForum} posts={posts} setPosts={setPosts} forumId={forumId} updateForumLastActivity={updateForumLastActivity} updateForumPostCount={updateForumPostCount} currentUser={currentUser} />;
       case 'Media':
-        return <Media />;
+        return <Media forumId={forumId} updateForumLastActivity={updateForumLastActivity} />;
       case 'Files':
-        return <Files />;
+        return <Files forumId={forumId} updateForumLastActivity={updateForumLastActivity} />;
       case 'Members':
-        return <Members />;
+        return <Members forumData={currentForum} forumId={forumId} updateForumLastActivity={updateForumLastActivity} />;
       case 'About':
-        return <About />;
+        return <About forumData={currentForum} forumId={forumId} updateForumLastActivity={updateForumLastActivity} />;
       default:
-        return <Discussion forumData={currentForum} posts={posts} setPosts={setPosts} />;
+        return <Discussion forumData={currentForum} posts={posts} setPosts={setPosts} forumId={forumId} updateForumLastActivity={updateForumLastActivity} updateForumPostCount={updateForumPostCount} currentUser={currentUser} />;
     }
   };
 

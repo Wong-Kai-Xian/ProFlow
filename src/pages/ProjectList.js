@@ -1,9 +1,13 @@
 // src/pages/ProjectList.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import TopBar from "../components/TopBar";
 import CreateProjectModal from "../components/project-component/CreateProjectModal";
 import { useNavigate } from "react-router-dom";
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "../components/profile-component/constants";
+import { db } from "../firebase";
+import { collection, getDocs, addDoc, updateDoc, doc, getDoc } from "firebase/firestore";
+import { onSnapshot, query, orderBy, where } from "firebase/firestore"; // Import onSnapshot, query, orderBy
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
 // Get initials from project name
 const getInitials = (name) =>
@@ -21,48 +25,128 @@ const stringToColor = (str) => {
 };
 
 export default function ProjectList() {
-  const [projects, setProjects] = useState([
-    { id: 1, name: "Website Redesign", stage: "Negotiation", team: ["Alice", "Bob"], tasks: 12, completedTasks: 8 },
-    { id: 2, name: "Mobile App", stage: "Proposal", team: ["Charlie", "David"], tasks: 8, completedTasks: 0 },
-    { id: 3, name: "Marketing Campaign", stage: "Complete", team: ["Eve", "Frank"], tasks: 15, completedTasks: 15 }
-  ]);
+  const [projects, setProjects] = useState([]);
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
+
+  useEffect(() => {
+    if (!currentUser) {
+      setProjects([]);
+      return;
+    }
+
+    const q = query(collection(db, "projects"), orderBy('name', 'asc'), where("userId", "==", currentUser.uid)); // Filter by userId
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const projectList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setProjects(projectList);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]); // Add currentUser to dependency array
 
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
+  const [joinProjectId, setJoinProjectId] = useState(''); // New state for join project ID
+  const [joinProjectError, setJoinProjectError] = useState(null); // New state for join project error
   const navigate = useNavigate();
 
-  const getProgress = (project) =>
-    project.tasks === 0 ? 0 : Math.round((project.completedTasks / project.tasks) * 100);
+  const getProgress = (project) => {
+    let totalTasks = 0;
+    let completedTasks = 0;
+
+    if (project.tasks && Array.isArray(project.tasks)) {
+      project.tasks.forEach(section => {
+        if (section.tasks && Array.isArray(section.tasks)) {
+          totalTasks += section.tasks.length;
+          completedTasks += section.tasks.filter(task => task.status === 'complete').length;
+        }
+      });
+    }
+
+    if (totalTasks === 0) return 0;
+    return Math.round((completedTasks / totalTasks) * 100);
+  };
 
   const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreateProject = (newProject) => {
-    const projectWithId = {
-      ...newProject,
-      id: Date.now(), // Simple ID generation
-      stage: newProject.stage || "Proposal"
-    };
-    setProjects([...projects, projectWithId]);
+  const handleCreateProject = async (newProject) => {
+    if (!currentUser) return; // Ensure user is logged in to create projects
+    await addDoc(collection(db, "projects"), {
+      name: newProject.name,
+      stage: newProject.stage || "Proposal",
+      status: determineProjectStatus(newProject.stage || "Proposal"), // Set status based on stage progress
+      team: newProject.team || [],
+      tasks: newProject.tasks || 0,
+      completedTasks: newProject.completedTasks || 0,
+      userId: currentUser.uid, // Assign project to current user
+    });
+    // setProjects will be handled by the onSnapshot listener, no need to refetch
     setShowCreateModal(false);
   };
 
   const handleEditProject = (project) => {
-    setEditingProject(project);
-    setShowCreateModal(true);
+    navigate(`/project/${project.id}`);
   };
 
-  const handleUpdateProject = (updatedProject) => {
-    setProjects(projects.map(p => 
-      p.id === editingProject.id 
-        ? { ...editingProject, ...updatedProject }
-        : p
-    ));
-    setEditingProject(null);
-    setShowCreateModal(false);
+  const handleJoinProject = async () => {
+    if (!joinProjectId.trim() || !currentUser) {
+      setJoinProjectError('Please enter a valid Project ID and ensure you are logged in.');
+      return;
+    }
+
+    setJoinProjectError(null);
+    try {
+      const projectRef = doc(db, 'projects', joinProjectId);
+      const projectSnap = await getDoc(projectRef);
+
+      if (projectSnap.exists()) {
+        const projectData = projectSnap.data();
+        const currentTeam = projectData.team || [];
+
+        if (currentTeam.includes(currentUser.uid)) {
+          setJoinProjectError('You are already a member of this project.');
+          return;
+        }
+
+        await updateDoc(projectRef, {
+          team: [...currentTeam, currentUser.uid]
+        });
+        alert('Successfully joined project!');
+        setJoinProjectId('');
+        navigate(`/project/${joinProjectId}`); // Navigate to the joined project
+      } else {
+        setJoinProjectError('Project not found.');
+      }
+    } catch (err) {
+      console.error("Error joining project:", err);
+      setJoinProjectError('Failed to join project: ' + err.message);
+    }
   };
+
+  // handleUpdateProject will no longer be needed here as editing happens on ProjectDetail page
+  // const handleUpdateProject = async (updatedProject) => {
+  //   const projectRef = doc(db, "projects", updatedProject.id);
+  //   await updateDoc(projectRef, {
+  //     name: updatedProject.name,
+  //     stage: updatedProject.stage,
+  //     team: updatedProject.team,
+  //     tasks: updatedProject.tasks,
+  //     completedTasks: updatedProject.completedTasks,
+  //   });
+  //   setProjects(projects.map(p => 
+  //     p.id === updatedProject.id 
+  //       ? { ...p, ...updatedProject }
+  //       : p
+  //   ));
+  //   setEditingProject(null);
+  //   setShowCreateModal(false);
+  // };
 
   const getStageColor = (stage) => {
     switch (stage) {
@@ -77,6 +161,10 @@ export default function ProjectList() {
     const stageOrder = ['Proposal', 'Negotiation', 'Complete'];
     const currentIndex = stageOrder.indexOf(stage);
     return ((currentIndex + 1) / stageOrder.length) * 100;
+  };
+
+  const determineProjectStatus = (stage) => {
+    return getStageProgress(stage) === 100 ? "Complete" : "Ongoing";
   };
 
   return (
@@ -98,29 +186,65 @@ export default function ProjectList() {
           }}>
             Projects
           </h1>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            style={{
-              ...BUTTON_STYLES.primary,
-              padding: "12px 24px",
-              fontSize: "16px",
-              fontWeight: "600",
-              borderRadius: "8px",
-              boxShadow: "0 4px 12px rgba(52, 152, 219, 0.3)",
-              transition: "all 0.3s ease"
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.transform = "translateY(-2px)";
-              e.target.style.boxShadow = "0 6px 16px rgba(52, 152, 219, 0.4)";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = "translateY(0)";
-              e.target.style.boxShadow = "0 4px 12px rgba(52, 152, 219, 0.3)";
-            }}
-          >
-            Create Project
-          </button>
+          {currentUser && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              style={{
+                ...BUTTON_STYLES.primary,
+                padding: "12px 24px",
+                fontSize: "16px",
+                fontWeight: "600",
+                borderRadius: "8px",
+                boxShadow: "0 4px 12px rgba(52, 152, 219, 0.3)",
+                transition: "all 0.3s ease"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 6px 16px rgba(52, 152, 219, 0.4)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "0 4px 12px rgba(52, 152, 219, 0.3)";
+              }}
+            >
+              Create Project
+            </button>
+          )}
         </div>
+
+        {/* Join Project Section */}
+        {currentUser && (
+          <div style={{ marginBottom: "30px", display: "flex", gap: "10px", alignItems: "center" }}>
+            <input
+              type="text"
+              placeholder="Enter Project ID to join"
+              value={joinProjectId}
+              onChange={(e) => setJoinProjectId(e.target.value)}
+              style={{
+                ...INPUT_STYLES.base,
+                flex: 1,
+                maxWidth: "300px",
+                padding: "12px 16px",
+                fontSize: "16px",
+                borderRadius: "8px",
+                border: `2px solid ${COLORS.border}`,
+              }}
+            />
+            <button 
+              onClick={handleJoinProject}
+              style={{
+                ...BUTTON_STYLES.secondary,
+                padding: "12px 24px",
+                fontSize: "16px",
+                fontWeight: "600",
+                borderRadius: "8px",
+              }}
+            >
+              Join Project
+            </button>
+            {joinProjectError && <p style={{ color: COLORS.danger, marginLeft: "10px" }}>{joinProjectError}</p>}
+          </div>
+        )}
 
         {/* Search Bar */}
         <div style={{ marginBottom: "30px" }}>
@@ -149,14 +273,23 @@ export default function ProjectList() {
         </div>
 
         {/* Project Grid */}
-        {filteredProjects.length === 0 ? (
+        {filteredProjects.length === 0 && currentUser ? (
           <div style={{
             textAlign: "center",
             padding: "60px 20px",
             color: COLORS.lightText,
             fontSize: "18px"
           }}>
-            {searchTerm ? `No projects found matching "${searchTerm}"` : "No projects yet. Create your first project!"}
+            {searchTerm ? `No projects found matching "${searchTerm}"` : "No projects yet. Create your first project or join one!"}
+          </div>
+        ) : filteredProjects.length === 0 && !currentUser ? (
+          <div style={{
+            textAlign: "center",
+            padding: "60px 20px",
+            color: COLORS.danger,
+            fontSize: "18px"
+          }}>
+            Please log in to view and manage projects.
           </div>
         ) : (
           <div style={{
@@ -277,9 +410,9 @@ export default function ProjectList() {
                     </div>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                       {project.team.length > 0 ? (
-                        project.team.map((member, index) => (
+                        project.team.map((member) => (
                           <div
-                            key={index}
+                            key={member}
                             title={member}
                             style={{
                               width: "36px",
@@ -392,7 +525,7 @@ export default function ProjectList() {
                       color: COLORS.lightText,
                       marginTop: "6px"
                     }}>
-                      {project.completedTasks} of {project.tasks} tasks completed
+                      {project.completedTasks} of {project.tasks?.length || 0} tasks completed
                     </div>
                   </div>
                 </div>
@@ -409,8 +542,8 @@ export default function ProjectList() {
           setShowCreateModal(false);
           setEditingProject(null);
         }}
-        onConfirm={editingProject ? handleUpdateProject : handleCreateProject}
-        editingProject={editingProject}
+        onConfirm={handleCreateProject}
+        // Removed editingProject prop as editing is now handled on ProjectDetail page
       />
     </div>
   );

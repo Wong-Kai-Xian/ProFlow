@@ -2,10 +2,11 @@ import React from "react";
 import { COLORS, BUTTON_STYLES, LAYOUT } from "./constants";
 
 export default function DeleteProfileModal({ isOpen, onClose, onDeleteConfirm, contactName }) {
+  console.log("DeleteProfileModal - isOpen:", isOpen, "contactName:", contactName);
   if (!isOpen) return null;
 
   return (
-    <div style={modalOverlayStyle}>
+    <div style={{ ...modalOverlayStyle, zIndex: 99999, backgroundColor: 'rgba(0, 0, 0, 0.7)' }}>
       <div style={modalContentStyle}>
         <h3 style={{ color: COLORS.text, marginBottom: LAYOUT.gap }}>Confirm Deletion</h3>
         <p style={{ color: COLORS.text, marginBottom: LAYOUT.gap }}>

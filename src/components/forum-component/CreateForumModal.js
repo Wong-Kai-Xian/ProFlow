@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
+import { useAuth } from '../../contexts/AuthContext'; // Import useAuth
 
-export default function CreateForumModal({ isOpen, onClose, onConfirm, editingForum }) {
+export default function CreateForumModal({ isOpen, onClose, onConfirm, editingForum, projects }) {
   const [forumName, setForumName] = useState('');
   const [description, setDescription] = useState('');
   const [members, setMembers] = useState([]);
   const [newMember, setNewMember] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(''); // New state for selected project
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
 
   // Populate form when editing
   React.useEffect(() => {
@@ -13,10 +16,13 @@ export default function CreateForumModal({ isOpen, onClose, onConfirm, editingFo
       setForumName(editingForum.name || '');
       setDescription(editingForum.description || '');
       setMembers(editingForum.members || []);
+      setSelectedProjectId(editingForum.projectId || ''); // Set selected project if editing
     } else {
       setForumName('');
       setDescription('');
       setMembers([]);
+      setNewMember('');
+      setSelectedProjectId(''); // Reset for new forum
     }
   }, [editingForum]);
 
@@ -32,20 +38,26 @@ export default function CreateForumModal({ isOpen, onClose, onConfirm, editingFo
   };
 
   const handleSubmit = () => {
-    if (forumName.trim()) {
+    console.log("handleSubmit called.");
+    if (forumName.trim() && currentUser) {
+      console.log("Forum name is valid and currentUser exists.", { forumName: forumName.trim(), currentUser: currentUser });
+      const initialMembers = editingForum ? members : (currentUser.email ? [...members, currentUser.email] : members);
       onConfirm({
         name: forumName.trim(),
         description: description.trim(),
-        members: members,
-        memberCount: members.length,
+        members: initialMembers,
+        memberCount: initialMembers.length,
         notifications: 0,
-        lastActivity: new Date().toISOString()
+        lastActivity: new Date().toISOString(), // This will be overwritten by serverTimestamp in ForumListPage
+        projectId: selectedProjectId === '' ? null : selectedProjectId, // Pass selected project ID
+        userId: currentUser.uid, // Associate forum with the current user
       });
       // Reset form
       setForumName('');
       setDescription('');
       setMembers([]);
       setNewMember('');
+      setSelectedProjectId('');
     }
   };
 
@@ -54,6 +66,7 @@ export default function CreateForumModal({ isOpen, onClose, onConfirm, editingFo
     setDescription('');
     setMembers([]);
     setNewMember('');
+    setSelectedProjectId(''); // Reset on cancel
     onClose();
   };
 
@@ -115,6 +128,36 @@ export default function CreateForumModal({ isOpen, onClose, onConfirm, editingFo
               padding: '12px'
             }}
           />
+        </div>
+
+        {/* Project Selection */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '8px', 
+            color: COLORS.dark,
+            fontSize: '16px',
+            fontWeight: '600'
+          }}>
+            Link to Project
+          </label>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            style={{
+              ...INPUT_STYLES.base,
+              width: '100%',
+              fontSize: '16px',
+              padding: '12px'
+            }}
+          >
+            <option value="">-- No Project --</option>
+            {projects.map(project => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Description */}

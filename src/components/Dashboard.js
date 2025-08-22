@@ -2,6 +2,9 @@ import React, { useEffect, useState } from "react";
 import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; // Import COLORS, LAYOUT and BUTTON_STYLES
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'; // Import Recharts components
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import { db } from '../firebase'; // Import db
+import { collection, query, where, getDocs } from 'firebase/firestore'; // Import Firestore functions
 
 // Define a simple Widget component for demonstration
 const Widget = ({ children, onRemove, isEditing }) => (
@@ -36,36 +39,98 @@ const Widget = ({ children, onRemove, isEditing }) => (
 );
 
 export default function Dashboard() {
-  const [data, setData] = useState(null);
+  const [data, setData] = useState({
+    totalProjects: 0,
+    activeProjects: 0,
+    completedProjects: 0,
+    totalClients: 0,
+    revenue: "$0",
+    pendingTasks: 0,
+    projectCompletionData: [
+      { name: 'Total', value: 0, fill: COLORS.primary },
+      { name: 'Active', value: 0, fill: COLORS.success },
+      { name: 'Completed', value: 0, fill: COLORS.secondary },
+    ]
+  }); // Initialize with empty data
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [dashboardWidgets, setDashboardWidgets] = useState([]); // New state for managing widgets
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
 
   useEffect(() => {
-    // Simulate API call with mock data
-    setTimeout(() => {
-      setData({
-        totalProjects: 12,
-        activeProjects: 8,
-        completedProjects: 4,
-        totalClients: 15,
-        revenue: "$45,000",
-        pendingTasks: 23,
-        projectCompletionData: [
-          { name: 'Total', value: 12, fill: COLORS.primary },
-          { name: 'Active', value: 8, fill: COLORS.success },
-          { name: 'Completed', value: 4, fill: COLORS.secondary },
-        ]
-      });
-      // Initialize widgets
-      setDashboardWidgets([
-        { id: 'metrics-1', type: 'metrics' },
-        { id: 'projectChart-1', type: 'projectChart' },
-        { id: 'text-1', type: 'textWidget', content: 'Welcome to your customizable dashboard!' },
-      ]);
-      setLoading(false);
-    }, 1000);
-  }, []);
+    const fetchData = async () => {
+      if (!currentUser) {
+        setData({
+          totalProjects: 0,
+          activeProjects: 0,
+          completedProjects: 0,
+          totalClients: 0,
+          revenue: "$0",
+          pendingTasks: 0,
+          projectCompletionData: [
+            { name: 'Total', value: 0, fill: COLORS.primary },
+            { name: 'Active', value: 0, fill: COLORS.success },
+            { name: 'Completed', value: 0, fill: COLORS.secondary },
+          ]
+        });
+        setDashboardWidgets([]);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        // Fetch projects data
+        const projectsQuery = query(collection(db, 'projects'), where('userId', '==', currentUser.uid));
+        const projectsSnapshot = await getDocs(projectsQuery);
+        const projects = projectsSnapshot.docs.map(doc => doc.data());
+
+        const totalProjects = projects.length;
+        const activeProjects = projects.filter(p => p.status === 'Active' || p.status === 'Working').length;
+        const completedProjects = projects.filter(p => p.status === 'Completed' || p.status === 'Converted').length;
+
+        // Fetch clients data
+        const clientsQuery = query(collection(db, 'customerProfiles'), where('userId', '==', currentUser.uid));
+        const clientsSnapshot = await getDocs(clientsQuery);
+        const totalClients = clientsSnapshot.docs.length;
+
+        // For now, revenue and pending tasks are mock data or need more complex aggregation
+        // You would expand this logic to calculate actual revenue and pending tasks from your project/task data
+        const revenue = "$0"; // Placeholder
+        const pendingTasks = 0; // Placeholder
+
+        setData({
+          totalProjects,
+          activeProjects,
+          completedProjects,
+          totalClients,
+          revenue,
+          pendingTasks,
+          projectCompletionData: [
+            { name: 'Total', value: totalProjects, fill: COLORS.primary },
+            { name: 'Active', value: activeProjects, fill: COLORS.success },
+            { name: 'Completed', value: completedProjects, fill: COLORS.secondary },
+          ]
+        });
+
+        // Initialize widgets if they are empty for a new user, or if existing widgets need data updates
+        if (dashboardWidgets.length === 0) {
+          setDashboardWidgets([
+            { id: 'metrics-1', type: 'metrics' },
+            { id: 'projectChart-1', type: 'projectChart' },
+            { id: 'text-1', type: 'textWidget', content: 'Welcome to your customizable dashboard!' },
+          ]);
+        }
+      } catch (err) {
+        console.error("Error fetching dashboard data:", err);
+        // Optionally set an error state here
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [currentUser]); // Re-run effect when currentUser changes
 
   const handleAddWidget = (type) => {
     const newWidget = {
@@ -81,6 +146,12 @@ export default function Dashboard() {
     setDashboardWidgets(dashboardWidgets.filter(widget => widget.id !== id));
   };
 
+  if (loading) {
+    return <p style={{ color: COLORS.lightText, textAlign: 'center', padding: '20px' }}>Loading dashboard data...</p>;
+  }
+
+  // Removed the conditional rendering based on currentUser here
+
   return (
     <Card style={{
       height: "93%",
@@ -91,16 +162,16 @@ export default function Dashboard() {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
         <h2 style={{ margin: 0, color: COLORS.text, fontSize: "18px" }}>Company Dashboard</h2>
-        <button 
-          onClick={() => setEditMode(!editMode)}
-          style={{ ...BUTTON_STYLES.secondary, padding: "4px 8px", fontSize: "12px" }}
-        >
-          {editMode ? "Done Editing" : "Edit Dashboard"}
-        </button>
+        {currentUser && (
+          <button 
+            onClick={() => setEditMode(!editMode)}
+            style={{ ...BUTTON_STYLES.secondary, padding: "4px 8px", fontSize: "12px" }}
+          >
+            {editMode ? "Done Editing" : "Edit Dashboard"}
+          </button>
+        )}
       </div>
-      {loading ? (
-        <p style={{ color: COLORS.lightText }}>Loading dashboard data...</p>
-      ) : (
+      {currentUser ? (
         <>
           {editMode && (
             <div style={{ marginBottom: LAYOUT.gap }}>
@@ -158,6 +229,8 @@ export default function Dashboard() {
             </Widget>
           ))}
         </>
+      ) : (
+        <p style={{ color: COLORS.danger, textAlign: 'center', padding: '20px' }}>Please log in to view the dashboard.</p>
       )}
     </Card>
   );

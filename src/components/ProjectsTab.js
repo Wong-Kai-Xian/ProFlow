@@ -4,6 +4,9 @@ import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants"; // Import constants
 import Switch from "./Switch"; // Import Switch component
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
+import { db } from "../firebase"; // Import db
+import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore"; // Import Firestore functions
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
 export default function ProjectsTab() {
   const [projects, setProjects] = useState([]);
@@ -11,16 +14,33 @@ export default function ProjectsTab() {
   const [collapseCompleted, setCollapseCompleted] = useState(true); // collapsed by default
   const [filter, setFilter] = useState("deadline"); // default sort
   const navigate = useNavigate(); // Initialize useNavigate
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
 
   useEffect(() => {
-    setProjects([
-      { name: "Website Redesign", status: "Ongoing", deadline: "2025-09-15", notifications: 3 },
-      { name: "Mobile App Development", status: "Ongoing", deadline: "2025-08-30", notifications: 1 },
-      { name: "E-commerce Platform", status: "Completed", deadline: "2025-07-10", notifications: 0 },
-      { name: "Marketing Campaign", status: "Ongoing", deadline: "2025-09-05", notifications: 2 },
-      { name: "Social Media Ads", status: "Completed", deadline: "2025-06-20", notifications: 0 }
-    ]);
-  }, []);
+    if (!currentUser) {
+      setProjects([]);
+      return;
+    }
+
+    const q = query(collection(db, "projects"), where("userId", "==", currentUser.uid), orderBy('name', 'asc')); // Order by name and filter by userId
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const projectsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      console.log("ProjectsTab: Projects data received:", projectsData); // Add this line for debugging
+      setProjects(projectsData);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]); // Add currentUser to dependency array
+
+  const getStageProgress = (stage) => {
+    const stageOrder = ['Proposal', 'Negotiation', 'Complete'];
+    const currentIndex = stageOrder.indexOf(stage);
+    return ((currentIndex + 1) / stageOrder.length) * 100;
+  };
 
   const sortProjects = (list) => {
     if (filter === "notifications") {
@@ -31,11 +51,11 @@ export default function ProjectsTab() {
     return list;
   };
 
-  const ongoingProjects = sortProjects(projects.filter(p => p.status === "Ongoing"));
-  const completedProjects = sortProjects(projects.filter(p => p.status === "Completed"));
+  const ongoingProjects = sortProjects(projects.filter(p => getStageProgress(p.stage) < 100));
+  const completedProjects = sortProjects(projects.filter(p => getStageProgress(p.stage) === 100));
 
   const ProjectCard = ({ project, completed }) => (
-    <li style={{ 
+    <li key={project.id} style={{ 
       position: "relative",
       background: completed ? '#BDC3C7' : 'white', 
       margin: '10px 0', 
@@ -64,11 +84,11 @@ export default function ProjectsTab() {
           {project.notifications}
         </div>
       )}
-      <div onClick={() => navigate(`/project/${project.name}`)} style={{ cursor: "pointer" }}>
+      <div onClick={() => navigate(`/project/${project.id}`)} style={{ cursor: "pointer" }}>
         <strong>{project.name}</strong>
         <br />
         <span style={{ fontSize: '12px', color: completed ? '#7F8C8D' : '#27AE60' }}>
-          {project.status}
+          {project.stage}
         </span>
       </div>
       <div style={{ textAlign: "right", fontSize: "12px", color: "#555", marginTop: "5px" }}>
@@ -109,7 +129,7 @@ export default function ProjectsTab() {
           </button>
           {!collapseOngoing && (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {ongoingProjects.map((p, idx) => <ProjectCard key={idx} project={p} completed={false} />)}
+              {ongoingProjects.map((p) => <ProjectCard key={p.id} project={p} completed={getStageProgress(p.stage) === 100} />)}
             </ul>
           )}
         </div>
@@ -124,7 +144,7 @@ export default function ProjectsTab() {
           </button>
           {!collapseCompleted && (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {completedProjects.map((p, idx) => <ProjectCard key={idx} project={p} completed={true} />)}
+              {completedProjects.map((p) => <ProjectCard key={p.id} project={p} completed={getStageProgress(p.stage) === 100} />)}
             </ul>
           )}
         </div>

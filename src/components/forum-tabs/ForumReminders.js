@@ -1,36 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { COLORS } from '../profile-component/constants';
+import { db } from '../../firebase';
+import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import AddReminderModal from './AddReminderModal'; // Import the new modal
 
-export default function ForumReminders() {
+export default function ForumReminders({ forumId }) {
+  console.log("ForumReminders: Initial forumId prop:", forumId);
   const [isExpanded, setIsExpanded] = useState(true);
+  const [reminders, setReminders] = useState([]);
+  const [showReminderModal, setShowReminderModal] = useState(false); // State for modal visibility
+  const [editingReminder, setEditingReminder] = useState(null); // State to hold reminder being edited
 
-  // Mock reminders data
-  const reminders = [
-    {
-      id: 1,
-      title: "Team Standup Meeting",
-      date: "2025-01-21",
-      time: "10:00 AM",
-      type: "meeting",
-      priority: "high"
-    },
-    {
-      id: 2,
-      title: "Project Milestone Review",
-      date: "2025-01-23",
-      time: "2:00 PM",
-      type: "deadline",
-      priority: "medium"
-    },
-    {
-      id: 3,
-      title: "Client Presentation",
-      date: "2025-01-25",
-      time: "3:30 PM",
-      type: "meeting",
-      priority: "high"
-    }
-  ];
+  useEffect(() => {
+    if (!forumId) return;
+
+    const remindersRef = collection(db, `forums/${forumId}/reminders`);
+    const q = query(remindersRef, orderBy('timestamp', 'asc')); // Order by timestamp ascending
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const remindersData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate() || null
+      }));
+      setReminders(remindersData);
+    });
+
+    return () => unsubscribe();
+  }, [forumId]);
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -60,6 +57,43 @@ export default function ForumReminders() {
     if (diffDays === 1) return 'Tomorrow';
     if (diffDays < 7) return `In ${diffDays} days`;
     return date.toLocaleDateString();
+  };
+
+  const handleAddReminder = async (newReminder) => {
+    console.log("ForumReminders: handleAddReminder called with newReminder:", newReminder, "for forumId:", forumId);
+    if (!forumId) {
+      console.error("ForumReminders: forumId is missing, cannot add reminder.");
+      return;
+    }
+    try {
+      await addDoc(collection(db, `forums/${forumId}/reminders`), {
+        ...newReminder,
+        timestamp: serverTimestamp(),
+      });
+      console.log("Forum reminder successfully added to Firestore.");
+    } catch (error) {
+      console.error("Error adding reminder: ", error);
+    }
+  };
+
+  const handleUpdateReminder = async (id, updatedReminder) => {
+    if (!forumId || !id) return;
+    try {
+      const reminderRef = doc(db, `forums/${forumId}/reminders`, id);
+      await updateDoc(reminderRef, updatedReminder);
+    } catch (error) {
+      console.error("Error updating reminder: ", error);
+    }
+  };
+
+  const handleDeleteReminder = async (id) => {
+    if (!forumId || !id) return;
+    if (!window.confirm("Are you sure you want to delete this reminder?")) return;
+    try {
+      await deleteDoc(doc(db, `forums/${forumId}/reminders`, id));
+    } catch (error) {
+      console.error("Error deleting reminder: ", error);
+    }
   };
 
   return (
@@ -95,6 +129,25 @@ export default function ForumReminders() {
           ▼
         </span>
       </div>
+
+      {/* Add New Reminder Button (always visible) */}
+      <button
+        onClick={() => { setEditingReminder(null); setShowReminderModal(true); }}
+        style={{
+          backgroundColor: COLORS.primary,
+          color: COLORS.white,
+          border: 'none',
+          borderRadius: '8px',
+          padding: '10px 15px',
+          fontSize: '14px',
+          fontWeight: '600',
+          cursor: 'pointer',
+          marginBottom: '15px',
+          width: '100%'
+        }}
+      >
+        + Add New Reminder
+      </button>
 
       {isExpanded && (
         <div>
@@ -148,11 +201,44 @@ export default function ForumReminders() {
                   borderRadius: '50%',
                   backgroundColor: getPriorityColor(reminder.priority)
                 }} />
+                {/* Reminder actions */}
+                <div style={{ display: 'flex', gap: '5px', marginLeft: '10px' }}>
+                  <button
+                    onClick={() => { setEditingReminder(reminder); setShowReminderModal(true); }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      color: COLORS.primary
+                    }}
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => handleDeleteReminder(reminder.id)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      color: COLORS.danger
+                    }}
+                  >
+                    🗑️
+                  </button>
+                </div>
               </div>
             ))
           )}
         </div>
       )}
+      <AddReminderModal
+        isOpen={showReminderModal}
+        onClose={() => setShowReminderModal(false)}
+        onSave={editingReminder ? (data) => handleUpdateReminder(editingReminder.id, data) : handleAddReminder}
+        editingReminder={editingReminder}
+      />
     </div>
   );
 }

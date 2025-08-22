@@ -1,44 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { COLORS } from '../profile-component/constants';
+import { db } from "../../firebase";
+import { collection, query, orderBy, onSnapshot, doc, where } from "firebase/firestore"; // Import where
 
-export default function TrendingPosts({ onPostClick }) {
+const formatTimestamp = (timestamp) => {
+  if (!timestamp) return 'N/A';
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  const now = new Date();
+  const diffSeconds = Math.floor((now - date) / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMinutes < 1) return 'Just now';
+  if (diffHours < 1) return `${diffMinutes} minutes ago`;
+  if (diffDays < 1) return `${diffHours} hours ago`;
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString();
+};
+
+export default function StarredPosts({ onPostClick, forumId, currentUser }) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [starredPosts, setStarredPosts] = useState([]);
+  const currentUserId = currentUser?.id; // Use currentUser.id
 
-  // Mock trending posts data
-  const trendingPosts = [
-    {
-      id: 1,
-      title: "Project Alpha milestone achieved! 🎉",
-      author: "John Smith",
-      likes: 24,
-      comments: 8,
-      timestamp: "2 hours ago"
-    },
-    {
-      id: 2,
-      title: "New design system implementation",
-      author: "Sarah Johnson",
-      likes: 18,
-      comments: 12,
-      timestamp: "4 hours ago"
-    },
-    {
-      id: 3,
-      title: "Client feedback on latest prototype",
-      author: "Mike Chen",
-      likes: 15,
-      comments: 6,
-      timestamp: "6 hours ago"
-    },
-    {
-      id: 4,
-      title: "Weekly team performance review",
-      author: "Alice Wong",
-      likes: 12,
-      comments: 4,
-      timestamp: "1 day ago"
-    }
-  ];
+  useEffect(() => {
+    if (!forumId || !currentUserId) return;
+
+    const postsCollectionRef = collection(doc(db, "forums", forumId), "posts");
+    // Query for posts where the current user ID is in the starredBy array
+    const q = query(postsCollectionRef, where('starredBy', 'array-contains', currentUserId), orderBy('timestamp', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const postsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setStarredPosts(postsData);
+    });
+
+    return () => unsubscribe();
+  }, [forumId, currentUserId, currentUser]); // Add currentUser to dependency array
 
   const handlePostClick = (post) => {
     if (onPostClick) {
@@ -68,7 +70,7 @@ export default function TrendingPosts({ onPostClick }) {
           fontSize: '18px',
           fontWeight: '700'
         }}>
-          🔥 Trending Posts
+          ⭐ Starred Posts
         </h3>
         <span style={{ 
           color: COLORS.lightText, 
@@ -82,7 +84,7 @@ export default function TrendingPosts({ onPostClick }) {
 
       {isExpanded && (
         <div>
-          {trendingPosts.length === 0 ? (
+          {starredPosts.length === 0 ? (
             <p style={{ 
               fontSize: '15px', 
               color: COLORS.lightText, 
@@ -90,10 +92,10 @@ export default function TrendingPosts({ onPostClick }) {
               fontStyle: 'italic',
               margin: '10px 0'
             }}>
-              No trending posts
+              No starred posts
             </p>
           ) : (
-            trendingPosts.map((post, index) => (
+            starredPosts.map((post) => (
               <div 
                 key={post.id} 
                 onClick={() => handlePostClick(post)}
@@ -120,14 +122,7 @@ export default function TrendingPosts({ onPostClick }) {
                   alignItems: 'flex-start',
                   gap: '8px'
                 }}>
-                  <span style={{
-                    fontSize: '14px',
-                    fontWeight: 'bold',
-                    color: COLORS.primary,
-                    minWidth: '20px'
-                  }}>
-                    #{index + 1}
-                  </span>
+                  {/* Removed ranking number */}
                   <div style={{ flex: 1 }}>
                     <div style={{ 
                       fontSize: '15px', 
@@ -140,14 +135,14 @@ export default function TrendingPosts({ onPostClick }) {
                       WebkitBoxOrient: 'vertical',
                       overflow: 'hidden'
                     }}>
-                      {post.title}
+                      {post.content}
                     </div>
                     <div style={{ 
                       fontSize: '13px', 
                       color: COLORS.lightText,
                       marginBottom: '4px'
                     }}>
-                      by {post.author} • {post.timestamp}
+                      by {post.author} • {formatTimestamp(post.timestamp)}
                     </div>
                     <div style={{
                       display: 'flex',
@@ -155,8 +150,8 @@ export default function TrendingPosts({ onPostClick }) {
                       fontSize: '13px',
                       color: COLORS.lightText
                     }}>
-                      <span>👍 {post.likes}</span>
-                      <span>💬 {post.comments}</span>
+                      <span>👍 {post.likes || 0}</span>
+                      <span>💬 {post.comments?.length || 0}</span>
                     </div>
                   </div>
                 </div>

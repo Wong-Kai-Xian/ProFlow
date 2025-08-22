@@ -1,23 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
+import { db } from "../../firebase"; // Import db
+import { collection, addDoc, deleteDoc, onSnapshot, query, orderBy, doc, updateDoc, serverTimestamp } from "firebase/firestore"; // Import Firestore functions and serverTimestamp, updateDoc
+import AddProjectReminderModal from "./AddProjectReminderModal"; // Import AddProjectReminderModal
 
-export default function Reminders({ reminders, setReminders }) {
-  const [newReminderText, setNewReminderText] = useState('');
+export default function Reminders({ projectId }) {
+  const [reminders, setReminders] = useState([]);
+  const [showModal, setShowModal] = useState(false); // State for AddReminderModal
+  const [editingReminder, setEditingReminder] = useState(null); // State for editing reminder
 
-  const handleAddReminder = () => {
-    if (newReminderText.trim()) {
-      const newReminder = {
-        id: Date.now() + Math.random(),
-        text: newReminderText.trim(),
-        timestamp: new Date().toLocaleString(),
-      };
-      setReminders((prevReminders) => [newReminder, ...prevReminders]); // Add new reminders to the top
-      setNewReminderText('');
+  useEffect(() => {
+    if (projectId) {
+      const remindersRef = collection(db, "projects", projectId, "reminders");
+      const q = query(remindersRef, orderBy("date", "asc"), orderBy("time", "asc")); // Order by date and time
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const remindersList = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setReminders(remindersList);
+      });
+
+      return () => unsubscribe(); // Cleanup on unmount
+    }
+  }, [projectId]);
+
+  const handleAddReminder = async (newReminderData) => {
+    if (!projectId) return;
+    try {
+      await addDoc(collection(db, "projects", projectId, "reminders"), {
+        ...newReminderData,
+        timestamp: serverTimestamp(), // Use serverTimestamp
+      });
+      setShowModal(false);
+    } catch (error) {
+      console.error("Error adding reminder: ", error);
     }
   };
 
-  const handleRemoveReminder = (id) => {
-    setReminders((prevReminders) => prevReminders.filter(reminder => reminder.id !== id));
+  const handleUpdateReminder = async (id, updatedReminderData) => {
+    if (!projectId || !id) return;
+    try {
+      const reminderRef = doc(db, "projects", projectId, "reminders", id);
+      await updateDoc(reminderRef, updatedReminderData);
+      setShowModal(false);
+      setEditingReminder(null);
+    } catch (error) {
+      console.error("Error updating reminder: ", error);
+    }
+  };
+
+  const handleRemoveReminder = async (id) => {
+    if (!projectId) return;
+    if (!window.confirm("Are you sure you want to delete this reminder?")) return; // Add confirmation
+    try {
+      await deleteDoc(doc(db, "projects", projectId, "reminders", id));
+    } catch (error) {
+      console.error("Error removing reminder: ", error);
+    }
   };
 
   return (
@@ -33,26 +74,17 @@ export default function Reminders({ reminders, setReminders }) {
     }}>
       <h3 style={{ margin: "0 0 10px 0", color: COLORS.text }}>Reminders</h3>
 
-      {/* Add Reminder Input */}
-      <div style={{ display: "flex", gap: LAYOUT.smallGap, marginBottom: LAYOUT.smallGap }}>
-        <input
-          type="text"
-          placeholder="Add a new reminder..."
-          value={newReminderText}
-          onChange={(e) => setNewReminderText(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleAddReminder()}
-          style={{
-            ...INPUT_STYLES.base,
-            flex: 1,
-          }}
-        />
-        <button
-          onClick={handleAddReminder}
-          style={BUTTON_STYLES.primary}
-        >
-          Add
-        </button>
-      </div>
+      {/* Add Reminder Button */}
+      <button
+        onClick={() => { setEditingReminder(null); setShowModal(true); }}
+        style={{
+          ...BUTTON_STYLES.primary,
+          marginBottom: LAYOUT.smallGap,
+          width: "100%",
+        }}
+      >
+        + Add New Reminder
+      </button>
 
       {/* Reminders List */}
       <ul style={{ listStyle: 'none', padding: 0, margin: 0, overflowY: "auto", flexGrow: 1 }}>
@@ -70,25 +102,45 @@ export default function Reminders({ reminders, setReminders }) {
               alignItems: "center",
             }}>
               <div>
-                <p style={{ margin: 0, color: COLORS.text, fontSize: "14px" }}>{reminder.text}</p>
-                <small style={{ color: COLORS.lightText, fontSize: "10px" }}>{reminder.timestamp}</small>
+                <p style={{ margin: 0, color: COLORS.text, fontSize: "14px", fontWeight: "bold" }}>{reminder.title}</p>
+                <small style={{ color: COLORS.lightText, fontSize: "12px" }}>{reminder.date} at {reminder.time}</small>
               </div>
-              <button
-                onClick={() => handleRemoveReminder(reminder.id)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: COLORS.danger,
-                  fontSize: "16px",
-                  cursor: "pointer",
-                }}
-              >
-                ×
-              </button>
+              <div style={{ display: 'flex', gap: '5px' }}>
+                <button
+                  onClick={() => { setEditingReminder(reminder); setShowModal(true); }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: COLORS.primary,
+                    fontSize: "16px",
+                    cursor: "pointer",
+                  }}
+                >
+                  ✏️
+                </button>
+                <button
+                  onClick={() => handleRemoveReminder(reminder.id)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: COLORS.danger,
+                    fontSize: "16px",
+                    cursor: "pointer",
+                  }}
+                >
+                  🗑️
+                </button>
+              </div>
             </li>
           ))
         )}
       </ul>
+      <AddProjectReminderModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSave={editingReminder ? (data) => handleUpdateReminder(editingReminder.id, data) : handleAddReminder}
+        editingReminder={editingReminder}
+      />
     </div>
   );
 }

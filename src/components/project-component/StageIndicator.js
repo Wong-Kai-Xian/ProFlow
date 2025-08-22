@@ -1,7 +1,7 @@
 import React from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES } from '../profile-component/constants';
 
-export default function StageIndicator({ currentStage, allStages, onAdvanceStage, onGoBackStage, isCurrentStageTasksComplete, onStageSelect }) {
+export default function StageIndicator({ currentStage, allStages, onAdvanceStage, onGoBackStage, isCurrentStageTasksComplete, onStageSelect, canAdvance }) {
   const currentStageIndex = allStages.indexOf(currentStage);
   const isLastStage = currentStageIndex === allStages.length - 1;
 
@@ -42,7 +42,7 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
             transition: "all 0.3s ease-in-out",
             position: "relative",
             zIndex: 1,
-            cursor: (isCompleted || isActive) ? "pointer" : "default", // Clickable if completed or active
+            cursor: "pointer", // Always clickable for navigation
           };
 
           const labelStyle = {
@@ -66,7 +66,7 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
               {index > 0 && <div style={lineStyle}></div>}
               <div 
                 style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
-                onClick={() => { if (isCompleted || isActive) onStageSelect(stage); }}
+                onClick={() => onStageSelect(stage)} // Only select stage, don't trigger advance logic here
               >
                 <div style={circleStyle}>
                   {index + 1}
@@ -80,17 +80,17 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
         })}
       </div>
       
-      {!isLastStage && ( // Only show button if not on the last stage
+      {currentStageIndex < allStages.length - 1 && (
         <button 
           onClick={onAdvanceStage}
           style={{
             ...BUTTON_STYLES.primary,
             width: "100%",
             marginTop: LAYOUT.smallGap, // Space above button
-            opacity: isCurrentStageTasksComplete ? 1 : 0.5,
-            cursor: isCurrentStageTasksComplete ? "pointer" : "not-allowed"
+            opacity: canAdvance ? 1 : 0.5, // Use canAdvance prop
+            cursor: canAdvance ? "pointer" : "not-allowed"
           }}
-          disabled={!isCurrentStageTasksComplete} // Disable button if not all tasks are complete
+          disabled={!canAdvance} // Use canAdvance prop
         >
           Get Approval & Advance Stage
         </button>

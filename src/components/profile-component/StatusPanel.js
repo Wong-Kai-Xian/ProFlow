@@ -100,32 +100,33 @@ export default function StatusPanel({
   };
 
   const handleDeleteStage = () => {
-    if (stages.length > 1) {
-      const currentIndex = stages.indexOf(currentStage);
-      const updatedStages = stages.filter(stage => stage !== currentStage);
-      const updatedStageData = { ...stageData }; // Copy existing stageData
-      delete updatedStageData[currentStage]; // Delete data for the current stage
-      
-      setStages(updatedStages);
-      
-      // Better logic for setting the new current stage
-      let newCurrentStage;
-      if (currentIndex === 0) {
-        // If we deleted the first stage, move to the new first stage
-        newCurrentStage = updatedStages[0];
-      } else if (currentIndex >= updatedStages.length) {
-        // If we deleted the last stage, move to the new last stage
-        newCurrentStage = updatedStages[updatedStages.length - 1];
-      } else {
-        // Otherwise, stay at the same index position
-        newCurrentStage = updatedStages[currentIndex - 1];
-      }
-      
-      setCurrentStage(newCurrentStage);
-      setStageData(updatedStageData); // Update stageData with the deleted stage removed
-    } else {
-      alert("Cannot delete the last stage."); // Prevent deleting the last stage
+    if (stages.length === 1) {
+      // Prevent deleting the last stage
+      // alert("Cannot delete the last stage.");
+      return;
     }
+    const currentIndex = stages.indexOf(currentStage);
+    const updatedStages = stages.filter(stage => stage !== currentStage);
+    const updatedStageData = { ...stageData }; // Copy existing stageData
+    delete updatedStageData[currentStage]; // Delete data for the current stage
+    
+    setStages(updatedStages);
+    
+    // Better logic for setting the new current stage
+    let newCurrentStage;
+    if (currentIndex === 0) {
+      // If we deleted the first stage, move to the new first stage
+      newCurrentStage = updatedStages[0];
+    } else if (currentIndex >= updatedStages.length) {
+      // If we deleted the last stage, move to the new last stage
+      newCurrentStage = updatedStages[updatedStages.length - 1];
+    } else {
+      // Otherwise, stay at the same index position
+      newCurrentStage = updatedStages[currentIndex - 1];
+    }
+    
+    setCurrentStage(newCurrentStage);
+    setStageData(updatedStageData); // Update stageData with the deleted stage removed
   };
 
   const handleStageClick = (stage, clickedIndex) => {

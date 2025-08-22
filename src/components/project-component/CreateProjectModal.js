@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
+import { useAuth } from '../../contexts/AuthContext'; // Import useAuth
 
 export default function CreateProjectModal({ isOpen, onClose, onConfirm, editingProject }) {
   const [projectName, setProjectName] = useState('');
   const [teamMembers, setTeamMembers] = useState([]);
   const [newMember, setNewMember] = useState('');
   const [selectedStage, setSelectedStage] = useState('Proposal');
+  const [projectDescription, setProjectDescription] = useState(''); // New state for project description
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
 
   const projectStages = ['Proposal', 'Negotiation', 'Complete'];
 
@@ -15,10 +18,12 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
       setProjectName(editingProject.name || '');
       setTeamMembers(editingProject.team || []);
       setSelectedStage(editingProject.stage || 'Proposal');
+      setProjectDescription(editingProject.description || ''); // Populate description
     } else {
       setProjectName('');
       setTeamMembers([]);
       setSelectedStage('Proposal');
+      setProjectDescription(''); // Reset description
     }
   }, [editingProject]);
 
@@ -34,19 +39,22 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
   };
 
   const handleSubmit = () => {
-    if (projectName.trim()) {
+    if (projectName.trim() && currentUser) {
       onConfirm({
         name: projectName.trim(),
         team: teamMembers,
         stage: selectedStage,
-        tasks: 0,
-        completedTasks: 0
+        description: projectDescription, // Include description
+        tasks: editingProject ? editingProject.tasks : 0,
+        completedTasks: editingProject ? editingProject.completedTasks : 0,
+        userId: currentUser.uid, // Associate project with the current user
       });
       // Reset form
       setProjectName('');
       setTeamMembers([]);
       setNewMember('');
       setSelectedStage('Proposal');
+      setProjectDescription(''); // Reset description
     }
   };
 
@@ -55,6 +63,7 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
     setTeamMembers([]);
     setNewMember('');
     setSelectedStage('Proposal');
+    setProjectDescription(''); // Reset description
     onClose();
   };
 
@@ -114,6 +123,32 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
               width: '100%',
               fontSize: '16px',
               padding: '12px'
+            }}
+          />
+        </div>
+
+        {/* Project Description */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '8px', 
+            color: COLORS.dark,
+            fontSize: '16px',
+            fontWeight: '600'
+          }}>
+            Description
+          </label>
+          <textarea
+            value={projectDescription}
+            onChange={(e) => setProjectDescription(e.target.value)}
+            placeholder="Enter project description"
+            style={{
+              ...INPUT_STYLES.base,
+              width: '100%',
+              minHeight: '80px',
+              fontSize: '16px',
+              padding: '12px',
+              resize: 'vertical'
             }}
           />
         </div>

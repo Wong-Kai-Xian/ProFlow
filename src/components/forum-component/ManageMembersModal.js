@@ -1,8 +1,16 @@
 import React, { useState } from 'react';
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
+import { db } from '../../firebase';
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
-export default function ManageMembersModal({ isOpen, onClose, members, onAddMember, onRemoveMember }) {
+export default function ManageMembersModal({ isOpen, onClose, members, onAddMember, onRemoveMember, forumId, forumName }) {
   const [newMember, setNewMember] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteError, setInviteError] = useState(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const auth = getAuth();
+  const currentUser = auth.currentUser;
 
   const handleAddMember = () => {
     if (newMember.trim() && !members.includes(newMember.trim())) {
@@ -11,8 +19,63 @@ export default function ManageMembersModal({ isOpen, onClose, members, onAddMemb
     }
   };
 
+  const handleSendInvitation = async () => {
+    if (!inviteEmail.trim() || !currentUser || !forumId || !forumName) {
+      setInviteError('Please enter a valid email and ensure forum details are available.');
+      return;
+    }
+
+    setInviteLoading(true);
+    setInviteError(null);
+
+    try {
+      // 1. Find recipient user by email
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', inviteEmail));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        setInviteError('No user found with that email address.');
+        setInviteLoading(false);
+        return;
+      }
+
+      const recipientUser = querySnapshot.docs[0].data();
+      const recipientId = querySnapshot.docs[0].id;
+
+      if (members.includes(recipientUser.name || recipientUser.email)) {
+        setInviteError('This user is already a member of this forum.');
+        setInviteLoading(false);
+        return;
+      }
+
+      // 2. Create invitation document
+      await addDoc(collection(db, 'invitations'), {
+        senderId: currentUser.uid,
+        senderName: currentUser.displayName || currentUser.email,
+        recipientId: recipientId,
+        recipientEmail: inviteEmail,
+        type: 'forum',
+        targetId: forumId,
+        targetName: forumName,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+
+      alert('Invitation sent successfully!');
+      setInviteEmail('');
+    } catch (err) {
+      console.error('Error sending invitation:', err);
+      setInviteError('Failed to send invitation: ' + err.message);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
   const handleClose = () => {
     setNewMember('');
+    setInviteEmail('');
+    setInviteError(null);
     onClose();
   };
 
@@ -93,6 +156,52 @@ export default function ManageMembersModal({ isOpen, onClose, members, onAddMemb
               Add
             </button>
           </div>
+        </div>
+
+        {/* Invite Member */}
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '8px', 
+            color: COLORS.dark,
+            fontSize: '16px',
+            fontWeight: '600'
+          }}>
+            Invite New Member
+          </label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="Enter member email to invite"
+              style={{
+                ...INPUT_STYLES.base,
+                flex: 1,
+                fontSize: '16px',
+                padding: '12px'
+              }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSendInvitation();
+                }
+              }}
+            />
+            <button
+              onClick={handleSendInvitation}
+              style={{
+                ...BUTTON_STYLES.primary,
+                backgroundColor: COLORS.secondary, // A different color for invite button
+                padding: '12px 20px',
+                fontSize: '16px'
+              }}
+              disabled={inviteLoading}
+            >
+              {inviteLoading ? 'Sending...' : 'Invite'}
+            </button>
+          </div>
+          {inviteError && <p style={{ color: COLORS.danger, fontSize: '14px', marginTop: '8px' }}>{inviteError}</p>}
         </div>
 
         {/* Current Members List */}

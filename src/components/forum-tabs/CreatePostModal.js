@@ -1,19 +1,54 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LocationModal from "./LocationModal";
 import MeetingModal from "./MeetingModal";
+import { db, storage } from '../../firebase'; // Import db and storage
+import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'; // Import Storage functions
 
-export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
+export default function CreatePostModal({
+  isOpen,
+  onClose,
+  forumId,
+  updateForumLastActivity,
+  updateForumPostCount,
+  editingPost, // New prop for editing existing posts
+  onConfirm, // Callback for when a post is created or updated
+  currentUser // Pass currentUser to CreatePostModal
+}) {
   const [postText, setPostText] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState('');
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showMeetingModal, setShowMeetingModal] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false); // State for tracking file upload progress
+  const [fileUploadProgress, setFileUploadProgress] = useState({}); // Track progress for each file
+  const [isSubmitting, setIsSubmitting] = useState(false); // New state for overall submission status
+
+  // Effect to populate form when editing an existing post
+  useEffect(() => {
+    if (isOpen && editingPost) {
+      setPostText(editingPost.content || '');
+      setSelectedFiles(editingPost.files || []);
+      setSelectedLocation(editingPost.location || '');
+      setSelectedMeeting(editingPost.meeting || null);
+    } else if (isOpen) {
+      // Reset form fields when opening for a new post
+      setPostText('');
+      setSelectedFiles([]);
+      setSelectedLocation('');
+      setSelectedMeeting(null);
+    }
+    // Also reset submission states when modal opens/closes
+    setUploadingFiles(false);
+    setFileUploadProgress({});
+    setIsSubmitting(false);
+  }, [isOpen, editingPost]);
 
   const handleImageUpload = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/*';
+    input.accept = 'image/*'; // Allows all image file types
     input.multiple = true;
     input.onchange = (e) => {
       const files = Array.from(e.target.files);
@@ -27,6 +62,7 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;
+    input.accept = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"; // Allows specified non-image file types
     input.onchange = (e) => {
       const files = Array.from(e.target.files);
       console.log("Files selected:", files);
@@ -51,29 +87,136 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
     setSelectedMeeting(null);
   };
 
-  const handleSubmit = () => {
-    if (postText.trim()) {
-      const newPost = {
-        type: 'message',
-        author: 'Current User',
-        timestamp: 'Just now',
-        content: postText,
+  const handleSubmit = async () => {
+    if (!postText.trim() && selectedFiles.length === 0) return; // Prevent empty posts
+    if (isSubmitting) return; // Prevent multiple submissions
+
+    setIsSubmitting(true); // Set submitting state to true
+    setUploadingFiles(true); // Indicate that file uploads are starting
+    let uploadedFileMetadata = [];
+
+    // Process files: Upload new files, retain existing file metadata
+    if (selectedFiles.length > 0) {
+      const uploadPromises = selectedFiles.map((file) => {
+        if (file instanceof File) {
+          // This is a new file to upload
+          const storageRef = ref(storage, `forum_attachments/${forumId}/${file.name}`);
+          const uploadTask = uploadBytesResumable(storageRef, file);
+
+          return new Promise((resolve, reject) => {
+            uploadTask.on('state_changed',
+              (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setFileUploadProgress(prev => ({ ...prev, [file.name]: progress }));
+              },
+              (error) => {
+                console.error("Upload failed for file", file.name, ":", error);
+                reject(error);
+              },
+              () => {
+                getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+                  uploadedFileMetadata.push({
+                    name: file.name,
+                    url: downloadURL,
+                    type: file.type,
+                    size: file.size,
+                  });
+                  resolve();
+                }).catch(reject);
+              }
+            );
+          });
+        } else {
+          // This is an existing file (metadata), just retain it
+          uploadedFileMetadata.push(file);
+          return Promise.resolve();
+        }
+      });
+
+      try {
+        await Promise.all(uploadPromises);
+        console.log("All files processed successfully!");
+      } catch (error) {
+        setUploadingFiles(false);
+        setIsSubmitting(false); // Reset submitting state on file upload error
+        console.error("Error during file uploads:", error);
+        alert("Failed to process some files.");
+        return; // Stop post creation/update if file processing fails
+      }
+    }
+
+    const newPost = {
+      type: 'message',
+      author: currentUser?.name || "Anonymous", // Use currentUser.name
+      content: postText,
+      likes: 0,
+      comments: [],
+      files: uploadedFileMetadata, // Store metadata, not raw File objects
+      location: selectedLocation,
+      meeting: selectedMeeting,
+      starredBy: [], // Initialize starredBy for new posts
+    };
+    
+    // Save to Firebase
+    const postsRef = collection(doc(db, "forums", forumId), "posts");
+    if (editingPost) {
+      // Update existing post
+      const postDocRef = doc(db, "forums", forumId, "posts", editingPost.id);
+      await updateDoc(postDocRef, {
+        content: newPost.content,
+        files: newPost.files,
+        location: newPost.location,
+        meeting: newPost.meeting,
+        timestamp: serverTimestamp(), // Update timestamp on edit
+      })
+      .then(() => {
+        console.log("Post updated successfully!");
+        updateForumLastActivity();
+        setUploadingFiles(false);
+        setFileUploadProgress({});
+        setIsSubmitting(false);
+        onClose();
+        if (onConfirm) onConfirm(); // Notify parent of update
+      })
+      .catch((error) => {
+        console.error("Error updating post:", error);
+        setUploadingFiles(false);
+        setIsSubmitting(false);
+        alert("Failed to update post.");
+      });
+    } else {
+      // Add new post
+      addDoc(postsRef, {
+        ...newPost,
+        timestamp: serverTimestamp(),
+        author: currentUser?.name || "Anonymous", // Use currentUser.name
         likes: 0,
         comments: [],
-        files: selectedFiles,
-        location: selectedLocation,
-        meeting: selectedMeeting
-      };
-      
-      onSubmit(newPost);
-      
-      // Reset form
-      setPostText('');
-      setSelectedFiles([]);
-      setSelectedLocation('');
-      setSelectedMeeting(null);
-      onClose();
+        forumId: forumId
+      })
+      .then(() => {
+        console.log("Post added successfully!");
+        updateForumPostCount();
+        updateForumLastActivity();
+        setUploadingFiles(false);
+        setFileUploadProgress({});
+        setIsSubmitting(false);
+        onClose();
+        if (onConfirm) onConfirm(); // Notify parent of creation
+      })
+      .catch((error) => {
+        console.error("Error adding post:", error);
+        setUploadingFiles(false);
+        setIsSubmitting(false);
+        alert("Failed to create post.");
+      });
     }
+    
+    // Reset form states (these will be cleared on success anyway, but good for immediate feedback)
+    setPostText('');
+    setSelectedFiles([]);
+    setSelectedLocation('');
+    setSelectedMeeting(null);
   };
 
   const handleClose = () => {
@@ -82,23 +225,29 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
     setSelectedFiles([]);
     setSelectedLocation('');
     setSelectedMeeting(null);
+    setUploadingFiles(false); // Ensure uploading state is reset on close
+    setFileUploadProgress({}); // Clear progress on close
+    setIsSubmitting(false); // Ensure submitting state is reset on close
     onClose();
+    if (onConfirm) onConfirm(); // Call onConfirm to ensure parent state is reset (e.g., editingPost to null)
   };
 
   const actionButtonStyle = {
-    padding: '10px 16px',
-    margin: '0 8px',
+    padding: '8px 12px', // Adjusted padding
+    margin: '0 5px', // Adjusted margin
     border: '1px solid #BDC3C7',
     backgroundColor: 'white',
-    borderRadius: '8px',
+    borderRadius: '6px', // Adjusted border radius
     cursor: 'pointer',
-    fontSize: '16px',
+    fontSize: '13px', // Adjusted font size
     color: '#7F8C8D',
     transition: 'all 0.3s ease',
     fontWeight: '500'
   };
 
   if (!isOpen) return null;
+
+  const isPostEmpty = !postText.trim() && selectedFiles.length === 0;
 
   return (
     <div style={{
@@ -196,6 +345,9 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
                   gap: '3px'
                 }}>
                   {file.name}
+                  {uploadingFiles && fileUploadProgress[file.name] !== undefined && (
+                    <span style={{ marginLeft: '5px' }}>({fileUploadProgress[file.name].toFixed(0)}%)</span>
+                  )}
                   <button
                     onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== index))}
                     style={{
@@ -212,6 +364,19 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
                 </span>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Loading Indicator */}
+        {isSubmitting && (
+          <div style={{
+            textAlign: 'center',
+            padding: '10px 0',
+            color: '#3498DB', // Using a color that matches the button
+            fontSize: '14px',
+            fontWeight: '500'
+          }}>
+            Posting...
           </div>
         )}
 
@@ -329,6 +494,7 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+              disabled={isSubmitting || uploadingFiles}
             >
               📷 Picture
             </button>
@@ -337,14 +503,16 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+              disabled={isSubmitting || uploadingFiles}
             >
-              📎 Attachment
+              📁 File
             </button>
             <button 
               onClick={() => setShowMeetingModal(true)}
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+              disabled={isSubmitting}
             >
               📅 Schedule Meeting
             </button>
@@ -353,6 +521,7 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
               style={actionButtonStyle}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#ECF0F1'}
               onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+              disabled={isSubmitting}
             >
               📍 Location
             </button>
@@ -376,24 +545,25 @@ export default function CreatePostModal({ isOpen, onClose, onSubmit }) {
               cursor: 'pointer',
               fontSize: '14px'
             }}
+            disabled={isSubmitting}
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!postText.trim()}
+            disabled={isPostEmpty || isSubmitting || uploadingFiles}
             style={{
               padding: '10px 20px',
-              backgroundColor: postText.trim() ? '#3498DB' : '#BDC3C7',
+              backgroundColor: (isPostEmpty || isSubmitting || uploadingFiles) ? '#BDC3C7' : '#3498DB',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
-              cursor: postText.trim() ? 'pointer' : 'not-allowed',
+              cursor: (isPostEmpty || isSubmitting || uploadingFiles) ? 'not-allowed' : 'pointer',
               fontSize: '14px',
               fontWeight: '500'
             }}
           >
-            Post
+            {isSubmitting ? 'Posting...' : 'Post'}
           </button>
         </div>
 

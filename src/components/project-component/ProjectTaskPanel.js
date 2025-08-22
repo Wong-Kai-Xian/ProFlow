@@ -4,6 +4,8 @@ import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-componen
 import TaskFormModal from './TaskFormModal'; // Re-using TaskFormModal for adding and editing
 import TaskChatModal from './TaskChatModal';
 import AddSubtitleModal from './AddSubtitleModal';
+import { db } from "../../firebase"; // Import db
+import { doc, updateDoc } from "firebase/firestore"; // Import Firestore functions
 
 // Helper to generate a consistent color from a string (e.g., for assigned user initials)
 const stringToColor = (str) => {
@@ -78,28 +80,31 @@ const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onE
       marginBottom: "6px",
       position: "relative",
     }}>
-      <input
-        type="checkbox"
-        checked={task.done}
-        onChange={onToggle}
-        style={{ cursor: "pointer", width: "24px", flexShrink: 0 }}
-      />
+      <div style={{ width: "24px", display: "flex", justifyContent: "center", flexShrink: 0 }}>
+        <input
+          type="checkbox"
+          checked={task.done}
+          onChange={onToggle}
+          style={{ cursor: "pointer" }}
+        />
+      </div>
       <strong style={{ 
         flex: 1, 
         textDecoration: task.done ? "line-through" : "none", 
         color: task.done ? COLORS.lightText : COLORS.dark,
         fontSize: "15px",
-        fontWeight: "700"
+        fontWeight: "700",
+        textAlign: "left"
       }}>{task.name}</strong>
       
-      {task.assignedTo && (
-        <span style={{
-          width: "70px", // Increased width to match header
-          display: "flex",
-          justifyContent: "flex-start", // Align to left
-          alignItems: "center",
-          flexShrink: 0
-        }}>
+      <div style={{
+        width: "70px",
+        display: "flex",
+        justifyContent: "flex-start",
+        alignItems: "center",
+        flexShrink: 0
+      }}>
+        {task.assignedTo ? (
           <span style={{
             width: "24px",
             height: "24px",
@@ -115,14 +120,15 @@ const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onE
           }} title={`Assigned to: ${task.assignedTo}`}>
             {getInitials(task.assignedTo)}
           </span>
-        </span>
-      )}
-      {!task.assignedTo && <span style={{ width: "70px", flexShrink: 0 }}></span>} {/* Placeholder for alignment */}
+        ) : (
+          <span style={{ color: COLORS.lightText, fontSize: "12px", fontStyle: "italic" }}>N/A</span>
+        )}
+      </div>
 
-      <span style={{
+      <div style={{
         width: "80px",
         display: "flex",
-        justifyContent: "flex-start", // Align to start
+        justifyContent: "flex-start", 
         alignItems: "center",
         gap: "3px",
         flexShrink: 0
@@ -135,9 +141,9 @@ const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onE
           flexShrink: 0
         }} title={`Priority: ${task.priority}`}></span>
         <span style={{ color: COLORS.dark, fontWeight: "600", fontSize: "14px" }}>{task.priority}</span>
-      </span>
+      </div>
 
-      <span style={{
+      <div style={{
         width: "120px",
         textAlign: "left",
         flexShrink: 0,
@@ -146,7 +152,7 @@ const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onE
         fontSize: "14px"
       }}>
         {task.deadline || 'N/A'}
-      </span>
+      </div>
 
       {/* New: Task Status Dropdown */}
       <select
@@ -239,7 +245,7 @@ const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onE
   );
 };
 
-export default function ProjectTaskPanel({ projectTasks, setProjectTasks, currentStage }) {
+export default function ProjectTaskPanel({ projectTasks, setProjectTasks, currentStage, projectId, setProjectData }) {
   const [panelTitle, setPanelTitle] = useState("Project Tasks");
   const [showTaskFormModal, setShowTaskFormModal] = useState(false); // Renamed from showAddTaskModal
   const [currentSubtitleIndex, setCurrentSubtitleIndex] = useState(null); // Renamed from currentSubtitleIndexForTask
@@ -251,6 +257,23 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
   const [currentEditTask, setCurrentEditTask] = useState(null); // Fix: Added missing useState declaration
   const [collapsedSubtitles, setCollapsedSubtitles] = useState(new Set()); // Track which subtitles are collapsed
 
+  const updateProjectTasksInFirestore = async (updatedTasks) => {
+    if (projectId) {
+      try {
+        const projectRef = doc(db, "projects", projectId);
+        await updateDoc(projectRef, { tasks: updatedTasks });
+        // After updating Firestore, update the parent's projectData state
+        setProjectData(prevProjectData => ({
+          ...prevProjectData,
+          tasks: updatedTasks
+        }));
+        console.log("Project tasks updated in Firestore!");
+      } catch (error) {
+        console.error("Error updating project tasks in Firestore: ", error);
+      }
+    }
+  };
+
   const handleAddSubtitle = (subtitleName, selectedColor) => {
     const newSubtitle = {
       id: Date.now() + Math.random(), // Unique ID for subtitle
@@ -259,7 +282,9 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
       tasks: [],
       stage: currentStage, // Assign new subtitles to the current stage
     };
-    setProjectTasks((prev) => [...prev, newSubtitle]);
+    const updatedTasks = [...projectTasks, newSubtitle];
+    setProjectTasks(updatedTasks); // Update local state
+    updateProjectTasksInFirestore(updatedTasks); // Update Firestore
     setShowAddSubtitleModal(false);
   };
 
@@ -277,8 +302,7 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
       ...taskData,
     };
 
-    // Immutable update of projectTasks
-    setProjectTasks(prevProjectTasks => prevProjectTasks.map((subtitle, sIdx) => {
+    const updatedTasks = projectTasks.map((subtitle, sIdx) => {
       if (sIdx === currentSubtitleIndex) {
         return {
           ...subtitle,
@@ -286,7 +310,9 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
         };
       }
       return subtitle;
-    }));
+    });
+    setProjectTasks(updatedTasks);
+    updateProjectTasksInFirestore(updatedTasks);
     setShowTaskFormModal(false);
     setCurrentSubtitleIndex(null); // Reset after adding task
   };
@@ -304,7 +330,7 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
 
   const handleSaveEditedTask = (updatedTaskData) => {
     if (currentEditTask && currentSubtitleIndex !== null) {
-      setProjectTasks(prevProjectTasks => prevProjectTasks.map((subtitle, sIdx) => {
+      const updatedTasks = projectTasks.map((subtitle, sIdx) => {
         if (sIdx === currentSubtitleIndex) { // Using currentSubtitleIndex now
           return {
             ...subtitle,
@@ -314,7 +340,9 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
           };
         }
         return subtitle;
-      }));
+      });
+      setProjectTasks(updatedTasks);
+      updateProjectTasksInFirestore(updatedTasks);
       setShowTaskFormModal(false);
       setCurrentEditTask(null);
       setCurrentSubtitleIndex(null);
@@ -324,21 +352,23 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
   // Toggle task done status
   const toggleTask = (subtitleIndex, taskId) => {
     if (projectTasks[subtitleIndex]) {
-      setProjectTasks(prevProjectTasks => prevProjectTasks.map((subtitle, sIdx) => {
+      const updatedTasks = projectTasks.map((subtitle, sIdx) => {
         if (sIdx === subtitleIndex) {
           return {
             ...subtitle,
             tasks: subtitle.tasks.map(task => {
               if (task.id === taskId) {
                 console.log(`  MATCH! Toggling done for task ID ${task.id} from ${task.done} to ${!task.done}`); // Debugging
-                return { ...task, done: !task.done };
+                return { ...task, done: !task.done, status: task.done ? 'working on' : 'complete' }; // Also update status
               }
               return task;
             }),
           };
         }
         return subtitle;
-      }));
+      });
+      setProjectTasks(updatedTasks);
+      updateProjectTasksInFirestore(updatedTasks);
     } else {
       console.warn("Subtitle not found for toggling task.", subtitleIndex);
     }
@@ -347,7 +377,7 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
 
   // Handle task status change
   const handleTaskStatusChange = (subtitleIndex, taskId, newStatus) => {
-    setProjectTasks(prevProjectTasks => prevProjectTasks.map((subtitle, sIdx) => {
+    const updatedTasks = projectTasks.map((subtitle, sIdx) => {
       if (sIdx === subtitleIndex) {
         return {
           ...subtitle,
@@ -357,11 +387,13 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
         };
       }
       return subtitle;
-    }));
+    });
+    setProjectTasks(updatedTasks);
+    updateProjectTasksInFirestore(updatedTasks);
   };
 
   const handleRemoveTask = (subtitleIndex, taskId) => {
-    setProjectTasks(prevProjectTasks => prevProjectTasks.map((subtitle, sIdx) => {
+    const updatedTasks = projectTasks.map((subtitle, sIdx) => {
       if (sIdx === subtitleIndex) {
         return {
           ...subtitle,
@@ -369,12 +401,15 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
         };
       }
       return subtitle;
-    }));
+    });
+    setProjectTasks(updatedTasks);
+    updateProjectTasksInFirestore(updatedTasks);
   };
 
   const handleRemoveSubtitle = (subtitleIndex) => {
     const updatedSections = projectTasks.filter((_, index) => index !== subtitleIndex);
     setProjectTasks(updatedSections);
+    updateProjectTasksInFirestore(updatedSections);
   };
 
   const handleEditSubtitleDoubleClick = (index, currentName) => {
@@ -387,6 +422,7 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
       const updatedSections = [...projectTasks];
       updatedSections[index].name = editedSubtitleName.trim(); // Changed from .subtitle to .name
       setProjectTasks(updatedSections);
+      updateProjectTasksInFirestore(updatedSections);
     }
     setEditingSubtitleIndex(null);
     setEditedSubtitleName("");
@@ -686,6 +722,7 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
         isOpen={showTaskChatModal}
         onClose={() => setShowTaskChatModal(false)}
         task={currentChatTask}
+        projectId={projectId} // Pass projectId here
       />
 
       {/* Add Subtitle Modal */}

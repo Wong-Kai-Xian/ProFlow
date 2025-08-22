@@ -4,119 +4,128 @@ import TopBar from "../components/TopBar";
 import ForumTabs from "../components/ForumTabs";
 import ProjectDetails from "../components/project-component/ProjectDetails";
 import ForumReminders from "../components/forum-tabs/ForumReminders";
-import TrendingPosts from "../components/forum-tabs/TrendingPosts";
+import StarredPosts from "../components/forum-tabs/StarredPosts"; // Updated import
 import ActiveUsers from "../components/forum-tabs/ActiveUsers";
 import FloatingCreateButton from "../components/forum-tabs/FloatingCreateButton";
 import CreatePostModal from "../components/forum-tabs/CreatePostModal";
 import ManageMembersModal from "../components/forum-component/ManageMembersModal";
 import { COLORS, BUTTON_STYLES } from "../components/profile-component/constants";
+import { db } from "../firebase";
+import { doc, onSnapshot, updateDoc, serverTimestamp, getDoc } from "firebase/firestore";
 
 export default function Forum() {
-  const { id } = useParams();
+  const { id: forumId } = useParams(); // Rename `id` to `forumId` for clarity
+  console.log("Forum.js: forumId from useParams:", forumId);
   const [forumData, setForumData] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [posts, setPosts] = useState([]);
-  const [projectDetails, setProjectDetails] = useState(null);
+  const [posts, setPosts] = useState([]); // This will eventually come from Discussion tab's Firestore logic
+  const [projectDetails, setProjectDetails] = useState(null); // This might be derived or fetched separately if needed
   const [showMemberModal, setShowMemberModal] = useState(false);
-  const [forumMembers, setForumMembers] = useState([]);
+  const [forumMembers, setForumMembers] = useState([]); // Will be populated from forumData
+  // Mock current user for demonstration purposes. In a real app, this would come from authentication.
+  const [currentUser, setCurrentUser] = useState({ id: 'user123', name: 'Test User' });
 
   useEffect(() => {
-    // Mock forum data - in real app this would come from backend based on ID
-    const forums = [
-      {
-        id: 1,
-        name: "Project Alpha Discussion",
-        picture: "https://via.placeholder.com/800x200/3498DB/FFFFFF?text=Alpha",
-        memberCount: 24,
-        description: "Main discussion forum for Project Alpha development and updates"
-      },
-      {
-        id: 2,
-        name: "Client Feedback Hub",
-        picture: "https://via.placeholder.com/800x200/E74C3C/FFFFFF?text=Feedback",
-        memberCount: 18,
-        description: "Centralized location for client feedback and responses"
-      },
-      {
-        id: 3,
-        name: "Team Updates",
-        picture: "https://via.placeholder.com/800x200/27AE60/FFFFFF?text=Updates",
-        memberCount: 32,
-        description: "Daily standups, announcements, and team coordination"
-      },
-      {
-        id: 4,
-        name: "Technical Support",
-        picture: "https://via.placeholder.com/800x200/F39C12/FFFFFF?text=Support",
-        memberCount: 15,
-        description: "Technical issues, bug reports, and troubleshooting"
-      },
-      {
-        id: 5,
-        name: "Design Reviews",
-        picture: "https://via.placeholder.com/800x200/9B59B6/FFFFFF?text=Design",
-        memberCount: 12,
-        description: "UI/UX discussions, design feedback, and creative reviews"
-      },
-      {
-        id: 6,
-        name: "Marketing Strategy",
-        picture: "https://via.placeholder.com/800x200/E67E22/FFFFFF?text=Marketing",
-        memberCount: 8,
-        description: "Marketing campaigns, social media, and promotional activities"
+    if (!forumId) return; // Exit if no forumId
+
+    const forumRef = doc(db, "forums", forumId);
+    const unsubscribe = onSnapshot(forumRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = { id: docSnap.id, ...docSnap.data() };
+        setForumData(data);
+        setForumMembers(data.members || []); // Update forumMembers from Firestore
+        // Set projectDetails if it's part of the forum data or derived
+        setProjectDetails({
+          name: data.name,
+          companyInfo: data.companyInfo || {},
+          description: data.description,
+          // Include other project-related fields if they exist in forumData
+        });
+      } else {
+        console.log("No such forum document!");
+        setForumData(null);
       }
-    ];
-    
-    const forum = forums.find(f => f.id === parseInt(id)) || forums[0];
-    setForumData(forum);
-    
-    // Mock project details for the forum
-    setProjectDetails({
-      name: forum.name,
-      companyInfo: { 
-        name: "Tech Solutions Inc", 
-        industry: "Software Development", 
-        contact: "john.doe@techsolutions.com" 
-      },
-      description: forum.description
     });
 
-    // Mock forum members
-    setForumMembers([
-      "Alice Johnson", "Bob Smith", "Charlie Brown", "Diana Prince", 
-      "Edward Norton", "Fiona Green", "George Miller", "Helen Clark"
-    ]);
-  }, [id]);
+    return () => unsubscribe();
+  }, [forumId]);
 
-  const handlePostSubmit = (newPost) => {
-    const postWithId = {
-      ...newPost,
-      id: posts.length + 1,
-    };
-    setPosts([postWithId, ...posts]);
+  // Function to update lastActivity in Firestore whenever there's relevant activity
+  const updateForumLastActivity = async () => {
+    if (forumId) {
+      const forumRef = doc(db, "forums", forumId);
+      try {
+        await updateDoc(forumRef, { lastActivity: serverTimestamp() });
+      } catch (error) {
+        console.error("Error updating forum last activity: ", error);
+      }
+    }
   };
 
+  // Function to update post count in the main forum document
+  const updateForumPostCount = async (incrementBy) => {
+    if (forumId) {
+      const forumRef = doc(db, "forums", forumId);
+      try {
+        // Use FieldValue.increment if you have it imported, otherwise fetch, update, and set
+        // For simplicity and to avoid importing FieldValue, we'll do a read-modify-write
+        const docSnap = await getDoc(forumRef);
+        if (docSnap.exists()) {
+          const currentPosts = docSnap.data().posts || 0;
+          await updateDoc(forumRef, { posts: currentPosts + incrementBy });
+        }
+      } catch (error) {
+        console.error("Error updating forum post count: ", error);
+      }
+    }
+  };
+
+  // Mock data functions (handlePostSubmit, handleAddMember, handleRemoveMember) will be modified later
+  // to interact with Firebase based on individual tab/modal integrations.
   const handleTrendingPostClick = (post) => {
-    // Find post in current posts and scroll to it
+    // This remains mostly UI related, but ensure it points to correct post IDs
     const postElement = document.getElementById(`post-${post.id}`);
     if (postElement) {
       postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       postElement.style.backgroundColor = '#E8F4FD';
       setTimeout(() => {
-        postElement.style.backgroundColor = 'white';
+        postElement.style.backgroundColor = 'transparent'; // Revert to transparent or original background
       }, 2000);
     }
   };
 
-  const handleAddMember = (newMember) => {
-    if (newMember.trim() && !forumMembers.includes(newMember.trim())) {
-      setForumMembers([...forumMembers, newMember.trim()]);
+  const handleAddMember = async (newMember) => {
+    if (newMember.trim() && forumData && !forumData.members?.includes(newMember.trim())) {
+      const updatedMembers = [...(forumData.members || []), newMember.trim()];
+      try {
+        const forumRef = doc(db, "forums", forumId);
+        await updateDoc(forumRef, { members: updatedMembers });
+        // setForumMembers is updated by onSnapshot listener, so no need to call it here
+        updateForumLastActivity(); // Update last activity on member change
+      } catch (error) {
+        console.error("Error adding member: ", error);
+      }
     }
   };
 
-  const handleRemoveMember = (memberToRemove) => {
-    setForumMembers(forumMembers.filter(member => member !== memberToRemove));
+  const handleRemoveMember = async (memberToRemove) => {
+    if (forumData) {
+      const updatedMembers = forumData.members.filter(member => member !== memberToRemove);
+      try {
+        const forumRef = doc(db, "forums", forumId);
+        await updateDoc(forumRef, { members: updatedMembers });
+        // setForumMembers is updated by onSnapshot listener
+        updateForumLastActivity(); // Update last activity on member change
+      } catch (error) {
+        console.error("Error removing member: ", error);
+      }
+    }
   };
+
+  if (!forumData) {
+    return <div style={{ textAlign: "center", padding: "50px", color: COLORS.lightText }}>Loading forum details...</div>;
+  }
+
   return (
     <div style={{ fontFamily: 'Arial, sans-serif' }}>
       <TopBar />
@@ -136,7 +145,7 @@ export default function Forum() {
               onSave={(updatedProject) => setProjectDetails(updatedProject)}
             />
           )}
-          <ForumReminders />
+          <ForumReminders forumId={forumId} /> {/* Moved ForumReminders here */}
         </div>
 
         {/* Middle Column - Tabbed Content (Posts Focus) */}
@@ -166,7 +175,7 @@ export default function Forum() {
                 color: COLORS.lightText, 
                 fontSize: "14px" 
               }}>
-                {forumMembers.length} members
+                {forumData?.members?.length || 0} members
               </p>
             </div>
             <button
@@ -181,13 +190,21 @@ export default function Forum() {
               Manage Members
             </button>
           </div>
-          <ForumTabs forumData={forumData} posts={posts} setPosts={setPosts} />
+          <ForumTabs 
+            forumData={forumData} 
+            posts={posts} 
+            setPosts={setPosts} 
+            forumId={forumId} // Pass forumId to ForumTabs
+            updateForumLastActivity={updateForumLastActivity} // Pass function to update last activity
+            updateForumPostCount={updateForumPostCount} // Pass the new function
+            currentUser={currentUser} // Pass currentUser to ForumTabs
+          />
         </div>
 
         {/* Right column: Online Members + Trending Posts */}
         <div style={{ gridColumn: 3, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
-          <ActiveUsers />
-          <TrendingPosts onPostClick={handleTrendingPostClick} />
+          <ActiveUsers forumData={forumData} />
+          <StarredPosts onPostClick={handleTrendingPostClick} forumId={forumId} currentUser={currentUser} />
         </div>
       </div>
 
@@ -198,7 +215,9 @@ export default function Forum() {
       <CreatePostModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onSubmit={handlePostSubmit}
+        forumId={forumId}
+        updateForumLastActivity={updateForumLastActivity}
+        updateForumPostCount={updateForumPostCount}
       />
 
       {/* Manage Members Modal */}
@@ -208,6 +227,8 @@ export default function Forum() {
         members={forumMembers}
         onAddMember={handleAddMember}
         onRemoveMember={handleRemoveMember}
+        forumId={forumId}
+        forumName={forumData?.name}
       />
     </div>
   );

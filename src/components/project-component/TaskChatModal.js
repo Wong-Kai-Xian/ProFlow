@@ -1,14 +1,33 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
+import { db } from "../../firebase"; // Import db
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc } from "firebase/firestore"; // Import Firestore functions
 
-export default function TaskChatModal({ isOpen, onClose, taskId, initialMessages = [] }) {
-  const [messages, setMessages] = useState(initialMessages);
+export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
+  const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    setMessages(initialMessages);
-  }, [initialMessages]);
+    if (isOpen && taskId && projectId) {
+      const messagesRef = collection(db, "projects", projectId, "tasks", taskId, "messages");
+      const q = query(messagesRef, orderBy("timestamp"));
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const messagesList = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setMessages(messagesList);
+      }, (error) => {
+        console.error("Error fetching chat messages: ", error);
+      });
+
+      return () => unsubscribe(); // Cleanup on unmount or when modal closes
+    } else {
+      setMessages([]); // Clear messages when modal is closed or no task/project ID
+    }
+  }, [isOpen, taskId, projectId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -18,13 +37,18 @@ export default function TaskChatModal({ isOpen, onClose, taskId, initialMessages
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      // In a real application, you would save this message to a backend
-      // For now, we'll just add it to the local state
-      const newMsg = { id: messages.length + 1, text: newMessage.trim(), sender: "User", timestamp: new Date().toLocaleTimeString() };
-      setMessages((prevMessages) => [...prevMessages, newMsg]);
-      setNewMessage('');
+  const handleSendMessage = async () => {
+    if (newMessage.trim() && taskId && projectId) {
+      try {
+        await addDoc(collection(db, "projects", projectId, "tasks", taskId, "messages"), {
+          text: newMessage.trim(),
+          sender: "User", // Or actual user name/ID from authentication
+          timestamp: serverTimestamp(),
+        });
+        setNewMessage('');
+      } catch (error) {
+        console.error("Error sending message: ", error);
+      }
     }
   };
 

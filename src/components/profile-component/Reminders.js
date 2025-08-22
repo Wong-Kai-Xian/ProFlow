@@ -12,49 +12,44 @@ export default function Reminders({ reminders, onAddReminder, onReminderRemove }
     return description.substring(0, maxLength) + "...";
   };
 
-  const getDaysLeft = (deadline) => {
+  const getDaysLeft = (dateStr, timeStr) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const reminderDate = new Date(deadline);
-    reminderDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0); // Normalize today to start of day
+    const reminderDateTime = new Date(`${dateStr}T${timeStr}`); // Create a full date-time object
+    reminderDateTime.setHours(reminderDateTime.getHours(), reminderDateTime.getMinutes(), 0, 0); // Normalize to minutes
 
-    const timeDiff = reminderDate.getTime() - today.getTime();
-    const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+    const diffTime = reminderDateTime.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (daysDiff === 0) {
+    if (diffDays < 0) {
+      return `${Math.abs(diffDays)} days overdue`;
+    } else if (diffDays === 0) {
       return "Today";
-    } else if (daysDiff === 1) {
+    } else if (diffDays === 1) {
       return "1 day left";
-    } else if (daysDiff > 1) {
-      return `${daysDiff} days left`;
     } else {
-      return `${Math.abs(daysDiff)} days overdue`;
+      return `${diffDays} days left`;
     }
   };
 
-  const isOverdue = (deadline) => {
+  const isOverdue = (dateStr, timeStr) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Set to start of today
-    const reminderDate = new Date(deadline);
-    reminderDate.setHours(0, 0, 0, 0); // Set to start of reminder date
-    return reminderDate.getTime() < today.getTime();
+    const reminderDateTime = new Date(`${dateStr}T${timeStr}`);
+    return reminderDateTime.getTime() < today.getTime();
   };
 
-  const getReminderColor = (deadline) => {
+  const getReminderColor = (dateStr, timeStr) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Set to start of today
-    const reminderDate = new Date(deadline);
-    reminderDate.setHours(0, 0, 0, 0); // Set to start of reminder date
-
-    const timeDiff = reminderDate.getTime() - today.getTime();
+    const reminderDateTime = new Date(`${dateStr}T${timeStr}`);
+    const timeDiff = reminderDateTime.getTime() - today.getTime();
     const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
 
     if (daysDiff < 0) {
-      return "#e74c3c"; // Red for overdue
+      return COLORS.danger; // Red for overdue
     } else if (daysDiff <= 7) {
-      return "#f39c12"; // Orange for due within 7 days
+      return COLORS.warning; // Orange for due within 7 days
     } else {
-      return "#27ae60"; // Green for far in the future
+      return COLORS.success; // Green for far in the future
     }
   };
 
@@ -67,7 +62,11 @@ export default function Reminders({ reminders, onAddReminder, onReminderRemove }
     setExpandedReminder(expandedReminder === index ? null : index);
   };
 
-  const sortedReminders = [...reminders].sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+  const sortedReminders = [...reminders].sort((a, b) => {
+    const dateA = new Date(`${a.date}T${a.time}`);
+    const dateB = new Date(`${b.date}T${b.time}`);
+    return dateA.getTime() - dateB.getTime();
+  });
 
   return (
     <Card style={{ minHeight: "auto", padding: "15px" }}>
@@ -96,7 +95,7 @@ export default function Reminders({ reminders, onAddReminder, onReminderRemove }
         {sortedReminders.map((reminder, i) => (
           <li key={i} style={{
             padding: "10px", 
-            background: getReminderColor(reminder.deadline),
+            background: getReminderColor(reminder.date, reminder.time),
             borderRadius: "6px",
             marginBottom: "8px", 
             fontSize: "14px",
@@ -108,7 +107,7 @@ export default function Reminders({ reminders, onAddReminder, onReminderRemove }
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", width: "100%", cursor: "pointer", alignItems: "center" }} onClick={() => toggleExpand(i)}>
               <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, overflow: "hidden" }}>
-                <span style={{ fontSize: "16px", fontWeight: "bold" }}>{reminder.text}</span>
+                <span style={{ fontSize: "16px", fontWeight: "bold" }}>{reminder.title}</span>
                 {reminder.description && (
                   <span style={{ 
                     fontSize: "12px", 
@@ -139,10 +138,10 @@ export default function Reminders({ reminders, onAddReminder, onReminderRemove }
                     {reminder.link}
                   </a>
                 )}
-                {isOverdue(reminder.deadline) && <span style={{ fontWeight: "bold", marginLeft: "5px", fontSize: "12px" }}>OVERDUE</span>}
+                {isOverdue(reminder.date, reminder.time) && <span style={{ fontWeight: "bold", marginLeft: "5px", fontSize: "12px" }}>OVERDUE</span>}
               </div>
               <div style={{ fontSize: "12px", opacity: 0.8, flexShrink: 0, marginLeft: "10px" }}>
-                {getDaysLeft(reminder.deadline)}
+                {getDaysLeft(reminder.date, reminder.time)}
               </div>
             </div>
             {expandedReminder === i && (
