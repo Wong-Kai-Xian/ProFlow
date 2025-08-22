@@ -127,7 +127,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
                   style={INPUT_STYLES.base} 
                 />
               ) : (
-                project.name || 'N/A'
+                project.name || 'Untitled Project'
               )}
             </span>
           </p>
@@ -135,7 +135,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
             <strong style={{ fontWeight: "600" }}>Project ID:</strong> 
             <span style={{ marginLeft: "8px", fontWeight: "400", userSelect: "all" }}>
-              {project.id || 'N/A'}
+              {project.id || 'Auto-generated'}
             </span>
           </p>
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
@@ -144,7 +144,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
               {(isEditing && !effectiveReadOnly) ? (
                 <input type="text" name="companyInfo.name" value={editableProject.companyInfo?.name || ''} onChange={handleChange} style={INPUT_STYLES.base} />
               ) : (
-                project.companyInfo?.name || 'N/A'
+                project.companyInfo?.name || 'No company specified'
               )}
             </span>
           </p>
@@ -154,7 +154,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
               {(isEditing && !effectiveReadOnly) ? (
                 <input type="text" name="companyInfo.industry" value={editableProject.companyInfo?.industry || ''} onChange={handleChange} style={INPUT_STYLES.base} />
               ) : (
-                project.companyInfo?.industry || 'N/A'
+                project.companyInfo?.industry || 'No industry specified'
               )}
             </span>
           </p>
@@ -164,7 +164,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
               {(isEditing && !effectiveReadOnly) ? (
                 <input type="text" name="companyInfo.contact" value={editableProject.companyInfo?.contact || ''} onChange={handleChange} style={INPUT_STYLES.base} />
               ) : (
-                project.companyInfo?.contact || 'N/A'
+                project.companyInfo?.contact || 'No contact provided'
               )}
             </span>
           </p>

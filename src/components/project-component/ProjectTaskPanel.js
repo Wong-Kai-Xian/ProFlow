@@ -121,7 +121,7 @@ const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onE
             {getInitials(task.assignedTo)}
           </span>
         ) : (
-          <span style={{ color: COLORS.lightText, fontSize: "12px", fontStyle: "italic" }}>N/A</span>
+          <span style={{ color: COLORS.lightText, fontSize: "12px", fontStyle: "italic" }}>Unassigned</span>
         )}
       </div>
 
@@ -151,7 +151,7 @@ const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onE
         fontWeight: "600",
         fontSize: "14px"
       }}>
-        {task.deadline || 'N/A'}
+        {task.deadline || 'No deadline'}
       </div>
 
       {/* New: Task Status Dropdown */}

@@ -79,10 +79,24 @@ export default function Forum() {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const userData = userSnap.data();
-            return { id: memberUid, name: userData.name || userData.email, email: userData.email, status: 'online', role: 'Member', joinDate: 'N/A' }; // Prioritize userData.name
+            return { 
+              id: memberUid, 
+              name: userData.name || userData.email || 'Forum Member', 
+              email: userData.email || 'No email provided', 
+              status: 'online', 
+              role: 'Member', 
+              joinDate: 'Recently joined'
+            };
           } else {
             console.warn(`User document not found for member ID: ${memberUid}`);
-            return { id: memberUid, name: `Unknown User (${memberUid})`, email: 'N/A', status: 'offline', role: 'Member', joinDate: 'N/A' };
+            return { 
+              id: memberUid, 
+              name: 'Forum Member', 
+              email: 'User not found', 
+              status: 'offline', 
+              role: 'Member', 
+              joinDate: 'Recently joined'
+            };
           }
         })
       );

@@ -28,10 +28,8 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
     } else {
       // For new projects, pre-fill from customerProfile and companyProfile if available
       if (!projectName) setProjectName(customerProfile?.name || '');
-      // Only set teamMembersEmails if it's currently empty and currentUser exists
-      if (currentUser && teamMembersEmails.length === 0) {
-        setTeamMembersEmails([currentUser.email]);
-      }
+      // Don't automatically add creator to team members - they're already the project owner
+      // Leave team members empty by default
       if (!selectedStage) setSelectedStage('Proposal');
       if (!projectDescription) setProjectDescription(companyProfile?.description || '');
       // Only set allowJoinById if it hasn't been explicitly set yet, or if it needs to be reset for a new project
@@ -95,7 +93,7 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
       });
       // Reset form
       setProjectName('');
-      setTeamMembersEmails(currentUser ? [currentUser.email] : []); // Reset to include current user
+      setTeamMembersEmails([]); // Reset to empty - don't auto-add creator
       setNewMember('');
       setSelectedStage('Proposal');
       setProjectDescription(''); // Reset description
@@ -105,7 +103,7 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
 
   const handleCancel = () => {
     setProjectName('');
-    setTeamMembersEmails(currentUser ? [currentUser.email] : []); // Reset to include current user
+    setTeamMembersEmails([]); // Reset to empty - don't auto-add creator
     setNewMember('');
     setSelectedStage('Proposal');
     setProjectDescription(''); // Reset description

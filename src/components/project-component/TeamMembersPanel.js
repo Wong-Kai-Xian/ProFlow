@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import Card from '../profile-component/Card';
 import { COLORS, LAYOUT } from '../profile-component/constants';
 import { db } from "../../firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { FaUserPlus, FaUserMinus } from 'react-icons/fa'; // Import icons
 import { BUTTON_STYLES } from '../profile-component/constants'; // Import BUTTON_STYLES
 import { Link } from 'react-router-dom'; // Import Link
 
-export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberClick, onRemoveMember, projectCreatorId, currentUserUid }) {
+export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberClick, onRemoveMember, projectCreatorId, currentUserUid, currentUser }) {
   const [membersData, setMembersData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -16,27 +16,158 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
     const fetchMemberDetails = async () => {
       setLoading(true);
       setError(null);
-      if (!teamMembers || teamMembers.length === 0) {
+      
+      // Start with project creator (they should always be shown)
+      const allMemberUIDs = new Set();
+      if (projectCreatorId) {
+        allMemberUIDs.add(projectCreatorId);
+      }
+      
+      // Add team members to the set (avoids duplicates)
+      if (teamMembers && teamMembers.length > 0) {
+        teamMembers.forEach(uid => allMemberUIDs.add(uid));
+      }
+      
+      const memberUIDsArray = Array.from(allMemberUIDs);
+      
+      if (memberUIDsArray.length === 0) {
         setMembersData([]);
         setLoading(false);
         return;
       }
+      
+      console.log('TeamMembersPanel: Fetching data for UIDs:', memberUIDsArray);
+      console.log('TeamMembersPanel: Project Creator ID:', projectCreatorId);
+      console.log('TeamMembersPanel: Current User:', currentUser);
 
       try {
-        const fetchedData = await Promise.all(
-          teamMembers.map(async (memberId) => {
-            const userRef = doc(db, "users", memberId);
-            const userSnap = await getDoc(userRef);
-            if (userSnap.exists()) {
-              const userData = userSnap.data();
-              return { id: memberId, name: userData.name || userData.email, email: userData.email }; // Prioritize userData.name
-            } else {
-              console.warn(`User document not found for member ID: ${memberId}`);
-              return { id: memberId, name: `Unknown User (${memberId})`, email: 'N/A' };
+        // Use the same approach as ProjectDetail.js for consistency
+        const fetchedDetails = [];
+        const chunkSize = 10; // Firestore 'in' query limit
+
+        for (let i = 0; i < memberUIDsArray.length; i += chunkSize) {
+          const chunk = memberUIDsArray.slice(i, i + chunkSize);
+          try {
+            // First try querying by uid field (Firebase auth UIDs)
+            const usersQuery = query(collection(db, "users"), where("uid", "in", chunk));
+            const usersSnapshot = await getDocs(usersQuery);
+            
+            const foundUIDs = new Set();
+            usersSnapshot.forEach(doc => {
+              const userData = doc.data();
+              
+              // Special handling for current user
+              let displayName = userData.name || userData.email || 'Team Member';
+              let displayEmail = userData.email || 'No email provided';
+              
+              if (currentUser && userData.uid === currentUser.uid) {
+                displayName = currentUser.name || currentUser.displayName || currentUser.email || 'You';
+                displayEmail = currentUser.email || userData.email || 'No email provided';
+              }
+              
+              fetchedDetails.push({
+                id: userData.uid, // Use the uid from the document data
+                name: displayName,
+                email: displayEmail,
+                isCreator: userData.uid === projectCreatorId,
+                isCurrentUser: currentUser && userData.uid === currentUser.uid,
+              });
+              foundUIDs.add(userData.uid);
+            });
+            
+            // For any UIDs not found by uid field, try direct document lookup
+            const notFoundUIDs = chunk.filter(uid => !foundUIDs.has(uid));
+            for (const uid of notFoundUIDs) {
+              try {
+                const userRef = doc(db, "users", uid);
+                const userSnap = await getDoc(userRef);
+                if (userSnap.exists()) {
+                  const userData = userSnap.data();
+                  
+                  // Special handling for current user in fallback lookup
+                  let displayName = userData.name || userData.email || 'Team Member';
+                  let displayEmail = userData.email || 'No email provided';
+                  
+                  if (currentUser && uid === currentUser.uid) {
+                    displayName = currentUser.name || currentUser.displayName || currentUser.email || 'You';
+                    displayEmail = currentUser.email || userData.email || 'No email provided';
+                  }
+                  
+                  fetchedDetails.push({
+                    id: uid,
+                    name: displayName,
+                    email: displayEmail,
+                    isCreator: uid === projectCreatorId,
+                    isCurrentUser: currentUser && uid === currentUser.uid,
+                  });
+                } else {
+                  console.warn(`User document not found for member ID: ${uid}`);
+                  // Special case for current user even if document not found
+                  if (currentUser && uid === currentUser.uid) {
+                    fetchedDetails.push({
+                      id: uid,
+                      name: currentUser.name || currentUser.displayName || currentUser.email || 'You',
+                      email: currentUser.email || 'No email provided',
+                      isCreator: uid === projectCreatorId,
+                      isCurrentUser: true,
+                    });
+                  } else {
+                    fetchedDetails.push({
+                      id: uid,
+                      name: 'Team Member',
+                      email: 'User not found',
+                      isCreator: uid === projectCreatorId,
+                      isCurrentUser: false,
+                    });
+                  }
+                }
+              } catch (memberErr) {
+                console.error(`Error fetching member ${uid}:`, memberErr);
+                // Special case for current user even on error
+                if (currentUser && uid === currentUser.uid) {
+                  fetchedDetails.push({
+                    id: uid,
+                    name: currentUser.name || currentUser.displayName || currentUser.email || 'You',
+                    email: currentUser.email || 'Error loading user',
+                    isCreator: uid === projectCreatorId,
+                    isCurrentUser: true,
+                  });
+                } else {
+                  fetchedDetails.push({
+                    id: uid,
+                    name: 'Team Member',
+                    email: 'Error loading user',
+                    isCreator: uid === projectCreatorId,
+                    isCurrentUser: false,
+                  });
+                }
+              }
             }
-          })
-        );
-        setMembersData(fetchedData);
+          } catch (chunkErr) {
+            console.error(`Error processing chunk:`, chunkErr);
+            // Fallback for this chunk
+            chunk.forEach(uid => {
+              if (currentUser && uid === currentUser.uid) {
+                fetchedDetails.push({
+                  id: uid,
+                  name: currentUser.name || currentUser.displayName || currentUser.email || 'You',
+                  email: currentUser.email || 'Error loading user',
+                  isCreator: uid === projectCreatorId,
+                  isCurrentUser: true,
+                });
+              } else {
+                fetchedDetails.push({
+                  id: uid,
+                  name: 'Team Member',
+                  email: 'Error loading user',
+                  isCreator: uid === projectCreatorId,
+                  isCurrentUser: false,
+                });
+              }
+            });
+          }
+        }
+        setMembersData(fetchedDetails);
       } catch (err) {
         console.error("Error fetching team member details:", err);
         setError("Failed to load team member details.");
@@ -46,7 +177,7 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
     };
 
     fetchMemberDetails();
-  }, [teamMembers]);
+  }, [teamMembers, projectCreatorId, currentUser]);
 
   const isProjectCreator = currentUserUid === projectCreatorId;
 
@@ -72,7 +203,7 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
       {loading && <p style={{ color: COLORS.lightText }}>Loading team members...</p>}
       {error && <p style={{ color: COLORS.danger }}>{error}</p>}
       {!loading && membersData.length === 0 && (
-        <p style={{ color: COLORS.lightText }}>No team members assigned yet.</p>
+        <p style={{ color: COLORS.lightText }}>No team members assigned yet. The project creator is always included.</p>
       )}
       {!loading && membersData.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: LAYOUT.smallGap }}>
@@ -125,6 +256,32 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
               <Link to={`/profile/${member.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                 <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: COLORS.dark, cursor: "pointer" }}>
                   {member.name}
+                  {member.isCreator && (
+                    <span style={{ 
+                      marginLeft: "4px", 
+                      fontSize: "10px", 
+                      backgroundColor: COLORS.primary, 
+                      color: COLORS.white, 
+                      padding: "2px 4px", 
+                      borderRadius: "3px",
+                      fontWeight: "500"
+                    }}>
+                      CREATOR
+                    </span>
+                  )}
+                  {member.isCurrentUser && !member.isCreator && (
+                    <span style={{ 
+                      marginLeft: "4px", 
+                      fontSize: "10px", 
+                      backgroundColor: COLORS.success, 
+                      color: COLORS.white, 
+                      padding: "2px 4px", 
+                      borderRadius: "3px",
+                      fontWeight: "500"
+                    }}>
+                      YOU
+                    </span>
+                  )}
                 </p>
                 <p style={{ margin: 0, fontSize: "12px", color: COLORS.lightText, cursor: "pointer" }}>
                   {member.email}

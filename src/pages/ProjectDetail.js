@@ -104,8 +104,8 @@ export default function ProjectDetail() {
             const userData = doc.data();
             fetchedDetails.push({
               uid: doc.id,
-              name: userData.name || userData.email,
-              email: userData.email,
+              name: userData.name || userData.email || 'Team Member',
+              email: userData.email || 'No email provided',
             });
           });
         }
@@ -312,6 +312,7 @@ export default function ProjectDetail() {
               onRemoveMember={handleRemoveTeamMember}
               projectCreatorId={projectData.userId}
               currentUserUid={currentUser?.uid}
+              currentUser={currentUser}
             />
           </div>
         </div>
@@ -340,22 +341,7 @@ export default function ProjectDetail() {
             onStageSelect={handleStageSelect} // New prop for direct stage selection
             canAdvance={canAdvanceStage} // Pass the new prop
           />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <h4 style={{ margin: "0", color: COLORS.dark }}>Team Members</h4>
-            {projectData && currentUser && projectData.userId === currentUser.uid && (
-              <button
-                onClick={() => setShowAddTeamMemberModal(true)}
-                style={{
-                  ...BUTTON_STYLES.secondary,
-                  padding: "8px 16px",
-                  fontSize: "14px",
-                }}
-              >
-                Add Team Member
-              </button>
-            )}
-          </div>
-          {/* Team Members Panel will go here */}
+          {/* Removed redundant team member buttons - they're already in the left panel */}
           <ProjectTaskPanel 
             projectTasks={projectTasks}
             setProjectTasks={setProjectTasks}
