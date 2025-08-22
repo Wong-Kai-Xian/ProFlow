@@ -4,10 +4,10 @@ import { COLORS, INPUT_STYLES } from '../components/profile-component/constants'
 import { db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import { Link } from 'react-router-dom'; // Import Link
-import InviteMemberModal from '../components/team-component/InviteMemberModal'; // Import InviteMemberModal
-import { FaSync } from 'react-icons/fa'; // Import refresh icon
-import IncomingInvitationsModal from '../components/team-component/IncomingInvitationsModal'; // Import new modal
+import { Link } from 'react-router-dom';
+import InviteMemberModal from '../components/team-component/InviteMemberModal';
+import { FaSync, FaUsers, FaClock, FaUserPlus } from 'react-icons/fa';
+import IncomingInvitationsModal from '../components/team-component/IncomingInvitationsModal';
 
 export default function TeamPage() {
   const [teamMembers, setTeamMembers] = useState([]);
@@ -147,357 +147,521 @@ export default function TeamPage() {
   );
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", minHeight: "100vh", backgroundColor: COLORS.background }}>
+    <div style={{ 
+      fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", 
+      minHeight: "100vh", 
+      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+    }}>
       <TopBar />
 
-      <div style={{ padding: "30px", maxWidth: "1200px", margin: "0 auto" }}>
-        {/* Enhanced Header Section */}
-        <div style={{ 
-          marginBottom: "40px",
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      <div style={{ padding: "20px", maxWidth: "1400px", margin: "0 auto" }}>
+        {/* Hero Header */}
+        <div style={{
+          background: "rgba(255, 255, 255, 0.95)",
+          backdropFilter: "blur(20px)",
+          borderRadius: "32px",
           padding: "40px",
-          borderRadius: "20px",
-          boxShadow: "0 10px 40px rgba(0,0,0,0.1)",
-          color: "white"
+          marginBottom: "32px",
+          boxShadow: "0 25px 50px rgba(0, 0, 0, 0.1)",
+          border: "1px solid rgba(255, 255, 255, 0.2)"
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "20px" }}>
             <div>
-              <h1 style={{ 
-                margin: "0 0 12px 0", 
-                fontSize: "36px", 
-                fontWeight: "700",
-                textShadow: "0 2px 4px rgba(0,0,0,0.1)"
+              <h1 style={{
+                margin: "0 0 12px 0",
+                fontSize: "42px",
+                fontWeight: "800",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                letterSpacing: "-0.02em"
               }}>
-                Team Management
+                🚀 Team Hub
               </h1>
-              <p style={{ 
-                margin: 0, 
-                fontSize: "18px", 
-                opacity: 0.9,
-                fontWeight: "400"
+              <p style={{
+                margin: 0,
+                fontSize: "18px",
+                color: "#64748b",
+                fontWeight: "500"
               }}>
-                Manage your team members and invitations
+                Collaborate, invite, and manage your dream team
               </p>
             </div>
-            <div style={{ 
-              background: "rgba(255,255,255,0.15)", 
-              padding: "20px", 
-              borderRadius: "12px",
-              backdropFilter: "blur(10px)",
-              border: "1px solid rgba(255,255,255,0.2)"
-            }}>
-              <div style={{ fontSize: "32px", fontWeight: "700", marginBottom: "4px" }}>
-                {teamMembers.length}
+            
+            {/* Stats Cards */}
+            <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+              <div style={{
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                color: "white",
+                padding: "16px 20px",
+                borderRadius: "20px",
+                textAlign: "center",
+                minWidth: "120px",
+                boxShadow: "0 8px 25px rgba(102, 126, 234, 0.3)"
+              }}>
+                <FaUsers style={{ fontSize: "24px", marginBottom: "8px" }} />
+                <div style={{ fontSize: "24px", fontWeight: "700" }}>{filteredMembers.length}</div>
+                <div style={{ fontSize: "12px", opacity: 0.9 }}>Team Members</div>
               </div>
-              <div style={{ fontSize: "14px", opacity: 0.9 }}>Team Members</div>
+              <div style={{
+                background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                color: "white",
+                padding: "16px 20px",
+                borderRadius: "20px",
+                textAlign: "center",
+                minWidth: "120px",
+                boxShadow: "0 8px 25px rgba(240, 147, 251, 0.3)"
+              }}>
+                <FaClock style={{ fontSize: "24px", marginBottom: "8px" }} />
+                <div style={{ fontSize: "24px", fontWeight: "700" }}>{filteredPendingInvitations.length}</div>
+                <div style={{ fontSize: "12px", opacity: 0.9 }}>Pending</div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div style={{ 
-          display: "flex", 
-          flexWrap: "wrap",
-          gap: "16px", 
-          marginBottom: "30px",
-          padding: "24px",
-          background: "white",
-          borderRadius: "16px",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-          border: "1px solid #f0f2f5"
+        {/* Action Section */}
+        <div style={{
+          background: "rgba(255, 255, 255, 0.95)",
+          backdropFilter: "blur(20px)",
+          borderRadius: "24px",
+          padding: "32px",
+          marginBottom: "32px",
+          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.08)",
+          border: "1px solid rgba(255, 255, 255, 0.2)"
         }}>
-          <button
-            onClick={() => setShowInviteModal(true)}
-            style={{
-              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-              color: "white",
-              padding: "14px 24px",
-              borderRadius: "12px",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "16px",
-              fontWeight: "600",
-              boxShadow: "0 4px 16px rgba(102, 126, 234, 0.3)",
-              transition: "all 0.3s ease",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px"
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.transform = "translateY(-2px)";
-              e.target.style.boxShadow = "0 8px 24px rgba(102, 126, 234, 0.4)";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = "translateY(0)";
-              e.target.style.boxShadow = "0 4px 16px rgba(102, 126, 234, 0.3)";
-            }}
-          >
-            Invite Member
-          </button>
-
-          <button
-            onClick={() => setShowIncomingInvitationsModal(true)}
-            style={{
-              background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-              color: "white",
-              padding: "14px 24px",
-              borderRadius: "12px",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "16px",
-              fontWeight: "600",
-              boxShadow: "0 4px 16px rgba(245, 87, 108, 0.3)",
-              transition: "all 0.3s ease",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px"
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.transform = "translateY(-2px)";
-              e.target.style.boxShadow = "0 8px 24px rgba(245, 87, 108, 0.4)";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = "translateY(0)";
-              e.target.style.boxShadow = "0 4px 16px rgba(245, 87, 108, 0.3)";
-            }}
-          >
-            My Invitations
-          </button>
-          
-          <button
-            onClick={refreshTeamData}
-            style={{
-              background: "#f8f9fa",
-              color: "#495057",
-              padding: "14px 16px",
-              borderRadius: "12px",
-              border: "1px solid #e9ecef",
-              cursor: "pointer",
-              fontSize: "16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
-              transition: "all 0.3s ease"
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = "#e9ecef";
-              e.target.style.transform = "translateY(-2px)";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = "#f8f9fa";
-              e.target.style.transform = "translateY(0)";
-            }}
-          >
-            <FaSync />
-          </button>
-        <button
-          onClick={() => setShowIncomingInvitationsModal(true)} // Open the new incoming invitations modal
-          style={{
-            backgroundColor: COLORS.tertiary, // New color for this button
-            color: COLORS.white,
-            padding: "10px 20px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "16px",
-            fontWeight: "600",
-            boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
-            position: "relative"
-          }}
-        >
-          My Invitations
-          {incomingInvitationsCount > 0 && (
-            <span style={{
-              position: "absolute",
-              top: "-8px",
-              right: "-8px",
-              backgroundColor: COLORS.error || "#ff4444",
-              color: "white",
-              borderRadius: "50%",
-              width: "24px",
-              height: "24px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "12px",
-              fontWeight: "bold",
-              minWidth: "24px"
-            }}>
-              {incomingInvitationsCount > 99 ? '99+' : incomingInvitationsCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={refreshTeamData}
-          style={{
-            backgroundColor: COLORS.light,
-            color: COLORS.darkText,
-            padding: "10px", // Square button
-            borderRadius: "8px",
-            border: `1px solid ${COLORS.border}`,
-            cursor: "pointer",
-            fontSize: "16px",
+          {/* Action Buttons */}
+          <div style={{
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 4px 8px rgba(0, 0, 0, 0.05)"
-          }}
-        >
-          <FaSync />
-        </button>
-        </div>
+            flexWrap: "wrap",
+            gap: "16px",
+            marginBottom: "32px",
+            alignItems: "center"
+          }}>
+            <button
+              onClick={() => setShowInviteModal(true)}
+              style={{
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                color: "white",
+                padding: "16px 32px",
+                borderRadius: "20px",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "16px",
+                fontWeight: "600",
+                boxShadow: "0 12px 30px rgba(102, 126, 234, 0.4)",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = "translateY(-3px)";
+                e.target.style.boxShadow = "0 16px 40px rgba(102, 126, 234, 0.5)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "0 12px 30px rgba(102, 126, 234, 0.4)";
+              }}
+            >
+              <FaUserPlus /> Invite New Member
+            </button>
 
-        {inviteMessage && (
-          <p style={{ color: COLORS.primary, marginBottom: "20px", fontSize: "16px" }}>
-            {inviteMessage}
-          </p>
-        )}
+            <button
+              onClick={() => setShowIncomingInvitationsModal(true)}
+              style={{
+                background: incomingInvitationsCount > 0 ? "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" : "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+                color: "white",
+                padding: "16px 32px",
+                borderRadius: "20px",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "16px",
+                fontWeight: "600",
+                boxShadow: incomingInvitationsCount > 0 ? "0 12px 30px rgba(240, 147, 251, 0.4)" : "0 12px 30px rgba(79, 172, 254, 0.4)",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = "translateY(-3px)";
+                e.target.style.boxShadow = incomingInvitationsCount > 0 ? "0 16px 40px rgba(240, 147, 251, 0.5)" : "0 16px 40px rgba(79, 172, 254, 0.5)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = incomingInvitationsCount > 0 ? "0 12px 30px rgba(240, 147, 251, 0.4)" : "0 12px 30px rgba(79, 172, 254, 0.4)";
+              }}
+            >
+              📨 My Invitations
+              {incomingInvitationsCount > 0 && (
+                <span style={{
+                  background: "rgba(255, 255, 255, 0.9)",
+                  color: "#1a1a1a",
+                  borderRadius: "12px",
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  fontWeight: "700",
+                  marginLeft: "8px"
+                }}>
+                  {incomingInvitationsCount > 99 ? '99+' : incomingInvitationsCount}
+                </span>
+              )}
+            </button>
 
-        {/* Search Bar */}
-        <div style={{ marginBottom: "30px" }}>
-          <input
-            type="text"
-            placeholder="Search team members and pending invitations..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              ...INPUT_STYLES.base,
-              width: "100%",
-              maxWidth: "400px",
-              padding: "12px 16px",
+            <button
+              onClick={refreshTeamData}
+              style={{
+                background: "rgba(255, 255, 255, 0.9)",
+                color: "#64748b",
+                padding: "16px 20px",
+                borderRadius: "20px",
+                border: "2px solid #e2e8f0",
+                cursor: "pointer",
+                fontSize: "18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 8px 20px rgba(0, 0, 0, 0.08)",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.borderColor = "#667eea";
+                e.target.style.color = "#667eea";
+                e.target.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.borderColor = "#e2e8f0";
+                e.target.style.color = "#64748b";
+                e.target.style.transform = "translateY(0)";
+              }}
+              title="Refresh team data"
+            >
+              <FaSync />
+            </button>
+          </div>
+
+          {inviteMessage && (
+            <div style={{
+              background: "linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%)",
+              border: "2px solid #28a745",
+              borderRadius: "20px",
+              padding: "20px 24px",
+              marginBottom: "24px",
+              color: "#155724",
               fontSize: "16px",
-              borderRadius: "8px",
-              border: `2px solid ${COLORS.border}`,
-              transition: "border-color 0.3s ease"
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = COLORS.primary;
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = COLORS.border;
-            }}
-          />
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              fontWeight: "500"
+            }}>
+              ✅ {inviteMessage}
+            </div>
+          )}
+
+          {/* Search Bar */}
+          <div style={{
+            position: "relative",
+            maxWidth: "600px"
+          }}>
+            <input
+              type="text"
+              placeholder="🔍 Search team members and invitations..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "20px 24px",
+                fontSize: "16px",
+                borderRadius: "20px",
+                border: "2px solid #e2e8f0",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                background: "rgba(248, 250, 252, 0.8)",
+                color: "#334155",
+                outline: "none",
+                fontWeight: "500"
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = "#667eea";
+                e.target.style.background = "white";
+                e.target.style.boxShadow = "0 0 0 4px rgba(102, 126, 234, 0.1)";
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = "#e2e8f0";
+                e.target.style.background = "rgba(248, 250, 252, 0.8)";
+                e.target.style.boxShadow = "none";
+              }}
+            />
+          </div>
         </div>
 
         {/* Pending Invitations Section */}
-        <h2 style={{ color: COLORS.dark, fontSize: "22px", fontWeight: "600", marginBottom: "20px", marginTop: "40px" }}>Pending Invitations</h2>
-        {filteredPendingInvitations.length === 0 ? (
+        <div style={{
+          background: "rgba(255, 255, 255, 0.95)",
+          backdropFilter: "blur(20px)",
+          borderRadius: "24px",
+          padding: "32px",
+          marginBottom: "32px",
+          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.08)",
+          border: "1px solid rgba(255, 255, 255, 0.2)"
+        }}>
           <div style={{
-            textAlign: "center",
-            padding: "30px 20px",
-            color: COLORS.lightText,
-            fontSize: "16px",
-            border: `1px dashed ${COLORS.border}`,
-            borderRadius: "8px",
-            backgroundColor: COLORS.white
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            marginBottom: "24px"
           }}>
-            {searchTerm ? `No pending invitations found matching "${searchTerm}"` : "No pending invitations."} 
-          </div>
-        ) : (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-            gap: "20px",
-            marginBottom: "40px"
-          }}>
-            {filteredPendingInvitations.map((invitation) => (
-              <div key={invitation.id} style={{
-                backgroundColor: COLORS.white,
-                borderRadius: "12px",
-                padding: "20px",
-                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)",
-                border: `1px solid ${COLORS.border}`,
-                display: "flex",
-                alignItems: "center",
-                gap: "15px",
-                opacity: 0.7, // Shaded effect
-                position: "relative",
-                overflow: "hidden"
+            <h2 style={{
+              color: "#1e293b",
+              fontSize: "28px",
+              fontWeight: "700",
+              margin: 0,
+              letterSpacing: "-0.025em"
+            }}>
+              ⏳ Pending Invitations
+            </h2>
+            {filteredPendingInvitations.length > 0 && (
+              <span style={{
+                background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                color: "white",
+                borderRadius: "16px",
+                padding: "8px 16px",
+                fontSize: "14px",
+                fontWeight: "700"
               }}>
-                <div style={{
-                  width: "50px",
-                  height: "50px",
-                  borderRadius: "50%",
-                  backgroundColor: COLORS.light,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: COLORS.white,
-                  fontSize: "20px",
-                  fontWeight: "700"
-                }}>
-                  {invitation.toUserEmail[0].toUpperCase()}
-                </div>
-                <div>
-                  <div style={{ fontSize: "18px", fontWeight: "600", color: COLORS.dark }}>{invitation.toUserEmail}</div>
-                  <div style={{ fontSize: "14px", color: COLORS.lightText }}>Pending</div>
-                </div>
-              </div>
-            ))}
+                {filteredPendingInvitations.length}
+              </span>
+            )}
           </div>
-        )}
 
-        {/* Team Members List */}
-        <h2 style={{ color: COLORS.dark, fontSize: "22px", fontWeight: "600", marginBottom: "20px" }}>Accepted Team Members</h2>
-        {filteredMembers.length === 0 ? (
-          <div style={{
-            textAlign: "center",
-            padding: "60px 20px",
-            color: COLORS.lightText,
-            fontSize: "18px"
-          }}>
-            {searchTerm ? `No team members found matching "${searchTerm}"` : "No team members yet."}
-          </div>
-        ) : (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-            gap: "20px"
-          }}>
-            {filteredMembers.map((member, index) => (
-              <div key={index} style={{
-                backgroundColor: COLORS.white,
-                borderRadius: "12px",
-                padding: "20px",
-                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)",
-                border: `1px solid ${COLORS.border}`,
-                display: "flex",
-                alignItems: "center",
-                gap: "15px"
+          {filteredPendingInvitations.length === 0 ? (
+            <div style={{
+              borderRadius: "20px",
+              padding: "60px 20px",
+              textAlign: "center",
+              border: "2px dashed #e2e8f0",
+              background: "rgba(248, 250, 252, 0.5)"
+            }}>
+              <div style={{
+                fontSize: "64px",
+                marginBottom: "20px",
+                opacity: 0.4
+              }}>📋</div>
+              <p style={{
+                color: "#64748b",
+                fontSize: "18px",
+                margin: 0,
+                fontWeight: "500"
               }}>
-                <div style={{
-                  width: "50px",
-                  height: "50px",
-                  borderRadius: "50%",
-                  backgroundColor: COLORS.primary,
+                {searchTerm ? `No pending invitations found matching "${searchTerm}"` : "No pending invitations at the moment"}
+              </p>
+            </div>
+          ) : (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
+              gap: "24px",
+              marginBottom: "20px"
+            }}>
+              {filteredPendingInvitations.map((invitation) => (
+                <div key={invitation.id} style={{
+                  background: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.9) 100%)",
+                  borderRadius: "24px",
+                  padding: "28px",
+                  boxShadow: "0 12px 30px rgba(0, 0, 0, 0.08)",
+                  border: "2px solid rgba(255, 255, 255, 0.6)",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  color: COLORS.white,
-                  fontSize: "20px",
-                  fontWeight: "700"
+                  gap: "20px",
+                  position: "relative",
+                  overflow: "hidden",
+                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-6px)";
+                  e.currentTarget.style.boxShadow = "0 20px 45px rgba(0, 0, 0, 0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 12px 30px rgba(0, 0, 0, 0.08)";
                 }}>
-                  {member.displayName[0].toUpperCase()}
+                  <div style={{
+                    width: "64px",
+                    height: "64px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    fontSize: "24px",
+                    fontWeight: "700",
+                    boxShadow: "0 8px 20px rgba(251, 191, 36, 0.3)"
+                  }}>
+                    {invitation.toUserEmail[0].toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "20px", fontWeight: "700", color: "#1e293b", marginBottom: "4px" }}>
+                      {invitation.toUserEmail}
+                    </div>
+                    <div style={{ fontSize: "14px", color: "#64748b", fontWeight: "500" }}>
+                      Invitation pending...
+                    </div>
+                  </div>
+                  <div style={{
+                    position: "absolute",
+                    top: "16px",
+                    right: "16px",
+                    width: "12px",
+                    height: "12px",
+                    borderRadius: "50%",
+                    background: "#fbbf24",
+                    animation: "pulse 2s infinite"
+                  }} />
                 </div>
-                <div>
-                 {member.uid ? (
-                   <Link to={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
-                     <div style={{ fontSize: "18px", fontWeight: "600", color: COLORS.primary, cursor: "pointer" }}>{member.displayName}</div>
-                     <div style={{ fontSize: "14px", color: COLORS.lightText, cursor: "pointer" }}>{member.email}</div>
-                   </Link>
-                 ) : (
-                   <>
-                     <div style={{ fontSize: "18px", fontWeight: "600", color: COLORS.dark }}>{member.displayName}</div>
-                     <div style={{ fontSize: "14px", color: COLORS.lightText }}>{member.email}</div>
-                   </>
-                 )}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Team Members Section */}
+        <div style={{
+          background: "rgba(255, 255, 255, 0.95)",
+          backdropFilter: "blur(20px)",
+          borderRadius: "24px",
+          padding: "32px",
+          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.08)",
+          border: "1px solid rgba(255, 255, 255, 0.2)"
+        }}>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            marginBottom: "24px"
+          }}>
+            <h2 style={{
+              color: "#1e293b",
+              fontSize: "28px",
+              fontWeight: "700",
+              margin: 0,
+              letterSpacing: "-0.025em"
+            }}>
+              👥 Team Members
+            </h2>
+            {filteredMembers.length > 0 && (
+              <span style={{
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                color: "white",
+                borderRadius: "16px",
+                padding: "8px 16px",
+                fontSize: "14px",
+                fontWeight: "700"
+              }}>
+                {filteredMembers.length}
+              </span>
+            )}
           </div>
-        )}
+
+          {filteredMembers.length === 0 ? (
+            <div style={{
+              borderRadius: "20px",
+              padding: "80px 20px",
+              textAlign: "center",
+              border: "2px dashed #e2e8f0",
+              background: "rgba(248, 250, 252, 0.5)"
+            }}>
+              <div style={{
+                fontSize: "80px",
+                marginBottom: "24px",
+                opacity: 0.3
+              }}>👥</div>
+              <p style={{
+                color: "#64748b",
+                fontSize: "20px",
+                margin: 0,
+                fontWeight: "500"
+              }}>
+                {searchTerm ? `No team members found matching "${searchTerm}"` : "Start building your team by inviting members!"}
+              </p>
+            </div>
+          ) : (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
+              gap: "24px"
+            }}>
+              {filteredMembers.map((member, index) => (
+                <div key={index} style={{
+                  background: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.9) 100%)",
+                  borderRadius: "24px",
+                  padding: "28px",
+                  boxShadow: "0 12px 30px rgba(0, 0, 0, 0.08)",
+                  border: "2px solid rgba(255, 255, 255, 0.6)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "20px",
+                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                  cursor: member.uid ? "pointer" : "default"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-6px)";
+                  e.currentTarget.style.boxShadow = "0 20px 45px rgba(0, 0, 0, 0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 12px 30px rgba(0, 0, 0, 0.08)";
+                }}>
+                  <div style={{
+                    width: "72px",
+                    height: "72px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    fontSize: "28px",
+                    fontWeight: "700",
+                    boxShadow: "0 12px 25px rgba(102, 126, 234, 0.3)"
+                  }}>
+                    {member.displayName[0].toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    {member.uid ? (
+                      <Link to={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
+                        <div style={{ fontSize: "22px", fontWeight: "700", color: "#667eea", marginBottom: "6px", transition: "color 0.2s" }}>
+                          {member.displayName}
+                        </div>
+                        <div style={{ fontSize: "16px", color: "#64748b", fontWeight: "500" }}>
+                          {member.email}
+                        </div>
+                      </Link>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: "22px", fontWeight: "700", color: "#1e293b", marginBottom: "6px" }}>
+                          {member.displayName}
+                        </div>
+                        <div style={{ fontSize: "16px", color: "#64748b", fontWeight: "500" }}>
+                          {member.email}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div style={{
+                    width: "16px",
+                    height: "16px",
+                    borderRadius: "50%",
+                    background: "#10b981",
+                    boxShadow: "0 0 12px rgba(16, 185, 129, 0.4)"
+                  }} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
       <InviteMemberModal
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
@@ -506,7 +670,7 @@ export default function TeamPage() {
       <IncomingInvitationsModal 
         isOpen={showIncomingInvitationsModal}
         onClose={() => setShowIncomingInvitationsModal(false)}
-        onInvitationAction={refreshTeamData} // Pass the refresh function to update TeamPage when an invitation is accepted/rejected
+        onInvitationAction={refreshTeamData}
       />
     </div>
   );

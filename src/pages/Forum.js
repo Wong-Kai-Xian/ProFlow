@@ -288,6 +288,7 @@ export default function Forum() {
         forumId={forumId}
         updateForumLastActivity={updateForumLastActivity}
         updateForumPostCount={updateForumPostCount}
+        currentUser={currentUser}
       />
 
       {/* Invite Member Modal */}

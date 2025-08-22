@@ -485,7 +485,7 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
                 <strong style={{ fontSize: '13px', color: COLORS.dark }}>{comment.author || 'Anonymous'}:</strong>
                 <span style={{ fontSize: '11px', color: COLORS.lightText, marginLeft: '8px' }}>{formatTimestamp(comment.timestamp)}</span>
                 {/* Comment Actions */}
-                {comment.author === currentUserId && (
+                {comment.authorId === currentUserId && (
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: '5px' }}>
                     {editingCommentId === (comment.timestamp?.seconds || null) && editingCommentId === (comment.timestamp?.nanoseconds || null) ? (
                       <>
@@ -583,6 +583,7 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
         // Removed temporary 'starredBy' initialization. It's now handled by handleStar.
         return {
           id: doc.id,
+          forumId: forumId, // Add forumId to post data
           ...data
         }
       });
@@ -701,7 +702,8 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
     try {
       await addDoc(collection(doc(db, "forums", forumId), "posts"), {
         content: newPostContent.trim(),
-        author: currentUser?.name || "Anonymous", // Use currentUser.name
+        author: currentUser?.name || currentUser?.displayName || currentUser?.email || "Anonymous", // Use currentUser.name
+        authorId: currentUser?.uid, // Add authorId field
         timestamp: serverTimestamp(),
         likes: 0, // Initialize likes to 0
         comments: [], // Initialize comments as an empty array
@@ -762,6 +764,7 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
         updateForumPostCount={updateForumPostCount}
         editingPost={editingPost}
         onConfirm={handleUpdatePost}
+        currentUser={currentUser}
       />
 
       {/* Delete Confirmation Modal */}

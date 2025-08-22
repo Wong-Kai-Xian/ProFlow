@@ -48,37 +48,12 @@ export default function Home() {
     }}>
       <TopBar />
 
-      {/* Welcome Header */}
-      <div style={{
-        padding: "30px",
-        textAlign: "center",
-        background: "rgba(255, 255, 255, 0.1)",
-        backdropFilter: "blur(10px)",
-        borderBottom: "1px solid rgba(255, 255, 255, 0.2)"
-      }}>
-        <h1 style={{
-          margin: "0 0 8px 0",
-          fontSize: "32px",
-          fontWeight: "700",
-          color: "#2d3748",
-          textShadow: "0 2px 4px rgba(0,0,0,0.1)"
-        }}>
-          Welcome to ProFlow
-        </h1>
-        <p style={{
-          margin: 0,
-          fontSize: "16px",
-          color: "#4a5568",
-          opacity: 0.8
-        }}>
-          Manage your projects, team, and workflows in one place
-        </p>
-      </div>
+
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `${leftCollapsed ? 40 : '1fr'} 4fr ${rightCollapsed ? 40 : '1fr'}`,
+          gridTemplateColumns: `${leftWidth}px 1fr ${rightWidth}px`,
           gridTemplateRows: "1fr",
           gap: "20px",
           padding: "20px",
@@ -106,30 +81,91 @@ export default function Home() {
           }}>
           {!leftCollapsed && currentUser && (
             <>
+              {/* Projects Section */}
               <div style={{ 
                 height: "350px",
                 marginBottom: "20px",
                 background: "rgba(255, 255, 255, 0.95)",
-                borderRadius: "16px",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-                border: "1px solid rgba(255, 255, 255, 0.2)",
-                backdropFilter: "blur(10px)",
+                borderRadius: "20px",
+                boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
+                backdropFilter: "blur(15px)",
                 overflow: "hidden",
-                flexShrink: 0
+                flexShrink: 0,
+                position: "relative"
               }}>
-                <ProjectsTab />
+                <div style={{
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  padding: "16px 20px",
+                  color: "white",
+                  borderRadius: "20px 20px 0 0",
+                  marginBottom: "12px"
+                }}>
+                  <h3 style={{
+                    margin: "0",
+                    fontSize: "18px",
+                    fontWeight: "700",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    Projects Hub
+                  </h3>
+                  <p style={{
+                    margin: "4px 0 0 0",
+                    fontSize: "13px",
+                    opacity: 0.9,
+                    fontWeight: "400"
+                  }}>
+                    Manage and track your projects
+                  </p>
+                </div>
+                <div style={{ height: "calc(100% - 80px)", overflow: "hidden" }}>
+                  <ProjectsTab />
+                </div>
               </div>
+
+              {/* Contacts Section */}
               <div style={{ 
                 height: "340px",
                 background: "rgba(255, 255, 255, 0.95)",
-                borderRadius: "16px",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-                border: "1px solid rgba(255, 255, 255, 0.2)",
-                backdropFilter: "blur(10px)",
+                borderRadius: "20px",
+                boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
+                backdropFilter: "blur(15px)",
                 overflow: "hidden",
-                flexShrink: 0
+                flexShrink: 0,
+                position: "relative"
               }}>
-                <Contacts onSelectCustomer={goToCustomerProfile} />
+                <div style={{
+                  background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+                  padding: "16px 20px",
+                  color: "white",
+                  borderRadius: "20px 20px 0 0",
+                  marginBottom: "12px"
+                }}>
+                  <h3 style={{
+                    margin: "0",
+                    fontSize: "18px",
+                    fontWeight: "700",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    Contacts
+                  </h3>
+                  <p style={{
+                    margin: "4px 0 0 0",
+                    fontSize: "13px",
+                    opacity: 0.9,
+                    fontWeight: "400"
+                  }}>
+                    Connect with your customers
+                  </p>
+                </div>
+                <div style={{ height: "calc(100% - 80px)", overflow: "hidden" }}>
+                  <Contacts onSelectCustomer={goToCustomerProfile} />
+                </div>
               </div>
             </>
           )}
@@ -200,32 +236,92 @@ export default function Home() {
         >
           {!rightCollapsed && currentUser && (
             <>
+              {/* Upcoming Events Section */}
               <div style={{ 
                 height: "320px",
                 marginBottom: "20px",
                 background: "rgba(255, 255, 255, 0.95)",
-                borderRadius: "16px",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-                border: "1px solid rgba(255, 255, 255, 0.2)",
-                backdropFilter: "blur(10px)",
+                borderRadius: "20px",
+                boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
+                backdropFilter: "blur(15px)",
                 overflow: "hidden",
-                flexShrink: 0
+                flexShrink: 0,
+                position: "relative"
               }}>
-                <UpcomingEvents />
+                <div style={{
+                  background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                  padding: "16px 20px",
+                  color: "white",
+                  borderRadius: "20px 20px 0 0",
+                  marginBottom: "12px"
+                }}>
+                  <h3 style={{
+                    margin: "0",
+                    fontSize: "18px",
+                    fontWeight: "700",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    Upcoming Events
+                  </h3>
+                  <p style={{
+                    margin: "4px 0 0 0",
+                    fontSize: "13px",
+                    opacity: 0.9,
+                    fontWeight: "400"
+                  }}>
+                    Stay on top of your schedule
+                  </p>
+                </div>
+                <div style={{ height: "calc(100% - 80px)", overflow: "hidden" }}>
+                  <UpcomingEvents />
+                </div>
               </div>
 
+              {/* General Forum Section */}
               <div style={{ 
                 height: "340px",
                 marginTop: "20px",
                 background: "rgba(255, 255, 255, 0.95)",
-                borderRadius: "16px",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-                border: "1px solid rgba(255, 255, 255, 0.2)",
-                backdropFilter: "blur(10px)",
+                borderRadius: "20px",
+                boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
+                backdropFilter: "blur(15px)",
                 overflow: "hidden",
-                flexShrink: 0
+                flexShrink: 0,
+                position: "relative"
               }}>
-                <HomeGroupForum />
+                <div style={{
+                  background: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
+                  padding: "16px 20px",
+                  color: "#2d3748",
+                  borderRadius: "20px 20px 0 0",
+                  marginBottom: "12px"
+                }}>
+                  <h3 style={{
+                    margin: "0",
+                    fontSize: "18px",
+                    fontWeight: "700",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    General Forum
+                  </h3>
+                  <p style={{
+                    margin: "4px 0 0 0",
+                    fontSize: "13px",
+                    opacity: 0.8,
+                    fontWeight: "400"
+                  }}>
+                    Community discussions and updates
+                  </p>
+                </div>
+                <div style={{ height: "calc(100% - 80px)", overflow: "hidden" }}>
+                  <HomeGroupForum />
+                </div>
               </div>
             </>
           )}
