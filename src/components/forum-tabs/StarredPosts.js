@@ -22,7 +22,7 @@ const formatTimestamp = (timestamp) => {
 export default function StarredPosts({ onPostClick, forumId, currentUser }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [starredPosts, setStarredPosts] = useState([]);
-  const currentUserId = currentUser?.id; // Use currentUser.id
+  const currentUserId = currentUser?.uid; // Use currentUser.uid (Firebase Auth)
 
   useEffect(() => {
     if (!forumId || !currentUserId) return;

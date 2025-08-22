@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import ForumList from "../components/ForumList";
 import CreateForumModal from "../components/forum-component/CreateForumModal";
+import JoinForumModal from "../components/forum-component/JoinForumModal";
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "../components/profile-component/constants";
 import { db } from "../firebase"; // Import db
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, serverTimestamp, where, getDoc } from "firebase/firestore"; // Import Firestore functions and query
@@ -10,10 +11,10 @@ import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
 export default function ForumListPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [editingForum, setEditingForum] = useState(null);
   const [forums, setForums] = useState([]); // Will be populated from Firebase
   const [projects, setProjects] = useState([]); // New state for projects
-  const [joinForumId, setJoinForumId] = useState(''); // New state for join forum ID
   const [joinForumError, setJoinForumError] = useState(null); // New state for join forum error
   const navigate = useNavigate();
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
@@ -111,15 +112,15 @@ export default function ForumListPage() {
     }
   };
 
-  const handleJoinForum = async () => {
-    if (!joinForumId.trim() || !currentUser) {
+  const handleJoinForum = async (forumId) => {
+    if (!forumId || !currentUser) {
       setJoinForumError('Please enter a valid Forum ID and ensure you are logged in.');
       return;
     }
 
     setJoinForumError(null);
     try {
-      const forumRef = doc(db, 'forums', joinForumId);
+      const forumRef = doc(db, 'forums', forumId);
       const forumSnap = await getDoc(forumRef);
 
       if (forumSnap.exists()) {
@@ -135,8 +136,8 @@ export default function ForumListPage() {
           members: [...currentMembers, currentUser.uid]
         });
         alert('Successfully joined forum!');
-        setJoinForumId('');
-        navigate(`/forum/${joinForumId}`); // Navigate to the joined forum
+        setShowJoinModal(false);
+        navigate(`/forum/${forumId}`); // Navigate to the joined forum
       } else {
         setJoinForumError('Forum not found.');
       }
@@ -150,80 +151,92 @@ export default function ForumListPage() {
     <div style={{ fontFamily: "Arial, sans-serif", minHeight: "100vh", backgroundColor: COLORS.background }}>
       <TopBar />
       
-      <div style={{ padding: "30px" }}>
+      <div style={{ padding: "30px", maxWidth: "1200px", margin: "0 auto" }}>
+        {/* Enhanced Header Section */}
         <div style={{ 
           display: "flex", 
           justifyContent: "space-between", 
           alignItems: "center", 
-          marginBottom: "30px" 
+          marginBottom: "30px",
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          padding: "30px",
+          borderRadius: "16px",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.1)"
         }}>
-          <h1 style={{ 
-            margin: 0, 
-            color: COLORS.dark, 
-            fontSize: "28px", 
-            fontWeight: "700" 
-          }}>
-            Community
-          </h1>
+          <div>
+            <h1 style={{ 
+              margin: "0 0 8px 0", 
+              color: "white", 
+              fontSize: "32px", 
+              fontWeight: "700" 
+            }}>
+              Discussion Forums
+            </h1>
+            <p style={{
+              margin: 0,
+              color: "rgba(255,255,255,0.9)",
+              fontSize: "16px"
+            }}>
+              Connect and collaborate with your team • {forums.length} forums available
+            </p>
+          </div>
           {currentUser && (
-            <button
-              onClick={() => setShowCreateModal(true)}
-              style={{
-                ...BUTTON_STYLES.primary,
-                padding: "12px 24px",
-                fontSize: "16px",
-                fontWeight: "600",
-                borderRadius: "8px",
-                boxShadow: "0 4px 12px rgba(52, 152, 219, 0.3)",
-                transition: "all 0.3s ease"
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.transform = "translateY(-2px)";
-                e.target.style.boxShadow = "0 6px 16px rgba(52, 152, 219, 0.4)";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = "translateY(0)";
-                e.target.style.boxShadow = "0 4px 12px rgba(52, 152, 219, 0.3)";
-              }}
-            >
-              Create Forum
-            </button>
+            <div style={{ display: "flex", gap: "12px" }}>
+              <button
+                onClick={() => setShowJoinModal(true)}
+                style={{
+                  ...BUTTON_STYLES.secondary,
+                  background: "rgba(255,255,255,0.15)",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255,255,255,0.3)",
+                  padding: "12px 20px",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  borderRadius: "12px",
+                  color: "white",
+                  transition: "all 0.3s ease"
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = "rgba(255,255,255,0.25)";
+                  e.target.style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = "rgba(255,255,255,0.15)";
+                  e.target.style.transform = "translateY(0)";
+                }}
+              >
+                Join Forum
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                style={{
+                  ...BUTTON_STYLES.primary,
+                  background: "rgba(255,255,255,0.2)",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255,255,255,0.3)",
+                  padding: "12px 24px",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  borderRadius: "12px",
+                  color: "white",
+                  transition: "all 0.3s ease"
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = "rgba(255,255,255,0.3)";
+                  e.target.style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = "rgba(255,255,255,0.2)";
+                  e.target.style.transform = "translateY(0)";
+                }}
+              >
+                Create Forum
+              </button>
+            </div>
           )}
         </div>
 
-        {/* Join Forum Section */}
-        {currentUser && (
-          <div style={{ marginBottom: "30px", display: "flex", gap: "10px", alignItems: "center" }}>
-            <input
-              type="text"
-              placeholder="Enter Forum ID to join"
-              value={joinForumId}
-              onChange={(e) => setJoinForumId(e.target.value)}
-              style={{
-                ...INPUT_STYLES.base,
-                flex: 1,
-                maxWidth: "300px",
-                padding: "12px 16px",
-                fontSize: "16px",
-                borderRadius: "8px",
-                border: `2px solid ${COLORS.border}`,
-              }}
-            />
-            <button 
-              onClick={handleJoinForum}
-              style={{
-                ...BUTTON_STYLES.secondary,
-                padding: "12px 24px",
-                fontSize: "16px",
-                fontWeight: "600",
-                borderRadius: "8px",
-              }}
-            >
-              Join Forum
-            </button>
-            {joinForumError && <p style={{ color: COLORS.danger, marginLeft: "10px" }}>{joinForumError}</p>}
-          </div>
-        )}
+        
         
         {/* Full-width Forum List */}
         {forums.length === 0 && currentUser ? (
@@ -265,6 +278,17 @@ export default function ForumListPage() {
         onConfirm={editingForum ? handleUpdateForum : handleCreateForum}
         editingForum={editingForum}
         projects={projects} // Pass projects to the modal
+      />
+
+      {/* Join Forum Modal */}
+      <JoinForumModal
+        isOpen={showJoinModal}
+        onClose={() => {
+          setShowJoinModal(false);
+          setJoinForumError(null);
+        }}
+        onJoin={handleJoinForum}
+        joinForumError={joinForumError}
       />
     </div>
   );

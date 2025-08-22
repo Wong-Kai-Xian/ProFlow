@@ -5,25 +5,79 @@ import { db } from "../../firebase"; // Import db
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import ShareInviteLinkModal from './ShareInviteLinkModal';
+import { getAcceptedTeamMembers } from '../../services/teamService';
 
-export default function InviteMemberModal({ isOpen, onClose, onInvite }) {
+export default function InviteMemberModal({ isOpen, onClose, onInvite, currentUser }) {
+  const [activeTab, setActiveTab] = useState('invite'); // 'invite' or 'add'
   const [email, setEmail] = useState('');
+  const [selectedMember, setSelectedMember] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
   const [signupLink, setSignupLink] = useState('');
   const [foundUserEmail, setFoundUserEmail] = useState(''); // To store the email of the found user if invited
   const [isLoading, setIsLoading] = useState(false); // Add loading state
+  const [acceptedMembers, setAcceptedMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
   const auth = getAuth();
+
+  // Fetch accepted members when modal opens
+  useEffect(() => {
+    const fetchAcceptedMembers = async () => {
+      if (!isOpen || !currentUser) return;
+      
+      setLoadingMembers(true);
+      try {
+        const members = await getAcceptedTeamMembers(currentUser);
+        setAcceptedMembers(members);
+      } catch (error) {
+        console.error("Error fetching accepted team members:", error);
+        setAcceptedMembers([]);
+      } finally {
+        setLoadingMembers(false);
+      }
+    };
+
+    fetchAcceptedMembers();
+  }, [isOpen, currentUser]);
 
   // Reset states when modal closes
   useEffect(() => {
     if (!isOpen) {
+      setActiveTab('invite');
       setEmail('');
+      setSelectedMember('');
       setIsLoading(false);
       setShowShareModal(false);
       setSignupLink('');
       setFoundUserEmail('');
     }
   }, [isOpen]);
+
+  const handleAddExistingMember = async (e) => {
+    e.preventDefault();
+    
+    if (isLoading || !selectedMember) return;
+    
+    setIsLoading(true);
+    try {
+      const member = acceptedMembers.find(m => m.id === selectedMember);
+      if (member) {
+        onInvite(member.email, true, null, { 
+          id: 'existing-' + member.id, 
+          fromUserId: auth.currentUser.uid, 
+          toUserId: member.id, 
+          toUserEmail: member.email, 
+          status: "accepted", 
+          timestamp: new Date() 
+        });
+        onClose();
+      }
+    } catch (error) {
+      console.error("Error adding member: ", error);
+      alert("Error adding member. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -83,34 +137,123 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite }) {
   return (
     <div style={modalOverlayStyle}>
       <div style={modalContentStyle}>
-        <h2 style={{ color: COLORS.text, marginBottom: '20px' }}>Invite Team Member</h2>
-        <form onSubmit={handleSubmit}>
-          <input
-            type="email"
-            placeholder="Enter user's email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ ...INPUT_STYLES.base, marginBottom: '15px' }}
-            required
-          />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button type="button" onClick={onClose} style={BUTTON_STYLES.secondary}>
-              Cancel
-            </button>
-            <button 
-              type="submit" 
-              disabled={isLoading}
-              style={{
-                ...BUTTON_STYLES.primary,
-                opacity: isLoading ? 0.6 : 1,
-                cursor: isLoading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {isLoading ? 'Sending...' : 'Invite'}
-            </button>
-          </div>
-        </form>
-        {/* {message && <p style={{ marginTop: '20px', color: COLORS.text }}>{message}</p>} */}
+        <h2 style={{ color: COLORS.text, marginBottom: '20px' }}>Team Member Management</h2>
+        
+        {/* Tabs */}
+        <div style={{ display: 'flex', borderBottom: '1px solid #e0e0e0', marginBottom: '20px' }}>
+          <button
+            onClick={() => setActiveTab('invite')}
+            style={{
+              ...BUTTON_STYLES.secondary,
+              borderRadius: '0',
+              border: 'none',
+              borderBottom: activeTab === 'invite' ? '2px solid ' + COLORS.primary : '2px solid transparent',
+              backgroundColor: 'transparent',
+              color: activeTab === 'invite' ? COLORS.primary : COLORS.lightText,
+              padding: '10px 20px',
+              fontWeight: activeTab === 'invite' ? '600' : '400'
+            }}
+          >
+            Invite New Member
+          </button>
+          <button
+            onClick={() => setActiveTab('add')}
+            style={{
+              ...BUTTON_STYLES.secondary,
+              borderRadius: '0',
+              border: 'none',
+              borderBottom: activeTab === 'add' ? '2px solid ' + COLORS.primary : '2px solid transparent',
+              backgroundColor: 'transparent',
+              color: activeTab === 'add' ? COLORS.primary : COLORS.lightText,
+              padding: '10px 20px',
+              fontWeight: activeTab === 'add' ? '600' : '400'
+            }}
+          >
+            Add Existing Member
+          </button>
+        </div>
+
+        {/* Invite New Member Tab */}
+        {activeTab === 'invite' && (
+          <form onSubmit={handleSubmit}>
+            <p style={{ color: COLORS.lightText, marginBottom: '15px', fontSize: '14px' }}>
+              Send an invitation to a new user via email, WhatsApp, or other platforms.
+            </p>
+            <input
+              type="email"
+              placeholder="Enter user's email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{ ...INPUT_STYLES.base, marginBottom: '15px' }}
+              required
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button type="button" onClick={onClose} style={BUTTON_STYLES.secondary}>
+                Cancel
+              </button>
+              <button 
+                type="submit" 
+                disabled={isLoading}
+                style={{
+                  ...BUTTON_STYLES.primary,
+                  opacity: isLoading ? 0.6 : 1,
+                  cursor: isLoading ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isLoading ? 'Sending...' : 'Send Invitation'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Add Existing Member Tab */}
+        {activeTab === 'add' && (
+          <form onSubmit={handleAddExistingMember}>
+            <p style={{ color: COLORS.lightText, marginBottom: '15px', fontSize: '14px' }}>
+              Add someone from your accepted team members list.
+            </p>
+            {loadingMembers ? (
+              <p style={{ color: COLORS.lightText, fontSize: '14px' }}>Loading team members...</p>
+            ) : (
+              <select
+                value={selectedMember}
+                onChange={(e) => setSelectedMember(e.target.value)}
+                style={{ ...INPUT_STYLES.base, marginBottom: '15px' }}
+                required
+              >
+                <option value="">-- Select from accepted team --</option>
+                {acceptedMembers.map(member => (
+                  <option key={member.id} value={member.id}>
+                    {member.name} ({member.email})
+                  </option>
+                ))}
+              </select>
+            )}
+            
+            {acceptedMembers.length === 0 && !loadingMembers && (
+              <p style={{ color: COLORS.lightText, fontSize: '12px', marginBottom: '15px' }}>
+                No accepted team members available. Send invitations first.
+              </p>
+            )}
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button type="button" onClick={onClose} style={BUTTON_STYLES.secondary}>
+                Cancel
+              </button>
+              <button 
+                type="submit" 
+                disabled={isLoading || !selectedMember}
+                style={{
+                  ...BUTTON_STYLES.primary,
+                  opacity: (isLoading || !selectedMember) ? 0.6 : 1,
+                  cursor: (isLoading || !selectedMember) ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isLoading ? 'Adding...' : 'Add Member'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
       <ShareInviteLinkModal 
         isOpen={showShareModal} 
@@ -142,9 +285,9 @@ const modalOverlayStyle = {
 const modalContentStyle = {
   backgroundColor: 'white',
   padding: '30px',
-  borderRadius: '8px',
-  width: '400px',
+  borderRadius: '12px',
+  width: '500px',
   maxWidth: '90%',
-  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
-  textAlign: 'center',
+  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.2)',
+  textAlign: 'left',
 };

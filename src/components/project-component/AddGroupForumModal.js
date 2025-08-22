@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
+import { getAcceptedTeamMembersForProject } from '../../services/teamService';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, projects, defaultProjectId }) {
   const [newForumName, setNewForumName] = useState('');
@@ -7,17 +9,43 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
   const [forumMembers, setForumMembers] = useState([]);
   const [newMember, setNewMember] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(defaultProjectId || '');
+  const [acceptedTeamMembers, setAcceptedTeamMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const { currentUser } = useAuth();
 
   React.useEffect(() => {
     setSelectedProjectId(defaultProjectId || '');
   }, [defaultProjectId]);
 
+  // Fetch accepted team members when modal opens or project changes
+  useEffect(() => {
+    const fetchAcceptedMembers = async () => {
+      if (!isOpen || !currentUser) return;
+      
+      setLoadingMembers(true);
+      try {
+        const members = await getAcceptedTeamMembersForProject(currentUser, selectedProjectId || null);
+        setAcceptedTeamMembers(members);
+      } catch (error) {
+        console.error("Error fetching accepted team members:", error);
+        setAcceptedTeamMembers([]);
+      } finally {
+        setLoadingMembers(false);
+      }
+    };
+
+    fetchAcceptedMembers();
+  }, [isOpen, currentUser, selectedProjectId]);
+
   if (!isOpen) return null;
 
   const handleAddMember = () => {
-    if (newMember.trim() && !forumMembers.includes(newMember.trim())) {
-      setForumMembers([...forumMembers, newMember.trim()]);
-      setNewMember('');
+    if (newMember && !forumMembers.includes(newMember)) {
+      const selectedMember = acceptedTeamMembers.find(member => member.id === newMember);
+      if (selectedMember) {
+        setForumMembers([...forumMembers, selectedMember.id]);
+        setNewMember('');
+      }
     }
   };
 
@@ -167,35 +195,48 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
               Forum Members
             </label>
             
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-              <input
-                type="text"
-                value={newMember}
-                onChange={(e) => setNewMember(e.target.value)}
-                placeholder="Add member"
-                style={{
-                  ...INPUT_STYLES.base,
-                  flex: 1,
-                  fontSize: '14px'
-                }}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddMember();
+            {loadingMembers ? (
+              <p style={{ color: COLORS.lightText, fontSize: '12px' }}>Loading accepted team members...</p>
+            ) : (
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                <select
+                  value={newMember}
+                  onChange={(e) => setNewMember(e.target.value)}
+                  style={{
+                    ...INPUT_STYLES.base,
+                    flex: 1,
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="">-- Select from accepted team --</option>
+                  {acceptedTeamMembers
+                    .filter(member => !forumMembers.includes(member.id))
+                    .map(member => (
+                      <option key={member.id} value={member.id}>
+                        {member.name} ({member.email})
+                      </option>
+                    ))
                   }
-                }}
-              />
-              <button
-                onClick={handleAddMember}
-                style={{
-                  ...BUTTON_STYLES.secondary,
-                  padding: '6px 12px',
-                  fontSize: '12px'
-                }}
-              >
-                Add
-              </button>
-            </div>
+                </select>
+                <button
+                  onClick={handleAddMember}
+                  style={{
+                    ...BUTTON_STYLES.secondary,
+                    padding: '6px 12px',
+                    fontSize: '12px'
+                  }}
+                  disabled={!newMember}
+                >
+                  Add
+                </button>
+              </div>
+            )}
+            
+            {acceptedTeamMembers.length === 0 && !loadingMembers && (
+              <p style={{ color: COLORS.lightText, fontSize: '12px' }}>
+                No accepted team members available. Send invitations from the Team page first.
+              </p>
+            )}
 
             {/* Display Added Members */}
             {forumMembers.length > 0 && (
@@ -205,19 +246,21 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
                 gap: '6px',
                 marginTop: '8px'
               }}>
-                {forumMembers.map((member, index) => (
-                  <div key={index} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    backgroundColor: COLORS.light,
-                    padding: '4px 8px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    color: COLORS.dark
-                  }}>
-                    <span>{member}</span>
-                    <button
-                      onClick={() => handleRemoveMember(member)}
+                {forumMembers.map((memberId, index) => {
+                  const memberData = acceptedTeamMembers.find(m => m.id === memberId);
+                  return (
+                    <div key={index} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      backgroundColor: COLORS.light,
+                      padding: '4px 8px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      color: COLORS.dark
+                    }}>
+                      <span>{memberData ? memberData.name : 'Unknown Member'}</span>
+                      <button
+                        onClick={() => handleRemoveMember(memberId)}
                       style={{
                         background: 'none',
                         border: 'none',
@@ -232,7 +275,8 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
                       ×
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

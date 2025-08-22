@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import TopBar from "../components/TopBar";
 import CreateProjectModal from "../components/project-component/CreateProjectModal";
+import JoinProjectModal from "../components/project-component/JoinProjectModal";
 import { useNavigate } from "react-router-dom";
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "../components/profile-component/constants";
 import { db } from "../firebase";
@@ -75,8 +76,8 @@ export default function ProjectList() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
-  const [joinProjectId, setJoinProjectId] = useState(''); // New state for join project ID
   const [joinProjectError, setJoinProjectError] = useState(null); // New state for join project error
   const [showEditProjectModal, setShowEditProjectModal] = useState(false); // State for edit modal
   const [projectToEdit, setProjectToEdit] = useState(null); // State to hold project being edited
@@ -140,15 +141,15 @@ export default function ProjectList() {
     }
   };
 
-  const handleJoinProject = async () => {
-    if (!joinProjectId.trim() || !currentUser) {
+  const handleJoinProject = async (projectId) => {
+    if (!projectId || !currentUser) {
       setJoinProjectError('Please enter a valid Project ID and ensure you are logged in.');
       return;
     }
 
     setJoinProjectError(null);
     try {
-      const projectRef = doc(db, 'projects', joinProjectId);
+      const projectRef = doc(db, 'projects', projectId);
       const projectSnap = await getDoc(projectRef);
 
       if (projectSnap.exists()) {
@@ -170,8 +171,8 @@ export default function ProjectList() {
           team: [...currentTeam, currentUser.uid]
         });
         alert('Successfully joined project!');
-        setJoinProjectId('');
-        navigate(`/project/${joinProjectId}`); // Navigate to the joined project
+        setShowJoinModal(false);
+        navigate(`/project/${projectId}`); // Navigate to the joined project
       } else {
         setJoinProjectError('Project not found.');
       }
@@ -258,64 +259,56 @@ export default function ProjectList() {
             Projects
           </h1>
           {currentUser && (
-            <button
-              onClick={() => setShowCreateModal(true)}
-              style={{
-                ...BUTTON_STYLES.primary,
-                padding: "12px 24px",
-                fontSize: "16px",
-                fontWeight: "600",
-                borderRadius: "8px",
-                boxShadow: "0 4px 12px rgba(52, 152, 219, 0.3)",
-                transition: "all 0.3s ease"
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.transform = "translateY(-2px)";
-                e.target.style.boxShadow = "0 6px 16px rgba(52, 152, 219, 0.4)";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = "translateY(0)";
-                e.target.style.boxShadow = "0 4px 12px rgba(52, 152, 219, 0.3)";
-              }}
-            >
-              Create Project
-            </button>
+            <div style={{ display: "flex", gap: "12px" }}>
+              <button
+                onClick={() => setShowJoinModal(true)}
+                style={{
+                  ...BUTTON_STYLES.secondary,
+                  padding: "12px 20px",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  borderRadius: "8px",
+                  boxShadow: "0 4px 12px rgba(108, 117, 125, 0.3)",
+                  transition: "all 0.3s ease"
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = "translateY(-2px)";
+                  e.target.style.boxShadow = "0 6px 16px rgba(108, 117, 125, 0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = "translateY(0)";
+                  e.target.style.boxShadow = "0 4px 12px rgba(108, 117, 125, 0.3)";
+                }}
+              >
+                Join Project
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                style={{
+                  ...BUTTON_STYLES.primary,
+                  padding: "12px 24px",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  borderRadius: "8px",
+                  boxShadow: "0 4px 12px rgba(52, 152, 219, 0.3)",
+                  transition: "all 0.3s ease"
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = "translateY(-2px)";
+                  e.target.style.boxShadow = "0 6px 16px rgba(52, 152, 219, 0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = "translateY(0)";
+                  e.target.style.boxShadow = "0 4px 12px rgba(52, 152, 219, 0.3)";
+                }}
+              >
+                Create Project
+              </button>
+            </div>
           )}
         </div>
 
-        {/* Join Project Section */}
-        {currentUser && (
-          <div style={{ marginBottom: "30px", display: "flex", gap: "10px", alignItems: "center" }}>
-            <input
-              type="text"
-              placeholder="Enter Project ID to join"
-              value={joinProjectId}
-              onChange={(e) => setJoinProjectId(e.target.value)}
-              style={{
-                ...INPUT_STYLES.base,
-                flex: 1,
-                maxWidth: "300px",
-                padding: "12px 16px",
-                fontSize: "16px",
-                borderRadius: "8px",
-                border: `2px solid ${COLORS.border}`,
-              }}
-            />
-            <button 
-              onClick={handleJoinProject}
-              style={{
-                ...BUTTON_STYLES.secondary,
-                padding: "12px 24px",
-                fontSize: "16px",
-                fontWeight: "600",
-                borderRadius: "8px",
-              }}
-            >
-              Join Project
-            </button>
-            {joinProjectError && <p style={{ color: COLORS.danger, marginLeft: "10px" }}>{joinProjectError}</p>}
-          </div>
-        )}
+
 
         {/* Search Bar */}
         <div style={{ marginBottom: "30px" }}>
@@ -660,6 +653,17 @@ export default function ProjectList() {
         }}
         onConfirm={projectToEdit ? handleUpdateProjectFromModal : handleCreateProject}
         editingProject={projectToEdit} // Pass the project to edit
+      />
+
+      {/* Join Project Modal */}
+      <JoinProjectModal
+        isOpen={showJoinModal}
+        onClose={() => {
+          setShowJoinModal(false);
+          setJoinProjectError(null);
+        }}
+        onJoin={handleJoinProject}
+        joinProjectError={joinProjectError}
       />
       {/* Removed EditProjectDetailsModal as CreateProjectModal is now used for both */}
     </div>

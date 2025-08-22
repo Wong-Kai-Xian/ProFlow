@@ -36,33 +36,60 @@ export default function Home() {
     <div style={{
       fontFamily: "Arial, sans-serif",
       position: "relative",
-      background: COLORS.background,
+      background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
       minHeight: "100vh",
-      width: "100%", /* Changed to 100% */
+      width: "100%",
       display: "flex",
       flexDirection: "column",
       margin: "0",
       padding: "0",
       overflowX: "hidden",
-      boxSizing: "border-box" /* Added boxSizing */
-      // Removed overflowY: "auto" /* Enabled vertical scrolling for the main page */
+      boxSizing: "border-box"
     }}>
       <TopBar />
+
+      {/* Welcome Header */}
+      <div style={{
+        padding: "30px",
+        textAlign: "center",
+        background: "rgba(255, 255, 255, 0.1)",
+        backdropFilter: "blur(10px)",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.2)"
+      }}>
+        <h1 style={{
+          margin: "0 0 8px 0",
+          fontSize: "32px",
+          fontWeight: "700",
+          color: "#2d3748",
+          textShadow: "0 2px 4px rgba(0,0,0,0.1)"
+        }}>
+          Welcome to ProFlow
+        </h1>
+        <p style={{
+          margin: 0,
+          fontSize: "16px",
+          color: "#4a5568",
+          opacity: 0.8
+        }}>
+          Manage your projects, team, and workflows in one place
+        </p>
+      </div>
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `${leftCollapsed ? 40 : '1fr'} 4fr ${rightCollapsed ? 40 : '1fr'}`, /* Adjusted column widths */
+          gridTemplateColumns: `${leftCollapsed ? 40 : '1fr'} 4fr ${rightCollapsed ? 40 : '1fr'}`,
           gridTemplateRows: "1fr",
-          gap: "10px",
-          padding: "10px",
+          gap: "20px",
+          padding: "20px",
           transition: "grid-template-columns 0.3s ease",
           flex: 1,
-          minHeight: "calc(100vh - 100px)",
+          minHeight: "calc(100vh - 200px)",
           overflowX: "hidden",
-          width: "100%", /* Changed to 100% */
-          maxWidth: "100%", /* Changed to 100% */
-          boxSizing: "border-box" /* Added boxSizing */
+          width: "100%",
+          maxWidth: "1400px",
+          margin: "0 auto",
+          boxSizing: "border-box"
         }}>
         {/* Left Panel */}
         <div
@@ -81,14 +108,26 @@ export default function Home() {
             <>
               <div style={{ 
                 height: "350px",
-                marginBottom: "45px",
-                flexShrink: 0 /* Prevent shrinking */
+                marginBottom: "20px",
+                background: "rgba(255, 255, 255, 0.95)",
+                borderRadius: "16px",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                backdropFilter: "blur(10px)",
+                overflow: "hidden",
+                flexShrink: 0
               }}>
                 <ProjectsTab />
               </div>
               <div style={{ 
                 height: "340px",
-                flexShrink: 0 /* Prevent shrinking */
+                background: "rgba(255, 255, 255, 0.95)",
+                borderRadius: "16px",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                backdropFilter: "blur(10px)",
+                overflow: "hidden",
+                flexShrink: 0
               }}>
                 <Contacts onSelectCustomer={goToCustomerProfile} />
               </div>
@@ -108,9 +147,10 @@ export default function Home() {
               transform: "translateY(-50%)",
               width: 20,
               height: 80,
-              background: leftButtonHovered ? "rgba(0,0,0,0.1)" : "rgba(0,0,0,0.05)",
-              color: leftButtonHovered ? COLORS.text : COLORS.lightText,
-              border: `1px solid ${COLORS.lightBorder}`,
+              background: leftButtonHovered ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.7)",
+              color: leftButtonHovered ? "#2d3748" : "#4a5568",
+              border: "1px solid rgba(255,255,255,0.3)",
+              backdropFilter: "blur(10px)",
               borderRadius: LAYOUT.smallBorderRadius + " 0 0 " + LAYOUT.smallBorderRadius,
               padding: 0,
               fontSize: "18px",
@@ -133,8 +173,13 @@ export default function Home() {
           gridRow: 1,
           height: "800px",
           maxWidth: "100%",
+          background: "rgba(255, 255, 255, 0.95)",
+          borderRadius: "20px",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.15)",
+          border: "1px solid rgba(255, 255, 255, 0.2)",
+          backdropFilter: "blur(10px)",
           overflow: "hidden",
-          boxSizing: "border-box" /* Added boxSizing */
+          boxSizing: "border-box"
         }}>
           <Dashboard />
         </div>
@@ -158,15 +203,27 @@ export default function Home() {
               <div style={{ 
                 height: "320px",
                 marginBottom: "20px",
-                flexShrink: 0 /* Prevent shrinking */
+                background: "rgba(255, 255, 255, 0.95)",
+                borderRadius: "16px",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                backdropFilter: "blur(10px)",
+                overflow: "hidden",
+                flexShrink: 0
               }}>
                 <UpcomingEvents />
               </div>
 
               <div style={{ 
                 height: "340px",
-                marginTop: "65px",
-                flexShrink: 0 /* Prevent shrinking */
+                marginTop: "20px",
+                background: "rgba(255, 255, 255, 0.95)",
+                borderRadius: "16px",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                backdropFilter: "blur(10px)",
+                overflow: "hidden",
+                flexShrink: 0
               }}>
                 <HomeGroupForum />
               </div>
@@ -186,9 +243,10 @@ export default function Home() {
               transform: "translateY(-50%)",
               width: 20,
               height: 80,
-              background: rightButtonHovered ? "rgba(0,0,0,0.1)" : "rgba(0,0,0,0.05)",
-              color: rightButtonHovered ? COLORS.text : COLORS.lightText,
-              border: `1px solid ${COLORS.lightBorder}`,
+              background: rightButtonHovered ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.7)",
+              color: rightButtonHovered ? "#2d3748" : "#4a5568",
+              border: "1px solid rgba(255,255,255,0.3)",
+              backdropFilter: "blur(10px)",
               borderRadius: "0 " + LAYOUT.smallBorderRadius + " " + LAYOUT.smallBorderRadius + " 0",
               padding: 0,
               fontSize: "18px",

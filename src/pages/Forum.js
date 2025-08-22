@@ -299,6 +299,7 @@ export default function Forum() {
         onRemoveMember={handleRemoveMember} // This will be ignored by InviteMemberModal, but kept for consistency if needed later
         forumId={forumId}
         forumName={forumData?.name}
+        currentUser={currentUser}
       />
     </div>
   );

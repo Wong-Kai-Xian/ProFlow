@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'; // Import useAuth
 import { Link } from 'react-router-dom'; // Import Link
 import { db } from '../../firebase'; // Import db
 import { collection, query, where, getDocs } from 'firebase/firestore'; // Import firestore functions
+import { getAcceptedTeamMembers } from '../../services/teamService';
 
 export default function CreateProjectModal({ isOpen, onClose, onConfirm, editingProject, customerProfile, companyProfile }) {
   const [projectName, setProjectName] = useState('');
@@ -14,8 +15,30 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
   const [projectDescription, setProjectDescription] = useState(''); // New state for project description
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
   const [allowJoinById, setAllowJoinById] = useState(true); // New state for "Allow Join by ID"
+  const [acceptedTeamMembers, setAcceptedTeamMembers] = useState([]); // Accepted team members
+  const [loadingAcceptedMembers, setLoadingAcceptedMembers] = useState(false);
 
   const projectStages = ['Proposal', 'Negotiation', 'Complete'];
+
+  // Fetch accepted team members when modal opens
+  React.useEffect(() => {
+    const fetchAcceptedMembers = async () => {
+      if (!isOpen || !currentUser) return;
+      
+      setLoadingAcceptedMembers(true);
+      try {
+        const members = await getAcceptedTeamMembers(currentUser);
+        setAcceptedTeamMembers(members);
+      } catch (error) {
+        console.error("Error fetching accepted team members:", error);
+        setAcceptedTeamMembers([]);
+      } finally {
+        setLoadingAcceptedMembers(false);
+      }
+    };
+
+    fetchAcceptedMembers();
+  }, [isOpen, currentUser]);
 
   // Populate form when editing
   React.useEffect(() => {
@@ -68,9 +91,12 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
   }, [editingProject, currentUser, teamMembersEmails, customerProfile, companyProfile]); // Add currentUser and teamMembersEmails to dependency array
 
   const handleAddMember = () => {
-    if (newMember.trim() && !teamMembersEmails.includes(newMember.trim())) {
-      setTeamMembersEmails([...teamMembersEmails, newMember.trim()]);
-      setNewMember('');
+    if (newMember && !teamMembersEmails.includes(newMember)) {
+      const selectedMember = acceptedTeamMembers.find(member => member.id === newMember);
+      if (selectedMember) {
+        setTeamMembersEmails([...teamMembersEmails, selectedMember.email]);
+        setNewMember('');
+      }
     }
   };
 
@@ -223,35 +249,48 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
             Team Members
           </label>
           
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-            <input
-              type="text"
-              value={newMember}
-              onChange={(e) => setNewMember(e.target.value)}
-              placeholder="Add team member"
-              style={{
-                ...INPUT_STYLES.base,
-                flex: 1,
-                fontSize: '14px'
-              }}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddMember();
+          {loadingAcceptedMembers ? (
+            <p style={{ color: COLORS.lightText, fontSize: '14px' }}>Loading accepted team members...</p>
+          ) : (
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <select
+                value={newMember}
+                onChange={(e) => setNewMember(e.target.value)}
+                style={{
+                  ...INPUT_STYLES.base,
+                  flex: 1,
+                  fontSize: '14px'
+                }}
+              >
+                <option value="">-- Select from accepted team --</option>
+                {acceptedTeamMembers
+                  .filter(member => !teamMembersEmails.includes(member.email))
+                  .map(member => (
+                    <option key={member.id} value={member.id}>
+                      {member.name} ({member.email})
+                    </option>
+                  ))
                 }
-              }}
-            />
-            <button
-              onClick={handleAddMember}
-              style={{
-                ...BUTTON_STYLES.secondary,
-                padding: '8px 16px',
-                fontSize: '14px'
-              }}
-            >
-              Add
-            </button>
-          </div>
+              </select>
+              <button
+                onClick={handleAddMember}
+                style={{
+                  ...BUTTON_STYLES.secondary,
+                  padding: '8px 16px',
+                  fontSize: '14px'
+                }}
+                disabled={!newMember}
+              >
+                Add
+              </button>
+            </div>
+          )}
+          
+          {acceptedTeamMembers.length === 0 && !loadingAcceptedMembers && (
+            <p style={{ color: COLORS.lightText, fontSize: '12px' }}>
+              No accepted team members available. Send invitations from the Team page first.
+            </p>
+          )}
 
           {/* Display Added Members */}
           {teamMembers.length > 0 && (

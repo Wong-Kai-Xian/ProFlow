@@ -170,21 +170,24 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                 onClick={() => handleForumClick(forum)}
                 style={{
                   position: "relative",
-                  backgroundColor: COLORS.white,
-                  borderRadius: "12px",
-                  padding: "24px",
-                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-                  border: `1px solid ${COLORS.border}`,
+                  backgroundColor: "white",
+                  borderRadius: "16px",
+                  padding: "0",
+                  boxShadow: "0 8px 30px rgba(0, 0, 0, 0.08)",
+                  border: "1px solid #f0f2f5",
                   cursor: "pointer",
-                  transition: "all 0.3s ease"
+                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                  overflow: "hidden"
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-4px)";
-                  e.currentTarget.style.boxShadow = "0 8px 25px rgba(0, 0, 0, 0.12)";
+                  e.currentTarget.style.transform = "translateY(-8px)";
+                  e.currentTarget.style.boxShadow = "0 20px 40px rgba(0, 0, 0, 0.15)";
+                  e.currentTarget.style.borderColor = "#e3f2fd";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.08)";
+                  e.currentTarget.style.boxShadow = "0 8px 30px rgba(0, 0, 0, 0.08)";
+                  e.currentTarget.style.borderColor = "#f0f2f5";
                 }}
               >
                 {/* Edit Button */}
@@ -281,42 +284,111 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                   </div>
                 )}
 
-                {/* Forum Icon */}
+                {/* Card Header with Gradient */}
                 <div style={{
-                  width: "80px",
-                  height: "80px",
-                  borderRadius: "12px",
-                  backgroundColor: bgColor,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "32px",
-                  fontWeight: "700",
-                  color: COLORS.white,
-                  marginBottom: "20px"
+                  background: `linear-gradient(135deg, ${bgColor}15, ${bgColor}25)`,
+                  padding: "24px 24px 20px 24px",
+                  position: "relative"
                 }}>
-                  {getInitials(forum.name)}
+                  {/* Forum Badge */}
+                  <div style={{
+                    display: "inline-block",
+                    padding: "8px 16px",
+                    borderRadius: "20px",
+                    backgroundColor: bgColor,
+                    color: "white",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    marginBottom: "16px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    boxShadow: `0 4px 12px ${bgColor}40`
+                  }}>
+                    {forum.projectId ? 'Project Forum' : 'General Forum'}
+                  </div>
+
+                  {/* Forum Content */}
+                  <h3 style={{
+                    margin: "0 0 8px 0",
+                    color: COLORS.dark,
+                    fontSize: "20px",
+                    fontWeight: "700",
+                    lineHeight: "1.3"
+                  }}>
+                    {forum.name}
+                  </h3>
                 </div>
 
-                {/* Forum Content */}
-                <h3 style={{
-                  margin: "0 0 8px 0",
-                  color: COLORS.dark,
-                  fontSize: "20px",
-                  fontWeight: "700",
-                  lineHeight: "1.3"
-                }}>
-                  {forum.name}
-                </h3>
+                {/* Card Body */}
+                <div style={{ padding: "0 24px 24px 24px" }}>
 
-                {/* Forum ID */}
-                <div style={{
-                  fontSize: "12px",
-                  color: COLORS.lightText,
-                  marginBottom: "8px",
-                  wordBreak: "break-all"
-                }}>
-                  ID: {forum.id}
+                {/* Forum ID - Clickable to Copy */}
+                <div style={{ marginBottom: "16px" }}>
+                  <div 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigator.clipboard.writeText(forum.id).then(() => {
+                        // Create a temporary tooltip
+                        const tooltip = document.createElement('div');
+                        tooltip.textContent = 'Forum ID Copied!';
+                        tooltip.style.cssText = `
+                          position: fixed;
+                          background: #10b981;
+                          color: white;
+                          padding: 8px 12px;
+                          border-radius: 6px;
+                          font-size: 12px;
+                          font-weight: 500;
+                          z-index: 9999;
+                          top: ${e.clientY - 50}px;
+                          left: ${e.clientX - 50}px;
+                          pointer-events: none;
+                          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+                        `;
+                        document.body.appendChild(tooltip);
+                        setTimeout(() => document.body.removeChild(tooltip), 2000);
+                      }).catch(() => {
+                        alert('Failed to copy Forum ID');
+                      });
+                    }}
+                    style={{
+                      fontSize: "13px",
+                      color: "#059669",
+                      wordBreak: "break-all",
+                      cursor: "pointer",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #d1fae5",
+                      backgroundColor: "#ecfdf5",
+                      transition: "all 0.2s ease",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontWeight: "500"
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.backgroundColor = "#d1fae5";
+                      e.target.style.borderColor = "#a7f3d0";
+                      e.target.style.transform = "translateY(-1px)";
+                      e.target.style.boxShadow = "0 4px 12px rgba(16, 185, 129, 0.15)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.backgroundColor = "#ecfdf5";
+                      e.target.style.borderColor = "#d1fae5";
+                      e.target.style.transform = "translateY(0)";
+                      e.target.style.boxShadow = "none";
+                    }}
+                  >
+                    <span style={{ fontWeight: "600" }}>Forum ID: {forum.id}</span>
+                    <span style={{ 
+                      fontSize: "11px", 
+                      opacity: 0.7,
+                      fontStyle: "italic",
+                      color: "#047857"
+                    }}>
+                      click to copy
+                    </span>
+                  </div>
                 </div>
 
                 {/* Project Name (if available) */}
@@ -324,27 +396,50 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                   <div style={{
                     color: COLORS.primary,
                     fontSize: "13px",
-                    marginBottom: "8px",
                     fontWeight: "600",
-                    display: "flex",
-                    alignItems: "center",
+                    marginBottom: "12px",
+                    background: `linear-gradient(135deg, ${COLORS.primary}15, ${COLORS.primary}25)`,
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    display: "inline-block",
+                    border: `1px solid ${COLORS.primary}30`
                   }}>
-                    <span style={{ marginRight: "6px", fontSize: "16px" }}>📁</span>
-                    {getProjectName(forum.projectId)}
+                    Project: {getProjectName(forum.projectId)}
                   </div>
                 )}
 
-                {/* Member Count */}
+                {/* Stats Row */}
                 <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  color: COLORS.lightText,
-                  fontSize: "14px",
-                  marginBottom: "12px",
-                  fontWeight: "600"
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "12px",
+                  marginBottom: "16px",
+                  fontSize: "13px"
                 }}>
-                  <span style={{ marginRight: "6px", fontSize: "16px" }}>👥</span>
-                  <span>{forum.members ? forum.members.length : 0} members</span> {/* Use forum.members.length */}
+                  <div style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                    backgroundColor: "#f0f9ff",
+                    borderRadius: "6px",
+                    border: "1px solid #e0f2fe"
+                  }}>
+                    <span style={{ fontWeight: "600", color: "#0369a1" }}>Members</span>
+                    <span style={{ fontWeight: "700", color: "#0c4a6e" }}>{forum.members ? forum.members.length : 0}</span>
+                  </div>
+                  <div style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                    backgroundColor: "#f0fdf4",
+                    borderRadius: "6px",
+                    border: "1px solid #dcfce7"
+                  }}>
+                    <span style={{ fontWeight: "600", color: "#16a34a" }}>Posts</span>
+                    <span style={{ fontWeight: "700", color: "#15803d" }}>{forum.posts || 0}</span>
+                  </div>
                 </div>
 
                 {/* Description */}
@@ -365,13 +460,15 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                 <div style={{
                   fontSize: "13px",
                   color: COLORS.lightText,
-                  padding: "8px 12px",
-                  backgroundColor: COLORS.light,
-                  borderRadius: "6px",
-                  fontWeight: "500"
+                  padding: "12px 16px",
+                  backgroundColor: "#f8f9fb",
+                  borderRadius: "8px",
+                  fontWeight: "500",
+                  marginTop: "16px"
                 }}>
-                  Last activity: {forum.lastActivity ? new Date(forum.lastActivity).toLocaleDateString() : 'N/A'}
+                  Last activity: {forum.lastActivity ? new Date(forum.lastActivity).toLocaleDateString() : 'Recently'}
                 </div>
+                </div> {/* Close card body */}
               </div>
             );
           })}

@@ -6,6 +6,7 @@ import { collection, query, onSnapshot, doc } from "firebase/firestore";
 export default function About({ forumData }) {
   const [filesSharedCount, setFilesSharedCount] = useState(0);
   const [meetingsScheduledCount, setMeetingsScheduledCount] = useState(0);
+  const [actualPostCount, setActualPostCount] = useState(0);
 
   useEffect(() => {
     if (!forumData?.id) return;
@@ -14,6 +15,7 @@ export default function About({ forumData }) {
     const unsubscribe = onSnapshot(postsCollectionRef, (snapshot) => {
       let totalFiles = 0;
       let totalMeetings = 0;
+      let totalPosts = snapshot.docs.length; // Count actual posts
 
       snapshot.docs.forEach(postDoc => {
         const postData = postDoc.data();
@@ -24,6 +26,8 @@ export default function About({ forumData }) {
           totalMeetings += 1;
         }
       });
+      
+      setActualPostCount(totalPosts);
       setFilesSharedCount(totalFiles);
       setMeetingsScheduledCount(totalMeetings);
     });
@@ -58,7 +62,7 @@ export default function About({ forumData }) {
         <h4 style={{ color: COLORS.dark, marginTop: 0, fontSize: "15px", fontWeight: "600" }}>Forum Statistics</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: COLORS.primary }}>{forumData?.posts || 0}</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold', color: COLORS.primary }}>{actualPostCount}</div>
             <div style={{ fontSize: '14px', color: COLORS.lightText }}>Total Posts</div>
           </div>
           <div style={{ textAlign: 'center' }}>

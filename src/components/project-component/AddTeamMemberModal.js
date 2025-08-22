@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { db } from "../../firebase";
 import { collection, query, where, getDocs, updateDoc, doc, arrayUnion, getDoc } from "firebase/firestore";
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from "../profile-component/constants";
+import { getAcceptedTeamMembersForProject } from "../../services/teamService";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamMemberAdded }) {
   const [memberEmail, setMemberEmail] = useState('');
@@ -10,11 +12,12 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const { currentUser } = useAuth();
 
-  // Fetch available users when modal opens
+  // Fetch accepted team members when modal opens
   useEffect(() => {
     const fetchAvailableUsers = async () => {
-      if (!isOpen) return;
+      if (!isOpen || !currentUser) return;
       
       setLoadingUsers(true);
       try {
@@ -24,36 +27,25 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
         const currentTeam = projectSnap.exists() ? (projectSnap.data().team || []) : [];
         const projectCreatorId = projectSnap.exists() ? projectSnap.data().userId : null;
         
-        // Get all users
-        const usersRef = collection(db, "users");
-        const usersSnapshot = await getDocs(usersRef);
+        // Get accepted team members only
+        const acceptedMembers = await getAcceptedTeamMembersForProject(currentUser, projectId);
         
-        const users = [];
-        usersSnapshot.forEach(doc => {
-          const userData = doc.data();
-          const userId = userData.uid || doc.id;
-          
-          // Exclude current team members and project creator
-          if (!currentTeam.includes(userId) && userId !== projectCreatorId) {
-            users.push({
-              id: userId,
-              email: userData.email,
-              name: userData.name || userData.email || 'Unknown User'
-            });
-          }
-        });
+        // Filter out users already on the team and project creator
+        const availableMembers = acceptedMembers.filter(member => 
+          !currentTeam.includes(member.id) && member.id !== projectCreatorId
+        );
         
-        setAvailableUsers(users.sort((a, b) => a.name.localeCompare(b.name)));
+        setAvailableUsers(availableMembers);
       } catch (error) {
-        console.error("Error fetching users:", error);
-        setError("Failed to load available users.");
+        console.error("Error fetching accepted team members:", error);
+        setError("Failed to load accepted team members.");
       } finally {
         setLoadingUsers(false);
       }
     };
 
     fetchAvailableUsers();
-  }, [isOpen, projectId]);
+  }, [isOpen, projectId, currentUser]);
 
   if (!isOpen) return null;
 
@@ -136,13 +128,13 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
         <h3 style={{ color: COLORS.dark, marginBottom: LAYOUT.gap }}>Add Team Member</h3>
         
         {loadingUsers ? (
-          <p style={{ color: COLORS.lightText, marginBottom: LAYOUT.smallGap }}>Loading available users...</p>
+          <p style={{ color: COLORS.lightText, marginBottom: LAYOUT.smallGap }}>Loading accepted team members...</p>
         ) : (
           <>
             {/* User Selection Dropdown */}
             <div style={{ marginBottom: LAYOUT.smallGap }}>
               <label style={{ display: 'block', marginBottom: '4px', color: COLORS.dark, fontSize: '14px', fontWeight: '500' }}>
-                Select User
+                Select Accepted Team Member
               </label>
               <select
                 value={selectedUserId}
@@ -153,13 +145,22 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
                 style={{ ...INPUT_STYLES.base, width: "100%" }}
                 disabled={loading}
               >
-                <option value="">-- Select a user --</option>
-                {availableUsers.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.name} ({user.email})
-                  </option>
-                ))}
+                <option value="">-- Select from accepted team --</option>
+                {availableUsers.length > 0 ? (
+                  availableUsers.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} ({user.email})
+                    </option>
+                  ))
+                ) : (
+                  <option value="" disabled>No accepted team members available</option>
+                )}
               </select>
+              {availableUsers.length === 0 && !loadingUsers && (
+                <p style={{ color: COLORS.lightText, fontSize: '12px', marginTop: '4px' }}>
+                  No accepted team members available. Send invitations from the Team page first.
+                </p>
+              )}
             </div>
 
             {/* OR separator */}

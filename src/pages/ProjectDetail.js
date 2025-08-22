@@ -356,6 +356,7 @@ export default function ProjectDetail() {
           isOpen={showApprovalModal}
           onClose={() => setShowApprovalModal(false)}
           onConfirm={handleConfirmAdvanceStage}
+          projectId={projectId}
         />
       )}
       <SendApprovalModal

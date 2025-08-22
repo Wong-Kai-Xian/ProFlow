@@ -3,6 +3,7 @@ import { COLORS, BUTTON_STYLES, INPUT_STYLES, LAYOUT } from "../profile-componen
 import { db, storage } from '../../firebase'; // Import db and storage
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'; // Import Firestore functions
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'; // Import Storage functions
+import { getAcceptedTeamMembersForProject } from "../../services/teamService";
 
 export default function SendApprovalModal({
   isOpen,
@@ -11,7 +12,7 @@ export default function SendApprovalModal({
   defaultProject = null,
   defaultStatus = "",
   currentUser,
-  teamMembers, // Expect teamMembers prop
+  teamMembers, // Expect teamMembers prop (will be replaced with accepted team members)
 }) {
   const [message, setMessage] = useState("");
   const [file, setFile] = useState(null);
@@ -22,30 +23,26 @@ export default function SendApprovalModal({
   const [loading, setLoading] = useState(false); // New loading state
   const [uploadProgress, setUploadProgress] = useState(0); // For file upload progress
   const [uploading, setUploading] = useState(false); // For file upload status
+  const [acceptedTeamMembers, setAcceptedTeamMembers] = useState([]); // Accepted team members only
 
   useEffect(() => {
-    if (!isOpen) return;
+    const fetchAcceptedTeamMembers = async () => {
+      if (!isOpen || !currentUser) return;
 
-    // This useEffect is no longer needed as teamMembers are passed as a prop
-    // const fetchAdmins = async () => {
-    //   const adminsCollectionRef = collection(db, "users");
-    //   // Assuming "role" field exists and identifies admins
-    //   const q = query(adminsCollectionRef, where("role", "==", "admin"));
-    //   const querySnapshot = await getDocs(q);
-    //   const adminList = querySnapshot.docs.map(doc => ({
-    //     id: doc.id,
-    //     ...doc.data()
-    //   }));
-    //   setAdmins(adminList);
-    //   // If there are admins, set the default selected admin to the first one, or "all" if it's the default.
-    //   // If no admins, selectedAdmin remains "all" or can be set to ""
-    //   if (adminList.length > 0 && selectedAdmin === "") { // Only set default if no specific admin selected
-    //     setSelectedAdmin("all"); // Default to all if no other selection has been made
-    //   }
-    // };
+      try {
+        const members = await getAcceptedTeamMembersForProject(
+          currentUser, 
+          defaultProject?.id || null
+        );
+        setAcceptedTeamMembers(members);
+      } catch (error) {
+        console.error("Error fetching accepted team members:", error);
+        setAcceptedTeamMembers([]);
+      }
+    };
 
-    // fetchAdmins();
-  }, [isOpen]);
+    fetchAcceptedTeamMembers();
+  }, [isOpen, currentUser, defaultProject?.id]);
 
   console.log("Team members fetched:", teamMembers);
   console.log("Team members length:", teamMembers.length);
@@ -114,17 +111,17 @@ export default function SendApprovalModal({
       let recipientNames = [];
 
       if (selectedRecipient) {
-        const recipientData = teamMembers.find(member => member.uid === selectedRecipient);
+        const recipientData = acceptedTeamMembers.find(member => member.id === selectedRecipient);
         if (recipientData) {
-          recipientUids.push(recipientData.uid);
+          recipientUids.push(recipientData.id);
           recipientNames.push(recipientData.name);
         }
-      } else if (teamMembers.length > 0) {
-        // Default to sending to all team members if no specific recipient is selected
-        recipientUids = teamMembers.map(member => member.uid);
-        recipientNames = teamMembers.map(member => member.name);
+      } else if (acceptedTeamMembers.length > 0) {
+        // Default to sending to all accepted team members if no specific recipient is selected
+        recipientUids = acceptedTeamMembers.map(member => member.id);
+        recipientNames = acceptedTeamMembers.map(member => member.name);
       } else {
-        alert("No team members available to send approval requests to.");
+        alert("No accepted team members available to send approval requests to.");
         setLoading(false);
         return;
       }
@@ -164,12 +161,12 @@ export default function SendApprovalModal({
   if (!isOpen) return null;
 
   console.log("SendApprovalModal is open. Current selectedRecipient:", selectedRecipient);
-  const filteredSuggestions = teamMembers.filter(member =>
+  const filteredSuggestions = acceptedTeamMembers.filter(member =>
     member.name.toLowerCase().includes(recipientSearchTerm.toLowerCase()) ||
     member.email.toLowerCase().includes(recipientSearchTerm.toLowerCase())
   );
   console.log("Recipient Search Term:", recipientSearchTerm);
-  console.log("Filtered Suggestions:", filteredSuggestions);
+  console.log("Filtered Suggestions (Accepted Team):", filteredSuggestions);
 
   return (
     <div style={{
@@ -245,9 +242,9 @@ export default function SendApprovalModal({
             }}>
               {filteredSuggestions.map(member => (
                 <li
-                  key={member.uid}
+                  key={member.id}
                   onMouseDown={() => {
-                    setSelectedRecipient(member.uid);
+                    setSelectedRecipient(member.id);
                     setRecipientSearchTerm(member.name);
                     setShowSuggestions(false);
                   }}
@@ -260,7 +257,7 @@ export default function SendApprovalModal({
                     },
                   }}
                 >
-                  {member.name}
+                  {member.name} ({member.email})
                 </li>
               ))}
             </ul>
@@ -280,7 +277,7 @@ export default function SendApprovalModal({
               textAlign: 'center',
               margin: '5px 0 0 0',
             }}>
-              No matching team members found.
+              No matching accepted team members found.
             </div>
           )}
         </div>

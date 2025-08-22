@@ -140,68 +140,147 @@ export default function TeamPage() {
     <div style={{ fontFamily: "Arial, sans-serif", minHeight: "100vh", backgroundColor: COLORS.background }}>
       <TopBar />
 
-      <div style={{ padding: "30px" }}>
-        <h1 style={{
-          margin: "0 0 30px 0",
-          color: COLORS.dark,
-          fontSize: "28px",
-          fontWeight: "700"
+      <div style={{ padding: "30px", maxWidth: "1200px", margin: "0 auto" }}>
+        {/* Enhanced Header Section */}
+        <div style={{ 
+          marginBottom: "40px",
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          padding: "40px",
+          borderRadius: "20px",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.1)",
+          color: "white"
         }}>
-          My Team
-        </h1>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h1 style={{ 
+                margin: "0 0 12px 0", 
+                fontSize: "36px", 
+                fontWeight: "700",
+                textShadow: "0 2px 4px rgba(0,0,0,0.1)"
+              }}>
+                Team Management
+              </h1>
+              <p style={{ 
+                margin: 0, 
+                fontSize: "18px", 
+                opacity: 0.9,
+                fontWeight: "400"
+              }}>
+                Manage your team members and invitations
+              </p>
+            </div>
+            <div style={{ 
+              background: "rgba(255,255,255,0.15)", 
+              padding: "20px", 
+              borderRadius: "12px",
+              backdropFilter: "blur(10px)",
+              border: "1px solid rgba(255,255,255,0.2)"
+            }}>
+              <div style={{ fontSize: "32px", fontWeight: "700", marginBottom: "4px" }}>
+                {teamMembers.length}
+              </div>
+              <div style={{ fontSize: "14px", opacity: 0.9 }}>Team Members</div>
+            </div>
+          </div>
+        </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-start", gap: "15px", marginBottom: "20px" }}>
-        <button
-          onClick={() => setShowInviteModal(true)}
-          style={{
-            backgroundColor: COLORS.primary,
-            color: COLORS.white,
-            padding: "10px 20px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "16px",
-            fontWeight: "600",
-            boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)"
-          }}
-        >
-          Invite Member
-        </button>
+        {/* Action Buttons */}
+        <div style={{ 
+          display: "flex", 
+          flexWrap: "wrap",
+          gap: "16px", 
+          marginBottom: "30px",
+          padding: "24px",
+          background: "white",
+          borderRadius: "16px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+          border: "1px solid #f0f2f5"
+        }}>
+          <button
+            onClick={() => setShowInviteModal(true)}
+            style={{
+              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              color: "white",
+              padding: "14px 24px",
+              borderRadius: "12px",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "16px",
+              fontWeight: "600",
+              boxShadow: "0 4px 16px rgba(102, 126, 234, 0.3)",
+              transition: "all 0.3s ease",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = "translateY(-2px)";
+              e.target.style.boxShadow = "0 8px 24px rgba(102, 126, 234, 0.4)";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = "translateY(0)";
+              e.target.style.boxShadow = "0 4px 16px rgba(102, 126, 234, 0.3)";
+            }}
+          >
+            Invite Member
+          </button>
 
-        <button
-          onClick={() => setShowIncomingInvitationsModal(true)} // Open the new incoming invitations modal
-          style={{
-            backgroundColor: COLORS.tertiary, // New color for this button
-            color: COLORS.white,
-            padding: "10px 20px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "16px",
-            fontWeight: "600",
-            boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)"
-          }}
-        >
-          My Invitations
-        </button>
-        <button
-          onClick={refreshTeamData}
-          style={{
-            backgroundColor: COLORS.light,
-            color: COLORS.darkText,
-            padding: "10px", // Square button
-            borderRadius: "8px",
-            border: `1px solid ${COLORS.border}`,
-            cursor: "pointer",
-            fontSize: "16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 4px 8px rgba(0, 0, 0, 0.05)"
-          }}
-        >
-          <FaSync />
-        </button>
+          <button
+            onClick={() => setShowIncomingInvitationsModal(true)}
+            style={{
+              background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+              color: "white",
+              padding: "14px 24px",
+              borderRadius: "12px",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "16px",
+              fontWeight: "600",
+              boxShadow: "0 4px 16px rgba(245, 87, 108, 0.3)",
+              transition: "all 0.3s ease",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = "translateY(-2px)";
+              e.target.style.boxShadow = "0 8px 24px rgba(245, 87, 108, 0.4)";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = "translateY(0)";
+              e.target.style.boxShadow = "0 4px 16px rgba(245, 87, 108, 0.3)";
+            }}
+          >
+            My Invitations
+          </button>
+          
+          <button
+            onClick={refreshTeamData}
+            style={{
+              background: "#f8f9fa",
+              color: "#495057",
+              padding: "14px 16px",
+              borderRadius: "12px",
+              border: "1px solid #e9ecef",
+              cursor: "pointer",
+              fontSize: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
+              transition: "all 0.3s ease"
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = "#e9ecef";
+              e.target.style.transform = "translateY(-2px)";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = "#f8f9fa";
+              e.target.style.transform = "translateY(0)";
+            }}
+          >
+            <FaSync />
+          </button>
         </div>
 
         {inviteMessage && (

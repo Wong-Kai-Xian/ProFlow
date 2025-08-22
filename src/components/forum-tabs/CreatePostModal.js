@@ -147,7 +147,8 @@ export default function CreatePostModal({
 
     const newPost = {
       type: 'message',
-      author: currentUser?.name || "Anonymous", // Use currentUser.name
+      author: currentUser?.name || currentUser?.displayName || currentUser?.email || "Anonymous", // Use currentUser.name
+      authorId: currentUser?.uid,
       content: postText,
       likes: 0,
       comments: [],
@@ -189,9 +190,6 @@ export default function CreatePostModal({
       addDoc(postsRef, {
         ...newPost,
         timestamp: serverTimestamp(),
-        author: currentUser?.name || "Anonymous", // Use currentUser.name
-        likes: 0,
-        comments: [],
         forumId: forumId
       })
       .then(() => {

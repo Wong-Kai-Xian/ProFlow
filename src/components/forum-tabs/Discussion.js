@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { COLORS, LAYOUT, INPUT_STYLES, BUTTON_STYLES } from "../profile-component/constants";
 import { db } from "../../firebase"; // Import db
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, arrayUnion, arrayRemove, getDoc, deleteDoc } from "firebase/firestore"; // Import Firestore functions
+import { storage } from "../../firebase";
+import { ref, deleteObject } from "firebase/storage";
 import CreatePostModal from "./CreatePostModal"; // Import CreatePostModal
 import ConfirmationModal from "./ConfirmationModal"; // Import ConfirmationModal
 
@@ -15,7 +17,7 @@ const formatTimestamp = (timestamp) => {
 
 // PostItem Sub-component (if you want to keep it separate or move it here)
 const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
-  const currentUserId = currentUser?.id; // Use currentUser.id
+  const currentUserId = currentUser?.uid; // Use currentUser.uid (Firebase Auth)
   const hasLiked = post.likedBy?.includes(currentUserId);
   const [showOptions, setShowOptions] = useState(false); // State for three-dot menu
   const [showComments, setShowComments] = useState(false); // State for comments section
@@ -64,20 +66,39 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
 
   const handleAddComment = async () => {
     if (newCommentText.trim() === '') return;
+    if (!post?.forumId || !post?.id || !currentUserId) {
+      console.error("Missing required data for comment:", { forumId: post?.forumId, postId: post?.id, userId: currentUserId });
+      return;
+    }
 
     try {
       const postRef = doc(db, "forums", post.forumId, "posts", post.id);
+      
+      // Get current post data first
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) {
+        console.error("Post does not exist");
+        return;
+      }
+
+      const postData = postSnap.data();
+      const currentComments = postData.comments || [];
+      
+      const newComment = {
+        author: currentUser?.name || currentUser?.displayName || currentUser?.email || "Anonymous",
+        authorId: currentUserId,
+        content: newCommentText.trim(),
+        timestamp: new Date(),
+      };
+
+      // Update with the new comments array
       await updateDoc(postRef, {
-        comments: arrayUnion({
-          author: currentUserId, // Placeholder, replace with actual user
-          content: newCommentText.trim(),
-          timestamp: new Date(), // Use new Date() for client-side timestamp
-        }),
-        // Optionally increment a comment count here if needed for trending
+        comments: [...currentComments, newComment]
       });
+      
       setNewCommentText(''); // Clear input after commenting
       setShowComments(true);
-      setNumVisibleComments(prev => (prev < (post.comments?.length || 0) + 1 ? (post.comments?.length || 0) + 1 : prev));
+      setNumVisibleComments(prev => Math.max(prev, currentComments.length + 1));
     } catch (error) {
       console.error("Error adding comment: ", error);
     }
@@ -165,48 +186,85 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
 
   return (
     <div id={`post-${post.id}`} style={{
-      backgroundColor: COLORS.white,
-      borderRadius: LAYOUT.borderRadius,
-      padding: LAYOUT.gap,
-      marginBottom: LAYOUT.smallGap,
-      boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
-      border: `1px solid ${COLORS.border}`
+      backgroundColor: "white",
+      borderRadius: "16px",
+      padding: "0",
+      marginBottom: "24px",
+      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+      border: "1px solid #e5e7eb",
+      overflow: "hidden",
+      transition: "all 0.2s ease"
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.boxShadow = "0 8px 25px rgba(0, 0, 0, 0.08)";
+      e.currentTarget.style.transform = "translateY(-2px)";
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.05)";
+      e.currentTarget.style.transform = "translateY(0)";
     }}>
-      <div style={{ display: "flex", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
-        {/* User Avatar (Placeholder) */}
-        <div style={{
-          width: '40px',
-          height: '40px',
-          borderRadius: '50%',
-          backgroundColor: COLORS.primary,
-          color: COLORS.white,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '16px',
-          fontWeight: 'bold',
-          marginRight: LAYOUT.smallGap
-        }}>
-          {post.author ? post.author.split(' ').map(n => n[0]).join('') : 'AN'}
-        </div>
-        <div style={{ flexGrow: 1 }}>
-        <strong style={{ color: COLORS.dark }}>{post.author || 'Anonymous'}</strong>
-          <div style={{ fontSize: "12px", color: COLORS.lightText, marginTop: '2px' }}>{formatTimestamp(post.timestamp)}</div>
-        </div>
-        {/* Three-dot menu */}
-        <div style={{ position: 'relative' }}>
-          <button 
-            onClick={() => setShowOptions(!showOptions)}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '20px',
-              cursor: 'pointer',
-              color: COLORS.lightText
-            }}
-          >
-            •••
-          </button>
+      {/* Post Header */}
+      <div style={{ 
+        padding: "20px 20px 16px 20px", 
+        borderBottom: "1px solid #f3f4f6"
+      }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          {/* User Avatar */}
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '18px',
+            fontWeight: '700',
+            marginRight: '12px',
+            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
+          }}>
+            {post.author ? post.author.split(' ').map(n => n[0]).join('') : 'AN'}
+          </div>
+          <div style={{ flexGrow: 1 }}>
+            <strong style={{ 
+              color: "#1f2937", 
+              fontSize: "16px", 
+              fontWeight: "600" 
+            }}>
+              {post.author || 'Anonymous'}
+            </strong>
+            <div style={{ 
+              fontSize: "14px", 
+              color: "#6b7280", 
+              marginTop: '2px' 
+            }}>
+              {formatTimestamp(post.timestamp)}
+            </div>
+          </div>
+          {/* Three-dot menu */}
+          <div style={{ position: 'relative' }}>
+            <button 
+              onClick={() => setShowOptions(!showOptions)}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '20px',
+                cursor: 'pointer',
+                color: "#6b7280",
+                padding: '8px',
+                borderRadius: '50%',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#f3f4f6';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = 'transparent';
+              }}
+            >
+              •••
+            </button>
           {showOptions && (
             <div style={{
               position: 'absolute',
@@ -243,10 +301,21 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
               </button>
             </div>
           )}
+          </div>
         </div>
       </div>
 
-      <p style={{ margin: `0 0 ${LAYOUT.smallGap} 0`, color: COLORS.text }}>{post.content}</p>
+      {/* Post Content */}
+      <div style={{ padding: "0 20px 16px 20px" }}>
+        <p style={{ 
+          margin: "0 0 16px 0", 
+          color: "#374151", 
+          fontSize: "15px",
+          lineHeight: "1.6",
+          whiteSpace: "pre-wrap"
+        }}>
+          {post.content}
+        </p>
 
       {/* Attached Files/Media */}
       {post.files && post.files.length > 0 && (
@@ -259,56 +328,113 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
         </div>
       )}
 
-      {/* Like, Star, and Comment Section */}
+      </div>
+
+      {/* Action Buttons */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        borderTop: `1px solid ${COLORS.border}`,
-        paddingTop: LAYOUT.smallGap,
-        marginTop: LAYOUT.smallGap
+        justifyContent: 'space-between',
+        borderTop: '1px solid #f3f4f6',
+        padding: '16px 20px',
+        backgroundColor: '#fafafa'
       }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button 
+            onClick={() => onLike(post.id, currentUserId)}
+            style={{
+              background: hasLiked ? '#eff6ff' : 'transparent',
+              border: hasLiked ? '1px solid #3b82f6' : '1px solid #e5e7eb',
+              borderRadius: '20px',
+              padding: '8px 16px',
+              color: hasLiked ? '#3b82f6' : '#6b7280',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!hasLiked) {
+                e.target.style.backgroundColor = '#f3f4f6';
+                e.target.style.borderColor = '#9ca3af';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!hasLiked) {
+                e.target.style.backgroundColor = 'transparent';
+                e.target.style.borderColor = '#e5e7eb';
+              }
+            }}
+          >
+            👍 {post.likes || 0}
+          </button>
+          
+          <button 
+            onClick={handleStar}
+            style={{
+              background: hasStarred ? '#fffbeb' : 'transparent',
+              border: hasStarred ? '1px solid #f59e0b' : '1px solid #e5e7eb',
+              borderRadius: '20px',
+              padding: '8px 16px',
+              color: hasStarred ? '#f59e0b' : '#6b7280',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!hasStarred) {
+                e.target.style.backgroundColor = '#f3f4f6';
+                e.target.style.borderColor = '#9ca3af';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!hasStarred) {
+                e.target.style.backgroundColor = 'transparent';
+                e.target.style.borderColor = '#e5e7eb';
+              }
+            }}
+          >
+            {hasStarred ? '⭐' : '☆'} Star
+          </button>
+        </div>
         <button 
-          onClick={() => onLike(post.id, currentUserId)} // Pass post ID and user ID to onLike
+          onClick={() => setShowComments(!showComments)}
           style={{
-            ...BUTTON_STYLES.secondary,
-            background: 'none',
-            border: 'none',
-            color: hasLiked ? COLORS.primary : COLORS.lightText, // Change color if liked
+            background: showComments ? '#f0f9ff' : 'transparent',
+            border: showComments ? '1px solid #0ea5e9' : '1px solid #e5e7eb',
+            borderRadius: '20px',
+            padding: '8px 16px',
+            color: showComments ? '#0ea5e9' : '#6b7280',
             fontSize: '14px',
+            fontWeight: '500',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '5px'
-          }}>
-          👍 {post.likes || 0} {hasLiked ? 'Unlike' : 'Like'}
-        </button>
-        <button 
-          onClick={handleStar}
-          style={{
-            ...BUTTON_STYLES.secondary,
-            background: 'none',
-            border: 'none',
-            color: hasStarred ? COLORS.warning : COLORS.lightText, // Change color if starred
-            fontSize: '14px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            marginLeft: LAYOUT.smallGap
+            gap: '6px',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            if (!showComments) {
+              e.target.style.backgroundColor = '#f3f4f6';
+              e.target.style.borderColor = '#9ca3af';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!showComments) {
+              e.target.style.backgroundColor = 'transparent';
+              e.target.style.borderColor = '#e5e7eb';
+            }
           }}
         >
-          ⭐ {hasStarred ? 'Unstar' : 'Star'}
-        </button>
-        <span 
-          onClick={() => setShowComments(!showComments)} // Toggle comments visibility
-          style={{
-            color: COLORS.lightText, 
-            fontSize: '14px', 
-            marginLeft: LAYOUT.smallGap,
-            cursor: 'pointer'
-          }}>
           💬 {post.comments?.length || 0} Comments
-        </span>
+        </button>
       </div>
 
       {/* New Comment Input */}
@@ -523,7 +649,40 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
     if (!forumId || !postToDeleteId) return;
 
     try {
-      await deleteDoc(doc(db, "forums", forumId, "posts", postToDeleteId));
+      // First get the post to check for files
+      const postRef = doc(db, "forums", forumId, "posts", postToDeleteId);
+      const postSnap = await getDoc(postRef);
+      
+      if (postSnap.exists()) {
+        const postData = postSnap.data();
+        
+        // Delete files from storage if they exist
+        if (postData.files && postData.files.length > 0) {
+          const deletePromises = postData.files.map(async (file) => {
+            try {
+              if (file.url) {
+                // Extract file path from URL
+                const url = new URL(file.url);
+                const pathMatch = url.pathname.match(/\/o\/(.+?)\?/);
+                if (pathMatch) {
+                  const filePath = decodeURIComponent(pathMatch[1]);
+                  const fileRef = ref(storage, filePath);
+                  await deleteObject(fileRef);
+                  console.log(`Deleted file: ${filePath}`);
+                }
+              }
+            } catch (fileError) {
+              console.error("Error deleting file:", fileError);
+              // Continue with post deletion even if file deletion fails
+            }
+          });
+          
+          await Promise.allSettled(deletePromises);
+        }
+      }
+      
+      // Delete the post document
+      await deleteDoc(postRef);
       updateForumLastActivity();
       updateForumPostCount(-1); // Decrement post count
       setShowDeleteConfirmModal(false);

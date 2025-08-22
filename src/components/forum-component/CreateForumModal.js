@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
 import { useAuth } from '../../contexts/AuthContext'; // Import useAuth
+import { getAcceptedTeamMembers, getAcceptedTeamMembersForProject } from '../../services/teamService';
 
 export default function CreateForumModal({ isOpen, onClose, onConfirm, editingForum, projects }) {
   const [forumName, setForumName] = useState('');
@@ -9,6 +10,32 @@ export default function CreateForumModal({ isOpen, onClose, onConfirm, editingFo
   const [newMember, setNewMember] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(''); // New state for selected project
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const [acceptedTeamMembers, setAcceptedTeamMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  // Fetch accepted team members when modal opens or project changes
+  useEffect(() => {
+    const fetchAcceptedMembers = async () => {
+      if (!isOpen || !currentUser) return;
+      
+      setLoadingMembers(true);
+      try {
+        // For general forums, get all accepted team members
+        // For project-specific forums, get project team members
+        const teamMembers = selectedProjectId 
+          ? await getAcceptedTeamMembersForProject(currentUser, selectedProjectId)
+          : await getAcceptedTeamMembers(currentUser);
+        setAcceptedTeamMembers(teamMembers);
+      } catch (error) {
+        console.error("Error fetching accepted team members:", error);
+        setAcceptedTeamMembers([]);
+      } finally {
+        setLoadingMembers(false);
+      }
+    };
+
+    fetchAcceptedMembers();
+  }, [isOpen, currentUser, selectedProjectId]);
 
   // Populate form when editing
   React.useEffect(() => {
@@ -27,8 +54,8 @@ export default function CreateForumModal({ isOpen, onClose, onConfirm, editingFo
   }, [editingForum]);
 
   const handleAddMember = () => {
-    if (newMember.trim() && !members.includes(newMember.trim())) {
-      setMembers([...members, newMember.trim()]);
+    if (newMember && !members.includes(newMember)) {
+      setMembers([...members, newMember]);
       setNewMember('');
     }
   };
@@ -198,35 +225,50 @@ export default function CreateForumModal({ isOpen, onClose, onConfirm, editingFo
             Forum Members
           </label>
           
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-            <input
-              type="text"
-              value={newMember}
-              onChange={(e) => setNewMember(e.target.value)}
-              placeholder="Add member"
-              style={{
-                ...INPUT_STYLES.base,
-                flex: 1,
-                fontSize: '14px'
-              }}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddMember();
+          {loadingMembers ? (
+            <p style={{ color: COLORS.lightText, fontSize: '14px' }}>Loading accepted team members...</p>
+          ) : (
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <select
+                value={newMember}
+                onChange={(e) => setNewMember(e.target.value)}
+                style={{
+                  ...INPUT_STYLES.base,
+                  flex: 1,
+                  fontSize: '14px'
+                }}
+              >
+                <option value="">-- Select from accepted team --</option>
+                {acceptedTeamMembers
+                  .filter(member => !members.includes(member.id))
+                  .map(member => (
+                    <option key={member.id} value={member.id}>
+                      {member.name} ({member.email})
+                    </option>
+                  ))
                 }
-              }}
-            />
-            <button
-              onClick={handleAddMember}
-              style={{
-                ...BUTTON_STYLES.secondary,
-                padding: '8px 16px',
-                fontSize: '14px'
-              }}
-            >
-              Add
-            </button>
-          </div>
+              </select>
+              <button
+                onClick={handleAddMember}
+                disabled={!newMember}
+                style={{
+                  ...BUTTON_STYLES.secondary,
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  opacity: !newMember ? 0.6 : 1,
+                  cursor: !newMember ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Add
+              </button>
+            </div>
+          )}
+          
+          {acceptedTeamMembers.length === 0 && !loadingMembers && (
+            <p style={{ color: COLORS.lightText, fontSize: '12px' }}>
+              No accepted team members available. Send invitations from the Team page first.
+            </p>
+          )}
 
           {/* Display Added Members */}
           {members.length > 0 && (
@@ -236,34 +278,38 @@ export default function CreateForumModal({ isOpen, onClose, onConfirm, editingFo
               gap: '8px',
               marginTop: '12px'
             }}>
-              {members.map((member, index) => (
-                <div key={index} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  backgroundColor: COLORS.light,
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  fontSize: '14px',
-                  color: COLORS.dark
-                }}>
-                  <span>{member}</span>
-                  <button
-                    onClick={() => handleRemoveMember(member)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      marginLeft: '6px',
-                      cursor: 'pointer',
-                      color: COLORS.danger,
-                      fontSize: '16px',
-                      padding: '0',
-                      lineHeight: '1'
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+              {members.map((memberId, index) => {
+                const memberData = acceptedTeamMembers.find(m => m.id === memberId);
+                const displayName = memberData ? memberData.name : memberId;
+                return (
+                  <div key={index} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: COLORS.light,
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    fontSize: '14px',
+                    color: COLORS.dark
+                  }}>
+                    <span>{displayName}</span>
+                    <button
+                      onClick={() => handleRemoveMember(memberId)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        marginLeft: '6px',
+                        cursor: 'pointer',
+                        color: COLORS.danger,
+                        fontSize: '16px',
+                        padding: '0',
+                        lineHeight: '1'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
