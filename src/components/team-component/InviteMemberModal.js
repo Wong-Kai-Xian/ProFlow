@@ -33,7 +33,7 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite }) {
         const currentUserId = auth.currentUser.uid;
 
         // Add invitation to a 'invitations' collection
-        await addDoc(collection(db, "invitations"), {
+        const docRef = await addDoc(collection(db, "invitations"), {
           fromUserId: currentUserId,
           toUserId: invitedUserId,
           toUserEmail: email,
@@ -41,7 +41,7 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite }) {
           timestamp: new Date(),
         });
         setFoundUserEmail(email);
-        onInvite(email, true); // Indicate user found and invited
+        onInvite(email, true, null, { id: docRef.id, fromUserId: currentUserId, toUserId: invitedUserId, toUserEmail: email, status: "pending", timestamp: new Date() }); // Pass the new invitation object
         onClose(); // Close the invite modal on successful invitation
       } else {
         // User does not exist, provide a signup link

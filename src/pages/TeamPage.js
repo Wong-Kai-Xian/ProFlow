@@ -6,6 +6,8 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom'; // Import Link
 import InviteMemberModal from '../components/team-component/InviteMemberModal'; // Import InviteMemberModal
+import { FaSync } from 'react-icons/fa'; // Import refresh icon
+import IncomingInvitationsModal from '../components/team-component/IncomingInvitationsModal'; // Import new modal
 
 export default function TeamPage() {
   const [teamMembers, setTeamMembers] = useState([]);
@@ -14,76 +16,74 @@ export default function TeamPage() {
   const { currentUser } = useAuth();
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteMessage, setInviteMessage] = useState('');
+  const [showIncomingInvitationsModal, setShowIncomingInvitationsModal] = useState(false);
+
+  const refreshTeamData = async () => {
+    if (!currentUser) {
+      setTeamMembers([]);
+      setPendingInvitations([]);
+      return;
+    }
+
+    try {
+      // Fetch projects where the current user is a member
+      const projectQuery = query(
+        collection(db, "projects"),
+        where("team", "array-contains", currentUser.email) // Assuming team stores emails
+      );
+      const projectSnapshot = await getDocs(projectQuery);
+
+      const uniqueMemberEmails = new Set();
+      projectSnapshot.forEach(doc => {
+        const projectData = doc.data();
+        (projectData.team || []).forEach(memberEmail => {
+          uniqueMemberEmails.add(memberEmail);
+        });
+      });
+
+      // Optionally, fetch user details for these emails if needed for display
+      const membersDetails = await Promise.all(Array.from(uniqueMemberEmails).map(async (email) => {
+        const usersQuery = query(collection(db, "users"), where("email", "==", email));
+        const userSnapshot = await getDocs(usersQuery);
+        if (!userSnapshot.empty) {
+          const userData = userSnapshot.docs[0].data();
+          return {
+            uid: userSnapshot.docs[0].id, // Get the UID from the user document
+            email: email,
+            displayName: userData.name || email.split('@')[0] // Use stored name or derive from email
+          };
+        } else {
+          console.warn(`User document not found for email: ${email}`);
+          return { email: email, displayName: email.split('@')[0] }; // Fallback
+        }
+      }));
+      setTeamMembers(membersDetails);
+
+      // Fetch pending outgoing invitations from the current user
+      const invitationsQuery = query(
+        collection(db, "invitations"),
+        where("fromUserId", "==", currentUser.uid),
+        where("status", "==", "pending")
+      );
+      const invitationsSnapshot = await getDocs(invitationsQuery);
+      const fetchedPendingInvitations = invitationsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPendingInvitations(fetchedPendingInvitations);
+    } catch (error) {
+      console.error("Error fetching team members: ", error);
+    }
+  };
 
   useEffect(() => {
-    const fetchTeamMembers = async () => {
-      if (!currentUser) {
-        setTeamMembers([]);
-        setPendingInvitations([]);
-        return;
-      }
-      
-      try {
-        // Fetch projects where the current user is a member
-        const projectQuery = query(
-          collection(db, "projects"),
-          where("team", "array-contains", currentUser.email) // Assuming team stores emails
-        );
-        const projectSnapshot = await getDocs(projectQuery);
-        
-        const uniqueMemberEmails = new Set();
-        projectSnapshot.forEach(doc => {
-          const projectData = doc.data();
-          (projectData.team || []).forEach(memberEmail => {
-            uniqueMemberEmails.add(memberEmail);
-          });
-        });
-
-        // Optionally, fetch user details for these emails if needed for display
-        const membersDetails = await Promise.all(Array.from(uniqueMemberEmails).map(async (email) => {
-          const usersQuery = query(collection(db, "users"), where("email", "==", email));
-          const userSnapshot = await getDocs(usersQuery);
-          if (!userSnapshot.empty) {
-            const userData = userSnapshot.docs[0].data();
-            return { 
-              uid: userSnapshot.docs[0].id, // Get the UID from the user document
-              email: email,
-              displayName: userData.name || email.split('@')[0] // Use stored name or derive from email
-            };
-          } else {
-            console.warn(`User document not found for email: ${email}`);
-            return { email: email, displayName: email.split('@')[0] }; // Fallback
-          }
-        }));
-        setTeamMembers(membersDetails);
-
-        // Fetch pending outgoing invitations from the current user
-        const invitationsQuery = query(
-          collection(db, "invitations"),
-          where("fromUserId", "==", currentUser.uid),
-          where("status", "==", "pending")
-        );
-        const invitationsSnapshot = await getDocs(invitationsQuery);
-        const fetchedPendingInvitations = invitationsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setPendingInvitations(fetchedPendingInvitations);
-
-      } catch (error) {
-        console.error("Error fetching team members: ", error);
-      }
-    };
-
-    fetchTeamMembers();
+    refreshTeamData();
   }, [currentUser]);
 
-  const handleInvite = (email, userExists, signupUrl) => {
+  const handleInvite = (email, userExists, signupUrl, newInvitation) => {
     if (userExists) {
-      // A new invitation has been sent, re-fetch pending invitations to update the list
-      // For now, let's just update the message. A full re-fetch might be too heavy.
       setInviteMessage(`Invitation sent to ${email}. They can accept it from their invitations page.`);
-      // Optionally, add the new pending invitation to the state directly if the full object is available
+      refreshTeamData(); // Re-fetch to update pending invitations
     } else {
       setInviteMessage(`User with email ${email} not found. Share this link for them to sign up: ${signupUrl}`);
     }
@@ -113,6 +113,7 @@ export default function TeamPage() {
           My Team
         </h1>
 
+        <div style={{ display: "flex", justifyContent: "flex-start", gap: "15px", marginBottom: "20px" }}>
         <button
           onClick={() => setShowInviteModal(true)}
           style={{
@@ -124,12 +125,47 @@ export default function TeamPage() {
             cursor: "pointer",
             fontSize: "16px",
             fontWeight: "600",
-            marginBottom: "20px",
             boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)"
           }}
         >
           Invite Member
         </button>
+
+        <button
+          onClick={() => setShowIncomingInvitationsModal(true)} // Open the new incoming invitations modal
+          style={{
+            backgroundColor: COLORS.tertiary, // New color for this button
+            color: COLORS.white,
+            padding: "10px 20px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "16px",
+            fontWeight: "600",
+            boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)"
+          }}
+        >
+          My Invitations
+        </button>
+        <button
+          onClick={refreshTeamData}
+          style={{
+            backgroundColor: COLORS.light,
+            color: COLORS.darkText,
+            padding: "10px", // Square button
+            borderRadius: "8px",
+            border: `1px solid ${COLORS.border}`,
+            cursor: "pointer",
+            fontSize: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 4px 8px rgba(0, 0, 0, 0.05)"
+          }}
+        >
+          <FaSync />
+        </button>
+        </div>
 
         {inviteMessage && (
           <p style={{ color: COLORS.primary, marginBottom: "20px", fontSize: "16px" }}>
@@ -285,6 +321,11 @@ export default function TeamPage() {
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         onInvite={handleInvite}
+      />
+      <IncomingInvitationsModal 
+        isOpen={showIncomingInvitationsModal}
+        onClose={() => setShowIncomingInvitationsModal(false)}
+        onInvitationAction={refreshTeamData} // Pass the refresh function to update TeamPage when an invitation is accepted/rejected
       />
     </div>
   );

@@ -1,45 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import TopBar from '../components/TopBar';
-import { db } from '../firebase';
-import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { useAuth } from '../contexts/AuthContext';
-import { COLORS, BUTTON_STYLES } from '../components/profile-component/constants';
+import { db } from '../../firebase';
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { useAuth } from '../../contexts/AuthContext';
+import { COLORS, BUTTON_STYLES } from '../profile-component/constants';
 
-export default function InvitationsPage() {
+export default function IncomingInvitationsModal({ isOpen, onClose, onInvitationAction }) {
   const { currentUser } = useAuth();
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchInvitations = async () => {
+    if (!currentUser) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const q = query(
+        collection(db, "invitations"),
+        where("toUserEmail", "==", currentUser.email),
+        where("status", "==", "pending")
+      );
+      const querySnapshot = await getDocs(q);
+      const fetchedInvitations = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setInvitations(fetchedInvitations);
+    } catch (error) {
+      console.error("Error fetching invitations: ", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchInvitations = async () => {
-      if (!currentUser) {
-        setLoading(false);
-        return;
-      }
+    if (isOpen) {
+      fetchInvitations();
+    }
+  }, [isOpen, currentUser]);
 
-      try {
-        const q = query(
-          collection(db, "invitations"),
-          where("toUserEmail", "==", currentUser.email),
-          where("status", "==", "pending")
-        );
-        const querySnapshot = await getDocs(q);
-        const fetchedInvitations = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setInvitations(fetchedInvitations);
-      } catch (error) {
-        console.error("Error fetching invitations: ", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInvitations();
-  }, [currentUser]);
-
-  const handleAccept = async (invitationId, fromUserId) => {
+  const handleAccept = async (invitationId, fromUserId, toUserEmail) => {
     if (!currentUser) return;
 
     try {
@@ -51,8 +52,6 @@ export default function InvitationsPage() {
       });
 
       // 2. Add current user's email to the inviting user's projects' team array
-      // This requires finding projects where fromUserId is a member and then adding currentUser.email to its team.
-      // For simplicity, let's assume the inviting user is the owner of the projects they are inviting for.
       const projectsQuery = query(
         collection(db, "projects"),
         where("ownerId", "==", fromUserId)
@@ -63,14 +62,15 @@ export default function InvitationsPage() {
       projectsSnapshot.forEach(projectDoc => {
         const projectRef = doc(db, "projects", projectDoc.id);
         batchUpdates.push(updateDoc(projectRef, {
-          team: arrayUnion(currentUser.email)
+          team: arrayUnion(toUserEmail)
         }));
       });
 
       await Promise.all(batchUpdates);
 
-      // 3. Update local state
+      // 3. Update local state and notify parent
       setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
+      onInvitationAction(); // Notify parent (TeamPage) to refresh its data
       alert("Invitation accepted!");
     } catch (error) {
       console.error("Error accepting invitation: ", error);
@@ -86,6 +86,7 @@ export default function InvitationsPage() {
         rejectedAt: new Date(),
       });
       setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
+      onInvitationAction(); // Notify parent (TeamPage) to refresh its data
       alert("Invitation rejected.");
     } catch (error) {
       console.error("Error rejecting invitation: ", error);
@@ -93,29 +94,24 @@ export default function InvitationsPage() {
     }
   };
 
-  if (loading) {
-    return <div style={{ textAlign: "center", padding: "50px", color: COLORS.lightText }}>Loading invitations...</div>;
-  }
+  if (!isOpen) return null;
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", minHeight: "100vh", backgroundColor: COLORS.background }}>
-      <TopBar />
-      <div style={{ padding: "30px", maxWidth: "800px", margin: "0 auto" }}>
-        <h1 style={{
-          margin: "0 0 30px 0",
-          color: COLORS.dark,
-          fontSize: "28px",
-          fontWeight: "700"
-        }}>
-          My Invitations
-        </h1>
+    <div style={modalOverlayStyle}>
+      <div style={modalContentStyle}>
+        <h2 style={{ color: COLORS.text, marginBottom: '20px' }}>My Invitations</h2>
 
-        {invitations.length === 0 ? (
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "30px", color: COLORS.lightText }}>Loading invitations...</div>
+        ) : invitations.length === 0 ? (
           <div style={{
             textAlign: "center",
-            padding: "60px 20px",
+            padding: "30px 20px",
             color: COLORS.lightText,
-            fontSize: "18px"
+            fontSize: "16px",
+            border: `1px dashed ${COLORS.border}`,
+            borderRadius: "8px",
+            backgroundColor: COLORS.white
           }}>
             No pending invitations.
           </div>
@@ -123,7 +119,7 @@ export default function InvitationsPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
             {invitations.map(invitation => (
               <div key={invitation.id} style={{
-                backgroundColor: COLORS.white,
+                backgroundColor: COLORS.cardBackground,
                 borderRadius: "12px",
                 padding: "20px",
                 boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)",
@@ -143,7 +139,7 @@ export default function InvitationsPage() {
                 </div>
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button
-                    onClick={() => handleAccept(invitation.id, invitation.fromUserId)}
+                    onClick={() => handleAccept(invitation.id, invitation.fromUserId, invitation.toUserEmail)}
                     style={{ ...BUTTON_STYLES.primary, backgroundColor: COLORS.success, padding: "8px 15px", fontSize: "14px" }}
                   >
                     Accept
@@ -159,7 +155,34 @@ export default function InvitationsPage() {
             ))}
           </div>
         )}
+        <button onClick={onClose} style={{ ...BUTTON_STYLES.secondary, marginTop: '20px' }}>
+          Close
+        </button>
       </div>
     </div>
   );
 }
+
+const modalOverlayStyle = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  zIndex: 1000,
+};
+
+const modalContentStyle = {
+  backgroundColor: COLORS.white,
+  padding: '30px',
+  borderRadius: '8px',
+  width: '600px',
+  maxWidth: '90%',
+  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+  textAlign: 'center',
+  color: COLORS.text, // Adjust text color for contrast
+};

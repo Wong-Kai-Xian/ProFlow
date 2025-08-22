@@ -17,7 +17,8 @@ export const COLORS = {
   aiBackground: "#e8f0fe",
   darkCardBackground: "#34495e",
   white: "#ffffff",
-  gray: "#95a5a6"
+  gray: "#95a5a6",
+  tertiary: "#6C757D" // A new color for the "My Invitations" button
 };
 
 export const BUTTON_STYLES = {
