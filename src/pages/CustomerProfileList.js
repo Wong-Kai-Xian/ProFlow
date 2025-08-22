@@ -26,19 +26,21 @@ const stringToColor = (str) => {
 };
 
 // Define the stages for progress tracking
-const STAGES = ["Proposal", "Working", "Qualified", "Converted"];
+const STAGES = ["Working", "Qualified", "Converted"];
 
 // Calculate progress based on current stage and tasks completed within stages
 const getProgress = (customer) => {
-  const currentStageIndex = STAGES.indexOf(customer.currentStage);
+  // Use customer.stages for calculating progress, fallback to local STAGES if not available
+  const stagesToUse = customer.stages || STAGES;
+  const currentStageIndex = stagesToUse.indexOf(customer.currentStage);
   if (currentStageIndex === -1) return 0; // Should not happen
 
   let completedStages = 0;
-  let totalStages = STAGES.length;
+  let totalStages = stagesToUse.length;
   let stageProgress = 0;
 
-  for (let i = 0; i < STAGES.length; i++) {
-    const stageName = STAGES[i];
+  for (let i = 0; i < stagesToUse.length; i++) {
+    const stageName = stagesToUse[i];
     const stage = customer.stageData?.[stageName];
 
     if (stage && stage.completed) {
@@ -85,6 +87,7 @@ export default function CustomerProfileList() {
         projects: doc.data().projects || [], // Ensure projects is an array
         status: doc.data().status || "Active",
         lastContact: doc.data().lastContact || "N/A",
+        stages: doc.data().stages || STAGES, // Ensure stages are loaded
       }));
       setCustomers(customerList);
     });
@@ -106,12 +109,12 @@ export default function CustomerProfileList() {
     return matchesSearch && matchesStatus;
   });
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Active': return COLORS.success;
-      case 'Proposal': return COLORS.primary;
-      case 'Inactive': return COLORS.lightText;
-      default: return COLORS.lightText;
+  const getStatusColor = (currentStage) => {
+    switch (currentStage) {
+      case 'Working': return COLORS.primary; // Blue
+      case 'Qualified': return COLORS.success; // Green
+      case 'Converted': return COLORS.accent; // A different color for converted
+      default: return COLORS.lightText; // Default color
     }
   };
 
@@ -135,7 +138,6 @@ export default function CustomerProfileList() {
         files: [],
         currentStage: STAGES[0],
         stageData: {
-          "Proposal": { notes: [], tasks: [], completed: false }, // New initial stage
           "Working": { notes: [], tasks: [], completed: false },
           "Qualified": { notes: [], tasks: [], completed: false },
           "Converted": { notes: [], tasks: [], completed: false },
@@ -366,7 +368,7 @@ export default function CustomerProfileList() {
               const bgColor = stringToColor(customer.customerProfile.name || ""); // Handle potentially undefined name
               const progress = getProgress(customer);
               const currentStageName = customer.currentStage;
-              const currentStageColor = getStatusColor(customer.currentStage); // Use currentStage for color
+              const currentStageColor = getStatusColor(currentStageName); // Use currentStageName for color
 
               return (
                 <div
