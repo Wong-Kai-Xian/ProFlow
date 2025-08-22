@@ -14,6 +14,7 @@ import Signup from "./pages/Signup"; // Import the new Signup component
 import UserProfile from "./pages/UserProfile"; // Import the new UserProfile component
 import Quote from "./pages/Quote"; // Import the new Quote component
 import TeamPage from "./pages/TeamPage"; // Import the new TeamPage component
+import InvitationsPage from "./pages/InvitationsPage"; // Import the new InvitationsPage component
 import { AuthProvider } from './contexts/AuthContext'; // Import AuthProvider
 import PrivateRoute from './components/PrivateRoute'; // Import PrivateRoute
 
@@ -112,6 +113,14 @@ root.render(
             element={
               <PrivateRoute>
                 <TeamPage />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/invitations" 
+            element={
+              <PrivateRoute>
+                <InvitationsPage />
               </PrivateRoute>
             }
           />

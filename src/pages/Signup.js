@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, collection } from 'firebase/firestore';
 import { app, db } from '../firebase';
@@ -32,6 +33,15 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const auth = getAuth(app);
+  const [searchParams] = useSearchParams();
+
+  // Effect to read email from URL parameters on component mount
+  React.useEffect(() => {
+    const emailParam = searchParams.get('email');
+    if (emailParam) {
+      setEmail(emailParam);
+    }
+  }, [searchParams]);
 
   const handleRegister = async (e) => {
     e.preventDefault();

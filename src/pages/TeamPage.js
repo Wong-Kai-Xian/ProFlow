@@ -5,11 +5,14 @@ import { db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom'; // Import Link
+import InviteMemberModal from '../components/team-component/InviteMemberModal'; // Import InviteMemberModal
 
 export default function TeamPage() {
   const [teamMembers, setTeamMembers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const { currentUser } = useAuth();
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState('');
 
   useEffect(() => {
     const fetchTeamMembers = async () => {
@@ -60,6 +63,15 @@ export default function TeamPage() {
     fetchTeamMembers();
   }, [currentUser]);
 
+  const handleInvite = (email, userExists, signupUrl) => {
+    if (userExists) {
+      setInviteMessage(`Invitation sent to ${email}. They can accept it from their dashboard.`);
+    } else {
+      setInviteMessage(`User with email ${email} not found. Share this link for them to sign up: ${signupUrl}`);
+    }
+    setShowInviteModal(false);
+  };
+
   const filteredMembers = teamMembers.filter(member =>
     member.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -78,6 +90,30 @@ export default function TeamPage() {
         }}>
           My Team
         </h1>
+
+        <button
+          onClick={() => setShowInviteModal(true)}
+          style={{
+            backgroundColor: COLORS.primary,
+            color: COLORS.white,
+            padding: "10px 20px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "16px",
+            fontWeight: "600",
+            marginBottom: "20px",
+            boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)"
+          }}
+        >
+          Invite Member
+        </button>
+
+        {inviteMessage && (
+          <p style={{ color: COLORS.primary, marginBottom: "20px", fontSize: "16px" }}>
+            {inviteMessage}
+          </p>
+        )}
 
         {/* Search Bar */}
         <div style={{ marginBottom: "30px" }}>
@@ -164,6 +200,11 @@ export default function TeamPage() {
           </div>
         )}
       </div>
+      <InviteMemberModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        onInvite={handleInvite}
+      />
     </div>
   );
 }

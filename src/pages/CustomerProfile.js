@@ -5,14 +5,13 @@ import CustomerInfo from "../components/profile-component/CustomerInfo";
 import CompanyInfo from "../components/profile-component/CompanyInfo";
 import CompanyReputation from "../components/profile-component/CompanyReputation";
 import StatusPanel from "../components/profile-component/StatusPanel";
-import ActivityRecord from "../components/profile-component/ActivityRecord";
 import Reminders from "../components/profile-component/Reminders";
 import AttachedFiles from "../components/profile-component/AttachedFiles";
 import TaskManager from "../components/profile-component/TaskManager";
 import SendApprovalModal from "../components/project-component/SendApprovalModal"; // Import SendApprovalModal
 import { COLORS, LAYOUT, BUTTON_STYLES } from "../components/profile-component/constants";
 import { db } from "../firebase"; // Import db
-import { doc, getDoc, updateDoc, collection, serverTimestamp } from "firebase/firestore"; // Import Firestore functions
+import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore"; // Import Firestore functions
 
 const STAGES = ["Working", "Qualified", "Converted"];
 
@@ -108,50 +107,6 @@ export default function CustomerProfile() {
 
     fetchCustomer();
   }, [id, navigate, setStages, setStageData]); // Depend on 'id', 'navigate', 'setStages', and 'setStageData'
-
-  const handleSaveCustomer = async () => {
-    setLoading(true);
-    const customerDataToSave = {
-      customerProfile,
-      companyProfile,
-      reputation,
-      activities,
-      reminders,
-      files,
-      currentStage,
-      stageData,
-      stages,
-      projects,
-      status,
-      lastContact: lastContact === "N/A" ? serverTimestamp() : lastContact, // Set timestamp on first save
-    };
-
-    try {
-      const docRef = doc(db, "customerProfiles", id);
-      await updateDoc(docRef, customerDataToSave);
-      console.log("Customer updated!");
-        
-      // TODO: For existing customers, you might also need to update their entry in the Contacts (organizations) if name/company changes.
-      // This is more complex as it requires finding the client entry in the correct organization and updating it.
-      // For now, we'll focus on new customer creation.
-      navigate('/customerlist'); // Navigate back to the list after saving
-    } catch (error) {
-      console.error("Error saving customer: ", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddActivity = (activity) => {
-    const updatedActivities = [activity, ...activities];
-    setActivities(updatedActivities);
-    // Consider saving to Firestore immediately or when main save button is clicked
-  };
-
-  const handleDeleteActivity = (indexToDelete) => {
-    const updatedActivities = activities.filter((_, index) => index !== indexToDelete);
-    setActivities(updatedActivities);
-  };
 
   const handleAddReminder = async (reminder) => {
     const updatedReminders = [...reminders, reminder]; // Add new reminder to the end

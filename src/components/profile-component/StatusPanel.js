@@ -2,10 +2,8 @@ import React, { useState } from "react";
 import Card from "./Card";
 import { COLORS, INPUT_STYLES, BUTTON_STYLES } from "./constants";
 import IncompleteStageModal from "./IncompleteStageModal"; // Import the new modal
-import { FaEdit } from 'react-icons/fa'; // Import FaEdit
 
 // Define the stages for progress tracking
-const STAGES = ["Working", "Qualified", "Converted"];
 
 export default function StatusPanel({
   stages,
