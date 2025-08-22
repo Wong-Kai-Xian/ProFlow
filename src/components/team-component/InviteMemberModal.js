@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { COLORS, INPUT_STYLES, BUTTON_STYLES } from "../profile-component/constants";
 import { db } from "../../firebase"; // Import db
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
@@ -11,15 +11,35 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite }) {
   const [showShareModal, setShowShareModal] = useState(false);
   const [signupLink, setSignupLink] = useState('');
   const [foundUserEmail, setFoundUserEmail] = useState(''); // To store the email of the found user if invited
+  const [isLoading, setIsLoading] = useState(false); // Add loading state
   const auth = getAuth();
+
+  // Reset states when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setEmail('');
+      setIsLoading(false);
+      setShowShareModal(false);
+      setSignupLink('');
+      setFoundUserEmail('');
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent multiple submissions
+    if (isLoading) {
+      return;
+    }
+    
     // setMessage(''); // Clear previous messages
     if (!email.trim()) {
       alert("Please enter an email address."); // Use alert for now, can be replaced by a more sophisticated notification
       return;
     }
+
+    setIsLoading(true); // Set loading state
 
     try {
       // Check if user exists in our Firestore 'users' collection
@@ -53,8 +73,9 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite }) {
     } catch (error) {
       console.error("Error inviting member: ", error);
       alert("Error sending invitation. Please try again.");
+    } finally {
+      setIsLoading(false); // Reset loading state
     }
-    setEmail('');
   };
 
   if (!isOpen) return null;
@@ -76,8 +97,16 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite }) {
             <button type="button" onClick={onClose} style={BUTTON_STYLES.secondary}>
               Cancel
             </button>
-            <button type="submit" style={BUTTON_STYLES.primary}>
-              Invite
+            <button 
+              type="submit" 
+              disabled={isLoading}
+              style={{
+                ...BUTTON_STYLES.primary,
+                opacity: isLoading ? 0.6 : 1,
+                cursor: isLoading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isLoading ? 'Sending...' : 'Invite'}
             </button>
           </div>
         </form>
@@ -87,6 +116,7 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite }) {
         isOpen={showShareModal} 
         onClose={() => { 
           setShowShareModal(false);
+          setIsLoading(false); // Reset loading state when share modal closes
           onClose(); // Close the parent modal as well
         }}
         signupLink={signupLink}
