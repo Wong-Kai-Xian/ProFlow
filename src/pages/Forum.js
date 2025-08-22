@@ -8,7 +8,7 @@ import StarredPosts from "../components/forum-tabs/StarredPosts"; // Updated imp
 import ActiveUsers from "../components/forum-tabs/ActiveUsers";
 import FloatingCreateButton from "../components/forum-tabs/FloatingCreateButton";
 import CreatePostModal from "../components/forum-tabs/CreatePostModal";
-import ManageMembersModal from "../components/forum-component/ManageMembersModal";
+import InviteMemberModal from "../components/forum-component/InviteMemberModal"; // Import the new InviteMemberModal
 import { COLORS, BUTTON_STYLES } from "../components/profile-component/constants";
 import { db } from "../firebase";
 import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc } from "firebase/firestore"; // Import collection, getDocs, getDoc
@@ -20,7 +20,7 @@ export default function Forum() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [posts, setPosts] = useState([]); // This will eventually come from Discussion tab's Firestore logic
   const [linkedProjectData, setLinkedProjectData] = useState(null); // State for actual project data
-  const [showMemberModal, setShowMemberModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false); // State for the new Invite Member modal
   const [forumMembers, setForumMembers] = useState([]); // Will be populated from forumData (UIDs)
   const [enrichedForumMembersDetails, setEnrichedForumMembersDetails] = useState([]); // Enriched member data
   // Mock current user for demonstration purposes. In a real app, this would come from authentication.
@@ -185,6 +185,7 @@ export default function Forum() {
           {linkedProjectData ? (
             <ProjectDetails 
               project={linkedProjectData} 
+              readOnly={true} // Ensure ProjectDetails is read-only in the forum context
             />
           ) : (
             <div style={{
@@ -233,7 +234,7 @@ export default function Forum() {
               </p>
             </div>
             <button
-              onClick={() => setShowMemberModal(true)}
+              onClick={() => setShowInviteModal(true)} // Open the new InviteMemberModal
               style={{
                 ...BUTTON_STYLES.primary,
                 padding: "10px 16px",
@@ -241,7 +242,7 @@ export default function Forum() {
                 fontWeight: "600"
               }}
             >
-              Manage Members
+              Invite Members
             </button>
           </div>
           <ForumTabs 
@@ -275,13 +276,13 @@ export default function Forum() {
         updateForumPostCount={updateForumPostCount}
       />
 
-      {/* Manage Members Modal */}
-      <ManageMembersModal
-        isOpen={showMemberModal}
-        onClose={() => setShowMemberModal(false)}
-        members={enrichedForumMembersDetails} // Pass enriched member details to ManageMembersModal
+      {/* Invite Member Modal */}
+      <InviteMemberModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        members={enrichedForumMembersDetails} // Pass enriched member details to InviteMemberModal
         onAddMember={handleAddMember}
-        onRemoveMember={handleRemoveMember}
+        onRemoveMember={handleRemoveMember} // This will be ignored by InviteMemberModal, but kept for consistency if needed later
         forumId={forumId}
         forumName={forumData?.name}
       />

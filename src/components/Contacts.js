@@ -21,21 +21,18 @@ export default function Contacts() {
   const [view, setView] = useState("clients");
   const [showAddOrg, setShowAddOrg] = useState(false);
   const [showDelOrg, setShowDelOrg] = useState(false);
+  const [organizations, setOrganizations] = useState([]); // Re-initialize with empty array
   const [showAddClientModal, setShowAddClientModal] = useState(false); // New state for add client modal
   const [currentOrgIndex, setCurrentOrgIndex] = useState(null); // To keep track of which org to add client to
   const [showDeleteClientModal, setShowDeleteClientModal] = useState(false); // New state for delete client modal
   const [clientToDelete, setClientToDelete] = useState(null); // To store client to delete
-  const [showAddTeamMemberModal, setShowAddTeamMemberModal] = useState(false); // New state for add team member modal
-  const [teamMemberToDelete, setTeamMemberToDelete] = useState(null); // To store team member to delete
-
-  const [organizations, setOrganizations] = useState([]); // Initialize with empty array
-  const [team, setTeam] = useState([]); // Initialize with empty array
+  const [teamMembersList, setTeamMembersList] = useState([]); // Unified state for team members
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
 
   useEffect(() => {
     if (!currentUser) {
       setOrganizations([]);
-      setTeam([]);
+      setTeamMembersList([]);
       return; // Exit if no current user
     }
 
@@ -76,19 +73,46 @@ export default function Contacts() {
       setOrganizations(orgList);
     });
 
-    const teamCollectionRef = collection(db, "teamMembers");
-    const teamQuery = query(teamCollectionRef, where("userId", "==", currentUser.uid)); // Filter by userId
-    const unsubscribeTeamMembers = onSnapshot(teamQuery, (snapshot) => {
-      const teamList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setTeam(teamList);
-    });
+    // Fetch team members by looking at all projects the current user is part of
+    const fetchTeamMembers = async () => {
+      try {
+        const projectQuery = query(
+          collection(db, "projects"),
+          where("team", "array-contains", currentUser.email)
+        );
+        const projectSnapshot = await getDocs(projectQuery);
+        
+        const uniqueMemberEmails = new Set();
+        projectSnapshot.forEach(doc => {
+          const projectData = doc.data();
+          (projectData.team || []).forEach(memberEmail => {
+            // Exclude the current user from the displayed team list if they are in the project team
+            if (memberEmail !== currentUser.email) {
+              uniqueMemberEmails.add(memberEmail);
+            }
+          });
+        });
+
+        const membersDetails = Array.from(uniqueMemberEmails).map(email => ({
+          email: email,
+          displayName: email.split('@')[0] // Simple display name for now
+        }));
+        setTeamMembersList(membersDetails);
+
+      } catch (error) {
+        console.error("Error fetching team members for Contacts page: ", error);
+      }
+    };
+
+    fetchTeamMembers();
+    // Note: This approach for team members is not real-time like onSnapshot, 
+    // but provides a consistent view with TeamPage.js for initial sync.
+    // If real-time updates for team members are critical here, a more complex setup 
+    // involving multiple onSnapshot listeners or a single collection for all users' teams 
+    // would be needed, which is out of scope for this task.
 
     return () => {
       unsubscribeOrganizations();
-      unsubscribeTeamMembers();
     };
   }, [currentUser]); // Add currentUser to dependency array
 
@@ -291,30 +315,6 @@ export default function Contacts() {
     setClientToDelete(null);
   };
 
-  const handleAddTeamMember = async (member) => {
-    if (!currentUser) return; // Only allow adding team members if logged in
-    await addDoc(collection(db, "teamMembers"), { ...member, userId: currentUser.uid }); // Add userId
-    const teamCollectionRef = collection(db, "teamMembers");
-    const teamQuery = query(teamCollectionRef, where("userId", "==", currentUser.uid));
-    const teamSnapshot = await getDocs(teamQuery);
-    const teamList = teamSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    setTeam(teamList);
-    setShowAddTeamMemberModal(false);
-  };
-
-  const handleDeleteTeamMember = async (indexToRemove) => {
-    const memberToDelete = team[indexToRemove];
-    if (memberToDelete && memberToDelete.id) {
-      await deleteDoc(doc(db, "teamMembers", memberToDelete.id));
-    setTeam(team.filter((_, index) => index !== indexToRemove));
-    }
-    setShowDeleteClientModal(false); // Reuse delete modal for team members
-    setTeamMemberToDelete(null);
-  };
-
   const addClient = (orgIndex) => {
     setCurrentOrgIndex(orgIndex);
     setShowAddClientModal(true);
@@ -324,18 +324,6 @@ export default function Contacts() {
       setCurrentOrgIndex(orgIndex);
     setClientToDelete(clientToRemove);
       setShowDeleteClientModal(true);
-  };
-
-  const addTeamMember = () => {
-    setShowAddTeamMemberModal(true);
-  };
-
-  const removeTeamMember = (teamMemberName) => {
-    const member = team.find(t => t.name === teamMemberName);
-    if (member) {
-      setTeamMemberToDelete(member);
-      setShowDeleteClientModal(true); // Reuse delete modal for team members
-    }
   };
 
   const goToCustomerProfile = (id) => {
@@ -359,9 +347,6 @@ export default function Contacts() {
               <button onClick={() => setShowAddOrg(true)} style={{ ...BUTTON_STYLES.primary, padding: "4px 8px", fontSize: "10px" }}>+</button>
               <button onClick={() => setShowDelOrg(true)} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "4px 8px", fontSize: "10px" }}>-</button>
             </>
-          )}
-          {view === "team" && currentUser && (
-            <button onClick={addTeamMember} style={{ ...BUTTON_STYLES.primary, padding: "6px 12px", fontSize: "14px" }}>+ Team Contact</button>
           )}
         </div>
       </div>
@@ -472,7 +457,7 @@ export default function Contacts() {
                   ))}
                 </li>
               ))
-            : team.map((t, i) => ( /* Added console.log */
+            : teamMembersList.map((member, i) => (
                 <li key={i} style={{
                   background: COLORS.cardBackground,
                   padding: LAYOUT.smallGap,
@@ -484,13 +469,14 @@ export default function Contacts() {
                   boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
                 }}>
                   <div style={{ marginBottom: "8px", width: "100%" }}>
-                    <strong style={{ color: COLORS.text, wordBreak: "break-word" }}>{t.name}</strong><br/>
-                    <span style={{ fontSize: "12px", color: COLORS.lightText, wordBreak: "break-word" }}>{t.email}</span>
+                    <strong style={{ color: COLORS.text, wordBreak: "break-word" }}>{member.displayName}</strong><br/>
+                    <span style={{ fontSize: "12px", color: COLORS.lightText, wordBreak: "break-word" }}>{member.email}</span>
                   </div>
                   <div style={{ display: "flex", gap: "8px", justifyContent: "flex-start", width: "100%", marginTop: "8px" }}>
-                    <button onClick={(e) => { e.stopPropagation(); openWhatsApp(t.phone); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaWhatsapp /></button>
-                    <button onClick={(e) => { e.stopPropagation(); openEmail(t.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><MdEmail /></button>
-                    <button onClick={(e) => { e.stopPropagation(); removeTeamMember(t.name); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "6px 12px", fontSize: "16px", borderRadius: "3px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaTrash /></button>
+                    {/* WhatsApp and Email buttons for team members, assuming phone and email are available */}
+                    {member.phone && <button onClick={(e) => { e.stopPropagation(); openWhatsApp(member.phone); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaWhatsapp /></button>}
+                    {member.email && <button onClick={(e) => { e.stopPropagation(); openEmail(member.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><MdEmail /></button>}
+                    {/* Removed delete button for team members as management is moved to TeamPage */}
                   </div>
                 </li>
               ))
@@ -510,32 +496,20 @@ export default function Contacts() {
           onAddContact={handleAddClient}
         />
       )}
-      {showAddTeamMemberModal && (
-        <AddProfileModal
-          isOpen={showAddTeamMemberModal}
-          onClose={() => setShowAddTeamMemberModal(false)}
-          onAddContact={handleAddTeamMember}
-        />
-      )}
-      {showDeleteClientModal && (clientToDelete || teamMemberToDelete) && (
+      {showDeleteClientModal && (clientToDelete) && (
         <DeleteProfileModal
           isOpen={showDeleteClientModal}
           onClose={() => {
             setShowDeleteClientModal(false);
             setClientToDelete(null);
-            setTeamMemberToDelete(null);
+            // setTeamMemberToDelete(null); // No longer needed
           }}
           onDeleteConfirm={() => {
             if (clientToDelete && currentOrgIndex !== null) { 
               handleRemoveClient(currentOrgIndex, clientToDelete.id);
-            } else if (teamMemberToDelete) {
-              const memberIndex = team.findIndex(member => member.name === teamMemberToDelete.name);
-              if (memberIndex !== -1) {
-                handleDeleteTeamMember(memberIndex);
-              }
-            }
+            } // Removed team member deletion logic
           }}
-          contactName={clientToDelete?.name || teamMemberToDelete?.name || ""}
+          contactName={clientToDelete?.name || ""} // Only pass client name for deletion
         />
       )}
     </Card>

@@ -9,6 +9,7 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
   const [selectedStage, setSelectedStage] = useState('Proposal');
   const [projectDescription, setProjectDescription] = useState(''); // New state for project description
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const [allowJoinById, setAllowJoinById] = useState(true); // New state for "Allow Join by ID"
 
   const projectStages = ['Proposal', 'Negotiation', 'Complete'];
 
@@ -19,13 +20,15 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
       setTeamMembers(editingProject.team || []);
       setSelectedStage(editingProject.stage || 'Proposal');
       setProjectDescription(editingProject.description || ''); // Populate description
+      setAllowJoinById(editingProject.allowJoinById !== undefined ? editingProject.allowJoinById : true); // Populate allowJoinById, default to true
     } else {
       setProjectName('');
-      setTeamMembers([]);
+      setTeamMembers(currentUser ? [currentUser.email] : []); // Add current user to team members for new projects
       setSelectedStage('Proposal');
       setProjectDescription(''); // Reset description
+      setAllowJoinById(true); // Default to true for new projects
     }
-  }, [editingProject]);
+  }, [editingProject, currentUser]); // Add currentUser to dependency array
 
   const handleAddMember = () => {
     if (newMember.trim() && !teamMembers.includes(newMember.trim())) {
@@ -48,22 +51,26 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
         tasks: editingProject ? editingProject.tasks : 0,
         completedTasks: editingProject ? editingProject.completedTasks : 0,
         userId: currentUser.uid, // Associate project with the current user
+        allowJoinById: allowJoinById, // Include allowJoinById
+        ...(editingProject && { id: editingProject.id }), // Conditionally add id for existing projects
       });
       // Reset form
       setProjectName('');
-      setTeamMembers([]);
+      setTeamMembers(currentUser ? [currentUser.email] : []); // Reset to include current user
       setNewMember('');
       setSelectedStage('Proposal');
       setProjectDescription(''); // Reset description
+      setAllowJoinById(true); // Reset allowJoinById
     }
   };
 
   const handleCancel = () => {
     setProjectName('');
-    setTeamMembers([]);
+    setTeamMembers(currentUser ? [currentUser.email] : []); // Reset to include current user
     setNewMember('');
     setSelectedStage('Proposal');
     setProjectDescription(''); // Reset description
+    setAllowJoinById(true); // Reset allowJoinById
     onClose();
   };
 
@@ -151,6 +158,20 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
               resize: 'vertical'
             }}
           />
+        </div>
+
+        {/* Allow Join by ID Checkbox */}
+        <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center' }}>
+          <input
+            type="checkbox"
+            id="allowJoinById"
+            checked={allowJoinById}
+            onChange={(e) => setAllowJoinById(e.target.checked)}
+            style={{ marginRight: '10px', width: '18px', height: '18px' }}
+          />
+          <label htmlFor="allowJoinById" style={{ color: COLORS.dark, fontSize: '16px', fontWeight: '600', cursor: 'pointer' }}>
+            Allow others to join by Project ID
+          </label>
         </div>
 
         {/* Team Members */}

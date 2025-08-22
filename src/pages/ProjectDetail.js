@@ -256,6 +256,7 @@ export default function ProjectDetail() {
             project={projectDetails} 
             onSave={handleSaveEditedProjectDetails}
             allProjectNames={allProjectNames} // Pass all project names
+            readOnly={false} // Explicitly set to editable mode
           />
           <div style={{ flexGrow: 0 }}>
             <Reminders projectId={projectId} /> 

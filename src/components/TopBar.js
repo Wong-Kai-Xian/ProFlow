@@ -43,6 +43,7 @@ export default function TopBar() {
           <Link to="/customer-profiles" style={getLinkStyle("/customer-profiles")}>Customer Profile</Link>
           <Link to="/approvals" style={getLinkStyle("/approvals")}>Approval</Link> {/* New link for Approvals */}
           <Link to="/quote" style={getLinkStyle("/quote")}>Quote</Link>
+          <Link to="/team" style={getLinkStyle("/team")}>Team</Link> {/* New link for Team Page */}
         </>
       )}
 

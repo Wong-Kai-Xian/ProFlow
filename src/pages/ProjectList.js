@@ -9,7 +9,6 @@ import { collection, getDocs, addDoc, updateDoc, doc, getDoc, deleteDoc } from "
 import { onSnapshot, query, orderBy, where } from "firebase/firestore"; // Import onSnapshot, query, orderBy
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
-import EditProjectDetailsModal from '../components/project-component/EditProjectDetailsModal'; // Import EditProjectDetailsModal
 
 // Get initials from project name
 const getInitials = (name) =>
@@ -86,18 +85,19 @@ export default function ProjectList() {
       stage: newProject.stage || "Proposal",
       status: determineProjectStatus(newProject.stage || "Proposal"), // Set status based on stage progress
       team: newProject.team || [],
-      tasks: newProject.tasks || 0,
+      tasks: newProject.tasks || [], // Initialize tasks as an empty array
       completedTasks: newProject.completedTasks || 0,
       userId: currentUser.uid, // Assign project to current user
+      description: newProject.description || '', // Include description
+      allowJoinById: newProject.allowJoinById !== undefined ? newProject.allowJoinById : true, // Include allowJoinById
     });
     // setProjects will be handled by the onSnapshot listener, no need to refetch
     setShowCreateModal(false);
   };
 
   const handleEditProject = (project) => {
-    // navigate(`/project/${project.id}`); // Old navigation for inline editing
     setProjectToEdit(project);
-    setShowEditProjectModal(true);
+    setShowCreateModal(true); // Open the CreateProjectModal for editing
   };
 
   const handleDeleteProject = async (projectId) => {
@@ -129,6 +129,12 @@ export default function ProjectList() {
       if (projectSnap.exists()) {
         const projectData = projectSnap.data();
         const currentTeam = projectData.team || [];
+
+        // Check if joining by ID is allowed for this project
+        if (projectData.allowJoinById === false) {
+          setJoinProjectError('This project cannot be joined by ID.');
+          return;
+        }
 
         if (currentTeam.includes(currentUser.uid)) {
           setJoinProjectError('You are already a member of this project.');
@@ -175,9 +181,12 @@ export default function ProjectList() {
       await updateDoc(projectRef, {
         name: updatedProject.name,
         description: updatedProject.description,
+        team: updatedProject.team,
+        stage: updatedProject.stage,
+        allowJoinById: updatedProject.allowJoinById,
       });
       // The onSnapshot listener will handle updating the projects state
-      setShowEditProjectModal(false);
+      setShowCreateModal(false); // Close CreateProjectModal
       setProjectToEdit(null);
     } catch (error) {
       console.error("Error updating project:", error);
@@ -455,6 +464,15 @@ export default function ProjectList() {
                     {project.name}
                   </h3>
 
+                  {/* Project ID */}
+                  <div style={{ 
+                    fontSize: "12px", 
+                    color: COLORS.lightText,
+                    marginBottom: "10px"
+                  }}>
+                    ID: {project.id}
+                  </div>
+
                   {/* Stage Badge */}
                   <div style={{
                     display: "inline-block",
@@ -613,19 +631,12 @@ export default function ProjectList() {
         onClose={() => {
           setShowCreateModal(false);
           setEditingProject(null);
+          setProjectToEdit(null); // Clear project to edit when closing
         }}
-        onConfirm={handleCreateProject}
-        // Removed editingProject prop as editing is now handled on ProjectDetail page
+        onConfirm={projectToEdit ? handleUpdateProjectFromModal : handleCreateProject}
+        editingProject={projectToEdit} // Pass the project to edit
       />
-      <EditProjectDetailsModal
-        isOpen={showEditProjectModal}
-        onClose={() => {
-          setShowEditProjectModal(false);
-          setProjectToEdit(null);
-        }}
-        project={projectToEdit}
-        onUpdate={handleUpdateProjectFromModal}
-      />
+      {/* Removed EditProjectDetailsModal as CreateProjectModal is now used for both */}
     </div>
   );
 }

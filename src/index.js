@@ -13,6 +13,7 @@ import Login from "./pages/Login"; // Import the new Login component
 import Signup from "./pages/Signup"; // Import the new Signup component
 import UserProfile from "./pages/UserProfile"; // Import the new UserProfile component
 import Quote from "./pages/Quote"; // Import the new Quote component
+import TeamPage from "./pages/TeamPage"; // Import the new TeamPage component
 import { AuthProvider } from './contexts/AuthContext'; // Import AuthProvider
 import PrivateRoute from './components/PrivateRoute'; // Import PrivateRoute
 
@@ -103,6 +104,14 @@ root.render(
             element={
               <PrivateRoute>
                 <Quote />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/team" 
+            element={
+              <PrivateRoute>
+                <TeamPage />
               </PrivateRoute>
             }
           />

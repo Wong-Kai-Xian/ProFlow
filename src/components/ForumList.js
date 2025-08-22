@@ -302,6 +302,16 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                   {forum.name}
                 </h3>
 
+                {/* Forum ID */}
+                <div style={{
+                  fontSize: "12px",
+                  color: COLORS.lightText,
+                  marginBottom: "8px",
+                  wordBreak: "break-all"
+                }}>
+                  ID: {forum.id}
+                </div>
+
                 {/* Project Name (if available) */}
                 {forum.projectId && (
                   <div style={{

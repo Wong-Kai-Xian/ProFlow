@@ -19,7 +19,7 @@ export default function HomeGroupForum() {
       return;
     }
 
-    // Query for forums where the current user is a member and not linked to a project
+    // Query for forums where the current user is a member
     const q = query(collection(db, "forums"), where("members", "array-contains", currentUser.uid), orderBy('lastActivity', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const forumsData = snapshot.docs.map(doc => ({

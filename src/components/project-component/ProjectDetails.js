@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react';
 import Card from '../profile-component/Card';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
 
-export default function ProjectDetails({ project, onSave, allProjectNames }) {
+export default function ProjectDetails({ project, onSave, allProjectNames, readOnly }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editableProject, setEditableProject] = useState(project || {});
 
-  // Update editableProject when project prop changes
+  // Debugging: Log onSave prop
   useEffect(() => {
+    console.log("ProjectDetails: onSave prop type and value", typeof onSave, onSave);
     if (project) {
       setEditableProject(project);
     }
-  }, [project]);
+  }, [project, onSave]); // Add onSave to dependency array to log changes
 
   // Early return if no project data
   if (!project) {
@@ -25,7 +26,9 @@ export default function ProjectDetails({ project, onSave, allProjectNames }) {
   }
 
   const handleSave = () => {
-    onSave(editableProject);
+    if (typeof onSave === 'function') {
+      onSave(editableProject);
+    }
     setIsEditing(false);
   };
 
@@ -61,11 +64,11 @@ export default function ProjectDetails({ project, onSave, allProjectNames }) {
       maxHeight: "250px", 
       display: "flex", 
       flexDirection: "column", 
-      overflow: isEditing ? "hidden" : "hidden" // Keep outer card hidden, inner div will scroll
+      overflow: (isEditing && !readOnly) ? "hidden" : "hidden" // Keep outer card hidden, inner div will scroll
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
         <h3 style={{ margin: 0, color: COLORS.dark, fontSize: "16px", fontWeight: "700" }}>Project Details</h3>
-        {!isEditing ? (
+        {!readOnly && typeof onSave === 'function' && (!isEditing ? (
           <button onClick={() => setIsEditing(true)} style={BUTTON_STYLES.secondary}>
             Edit
           </button>
@@ -78,33 +81,39 @@ export default function ProjectDetails({ project, onSave, allProjectNames }) {
               Cancel
             </button>
           </div>
-        )}
+        ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: isEditing ? "auto" : "hidden", paddingRight: "5px" }}> {/* Apply scroll here */}
+      <div style={{ flex: 1, overflowY: (isEditing && !readOnly) ? "auto" : "hidden", paddingRight: "5px" }}> {/* Apply scroll here */}
         {/* Editable Info at the top */}
         <div style={{ marginBottom: LAYOUT.smallGap }}>
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
             <strong style={{ fontWeight: "600" }}>Project Name:</strong> 
             <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {isEditing ? (
-                <select name="name" value={editableProject.name || ''} onChange={handleChange} style={INPUT_STYLES.base}>
-                  <option value="">Select Project</option>
-                  {allProjectNames && allProjectNames.map((proj) => (
-                    <option key={proj.id} value={proj.name}>
-                      {proj.name}
-                    </option>
-                  ))}
-                </select>
+              {(isEditing && !readOnly) ? (
+                <input 
+                  type="text" 
+                  name="name" 
+                  value={editableProject.name || ''} 
+                  onChange={handleChange} 
+                  style={INPUT_STYLES.base} 
+                />
               ) : (
                 project.name || 'N/A'
               )}
             </span>
           </p>
+          {/* Project ID (always read-only) */}
+          <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
+            <strong style={{ fontWeight: "600" }}>Project ID:</strong> 
+            <span style={{ marginLeft: "8px", fontWeight: "400", userSelect: "all" }}>
+              {project.id || 'N/A'}
+            </span>
+          </p>
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
             <strong style={{ fontWeight: "600" }}>Company:</strong> 
             <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {isEditing ? (
+              {(isEditing && !readOnly) ? (
                 <input type="text" name="companyInfo.name" value={editableProject.companyInfo?.name || ''} onChange={handleChange} style={INPUT_STYLES.base} />
               ) : (
                 project.companyInfo?.name || 'N/A'
@@ -114,7 +123,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames }) {
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
             <strong style={{ fontWeight: "600" }}>Industry:</strong> 
             <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {isEditing ? (
+              {(isEditing && !readOnly) ? (
                 <input type="text" name="companyInfo.industry" value={editableProject.companyInfo?.industry || ''} onChange={handleChange} style={INPUT_STYLES.base} />
               ) : (
                 project.companyInfo?.industry || 'N/A'
@@ -124,7 +133,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames }) {
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
             <strong style={{ fontWeight: "600" }}>Contact:</strong> 
             <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {isEditing ? (
+              {(isEditing && !readOnly) ? (
                 <input type="text" name="companyInfo.contact" value={editableProject.companyInfo?.contact || ''} onChange={handleChange} style={INPUT_STYLES.base} />
               ) : (
                 project.companyInfo?.contact || 'N/A'
@@ -138,7 +147,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames }) {
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px", fontWeight: "600" }}>
             <strong>Description:</strong>
           </p>
-          {isEditing ? (
+          {(isEditing && !readOnly) ? (
             <textarea
               name="description"
               value={editableProject.description || ''}
