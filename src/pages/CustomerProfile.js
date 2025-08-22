@@ -12,7 +12,7 @@ import SendApprovalModal from "../components/project-component/SendApprovalModal
 import CreateProjectModal from "../components/project-component/CreateProjectModal"; // Import CreateProjectModal
 import { COLORS, LAYOUT, BUTTON_STYLES } from "../components/profile-component/constants";
 import { db } from "../firebase"; // Import db
-import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc } from "firebase/firestore"; // Import Firestore functions
+import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc, query, where, getDocs } from "firebase/firestore"; // Import Firestore functions
 
 const STAGES = ["Working", "Qualified", "Converted"];
 
@@ -35,6 +35,7 @@ export default function CustomerProfile() {
   const [stages, setStages] = useState(STAGES);
   const [projects, setProjects] = useState([]); // To store associated projects
   const [lastContact, setLastContact] = useState("N/A"); // Default last contact
+  const [customerTeamMembersDetails, setCustomerTeamMembersDetails] = useState([]); // State for enriched team member details
 
   // Helper to check if a stage is completed
   const isStageCompleted = (stageName) => stageData[stageName]?.completed;
@@ -118,6 +119,49 @@ export default function CustomerProfile() {
 
     fetchCustomer();
   }, [id, navigate, setStages, setStageData]); // Depend on 'id', 'navigate', 'setStages', and 'setStageData'
+
+  // Effect to fetch team member details from associated projects
+  useEffect(() => {
+    const fetchCustomerTeamMembersDetails = async () => {
+      if (!projects || projects.length === 0) {
+        setCustomerTeamMembersDetails([]);
+        return;
+      }
+
+      const uniqueMemberUids = new Set();
+      for (const projectId of projects) {
+        const projectRef = doc(db, "projects", projectId);
+        const projectSnap = await getDoc(projectRef);
+        if (projectSnap.exists()) {
+          const projectData = projectSnap.data();
+          (projectData.team || []).forEach(memberUid => uniqueMemberUids.add(memberUid));
+        }
+      }
+
+      const allMemberUids = Array.from(uniqueMemberUids);
+      const fetchedDetails = [];
+      if (allMemberUids.length > 0) {
+        const chunkSize = 10; // Firestore 'in' query limit
+
+        for (let i = 0; i < allMemberUids.length; i += chunkSize) {
+          const chunk = allMemberUids.slice(i, i + chunkSize);
+          const usersQuery = query(collection(db, "users"), where("uid", "in", chunk));
+          const usersSnapshot = await getDocs(usersQuery);
+          usersSnapshot.forEach(userDoc => {
+            const userData = userDoc.data();
+            fetchedDetails.push({
+              uid: userDoc.id,
+              name: userData.name || userData.email,
+              email: userData.email,
+            });
+          });
+        }
+      }
+      setCustomerTeamMembersDetails(fetchedDetails);
+    };
+
+    fetchCustomerTeamMembersDetails();
+  }, [projects]); // Re-run when projects array changes
 
   const handleSaveCustomer = async () => {
     setLoading(true);
@@ -342,7 +386,8 @@ export default function CustomerProfile() {
         isOpen={showSendApprovalModal}
         onClose={() => setShowSendApprovalModal(false)}
         onSendApproval={(data) => console.log("Customer Profile - Approval data sent:", data)}
-        allProjects={projects} // Pass customer's projects (from state)
+        // allProjects={projects} // Pass customer's projects (from state) - Not directly used by the modal for recipient selection
+        teamMembers={customerTeamMembersDetails} // Pass enriched team members details
       />
 
       {/* Create Project Modal */}

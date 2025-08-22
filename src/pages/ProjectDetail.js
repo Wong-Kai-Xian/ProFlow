@@ -12,7 +12,7 @@ import SendApprovalModal from '../components/project-component/SendApprovalModal
 import AddTeamMemberModal from '../components/project-component/AddTeamMemberModal'; // Import AddTeamMemberModal
 import TeamMembersPanel from '../components/project-component/TeamMembersPanel'; // Import TeamMembersPanel
 import { db } from "../firebase";
-import { doc, getDoc, updateDoc, collection, query, where, onSnapshot } from "firebase/firestore"; // Import collection, query, where, onSnapshot
+import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs } from "firebase/firestore"; // Import collection, query, where, onSnapshot
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
 export default function ProjectDetail() {
@@ -26,6 +26,7 @@ export default function ProjectDetail() {
   const [currentApproval, setCurrentApproval] = useState(null); // State to hold the current approval request
   const [showAddTeamMemberModal, setShowAddTeamMemberModal] = useState(false); // New state for add team member modal
   const [allProjectNames, setAllProjectNames] = useState([]); // New state to store all project names
+  const [projectTeamMembersDetails, setProjectTeamMembersDetails] = useState([]); // State for enriched team member details
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -81,6 +82,42 @@ export default function ProjectDetail() {
     });
     return () => unsubscribe();
   }, [currentUser]);
+
+  // Effect to fetch team member details
+  useEffect(() => {
+    const fetchProjectTeamMembersDetails = async () => {
+      if (!projectData?.team || projectData.team.length === 0) {
+        setProjectTeamMembersDetails([]);
+        return;
+      }
+
+      try {
+        const memberUids = projectData.team;
+        const fetchedDetails = [];
+        const chunkSize = 10; // Firestore 'in' query limit
+
+        for (let i = 0; i < memberUids.length; i += chunkSize) {
+          const chunk = memberUids.slice(i, i + chunkSize);
+          const usersQuery = query(collection(db, "users"), where("uid", "in", chunk));
+          const usersSnapshot = await getDocs(usersQuery);
+          usersSnapshot.forEach(doc => {
+            const userData = doc.data();
+            fetchedDetails.push({
+              uid: doc.id,
+              name: userData.name || userData.email,
+              email: userData.email,
+            });
+          });
+        }
+        setProjectTeamMembersDetails(fetchedDetails);
+      } catch (error) {
+        console.error("Error fetching project team member details:", error);
+        setProjectTeamMembersDetails([]);
+      }
+    };
+
+    fetchProjectTeamMembersDetails();
+  }, [projectData?.team]); // Re-run when projectData.team changes
 
   // Fetch approval requests for the current project and stage in real-time
   useEffect(() => {
@@ -342,6 +379,7 @@ export default function ProjectDetail() {
         defaultProject={projectDetails} // Pass current project details
         defaultStatus={currentStage} // Pass current stage as default status
         currentUser={currentUser} // Pass currentUser to the modal
+        teamMembers={projectTeamMembersDetails} // Pass enriched team members details
       />
       {/* Add Team Member Modal */}
       <AddTeamMemberModal

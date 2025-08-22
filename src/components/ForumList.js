@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "./profile-component/constants";
+import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
 
 // Get initials from forum name
 const getInitials = (name) =>
@@ -231,26 +232,32 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                       position: "absolute",
                       top: "16px",
                       right: onEditForum ? "50px" : "16px", // Adjust position if Edit button is present
-                      background: COLORS.danger,
+                      background: COLORS.danger, // Red background
                       border: "none",
-                      borderRadius: "6px",
-                      padding: "6px 8px",
                       cursor: "pointer",
-                      fontSize: "12px",
-                      color: COLORS.white,
-                      transition: "all 0.2s ease",
-                      zIndex: 1
+                      color: COLORS.white, // White icon color
+                      fontSize: "14px", // Match edit button font size for visual consistency
+                      padding: "6px 8px", // Match edit button padding
+                      borderRadius: "6px", // Make it square with rounded corners
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "background-color 0.2s ease",
+                      zIndex: 1,
+                      '&:hover': {
+                        backgroundColor: "#c0392b", // Darker red on hover
+                      }
                     }}
                     onMouseEnter={(e) => {
-                      e.target.style.backgroundColor = "#c0392b";
-                      e.target.style.transform = "scale(1.05)";
+                      e.currentTarget.style.backgroundColor = "#c0392b";
+                      e.currentTarget.style.transform = "scale(1.05)";
                     }}
                     onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = COLORS.danger;
-                      e.target.style.transform = "scale(1)";
+                      e.currentTarget.style.backgroundColor = COLORS.danger; // Revert to original red on mouse leave
+                      e.currentTarget.style.transform = "scale(1)";
                     }}
                   >
-                    Delete
+                    <FaTrash />
                   </button>
                 )}
                 {/* Notification Badge */}
@@ -258,7 +265,7 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                   <div style={{
                     position: "absolute",
                     top: "16px",
-                    right: (onEditForum || onDeleteForum) ? "94px" : "16px", // Adjust position if Edit/Delete button is present
+                    right: (onEditForum || onDeleteForum) ? (onEditForum && onDeleteForum ? "94px" : "50px") : "16px", // Adjust position if Edit/Delete button is present
                     fontSize: "12px",
                     color: COLORS.white,
                     background: COLORS.danger,

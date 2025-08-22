@@ -10,13 +10,15 @@ export default function SendApprovalModal({
   onSendApproval,
   defaultProject = null,
   defaultStatus = "",
-  currentUser, // Expect currentUser prop
+  currentUser,
+  teamMembers, // Expect teamMembers prop
 }) {
   const [message, setMessage] = useState("");
   const [file, setFile] = useState(null);
-  const [selectedAdmin, setSelectedAdmin] = useState("all"); // Initialize with "all" for all admins by default
+  const [selectedRecipient, setSelectedRecipient] = useState(null); // Selected team member for approval
+  const [recipientSearchTerm, setRecipientSearchTerm] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
-  const [admins, setAdmins] = useState([]); // State to store fetched admins
   const [loading, setLoading] = useState(false); // New loading state
   const [uploadProgress, setUploadProgress] = useState(0); // For file upload progress
   const [uploading, setUploading] = useState(false); // For file upload status
@@ -24,28 +26,29 @@ export default function SendApprovalModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    const fetchAdmins = async () => {
-      const adminsCollectionRef = collection(db, "users");
-      // Assuming "role" field exists and identifies admins
-      const q = query(adminsCollectionRef, where("role", "==", "admin"));
-      const querySnapshot = await getDocs(q);
-      const adminList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setAdmins(adminList);
-      // If there are admins, set the default selected admin to the first one, or "all" if it's the default.
-      // If no admins, selectedAdmin remains "all" or can be set to ""
-      if (adminList.length > 0 && selectedAdmin === "") { // Only set default if no specific admin selected
-        setSelectedAdmin("all"); // Default to all if no other selection has been made
-      }
-    };
+    // This useEffect is no longer needed as teamMembers are passed as a prop
+    // const fetchAdmins = async () => {
+    //   const adminsCollectionRef = collection(db, "users");
+    //   // Assuming "role" field exists and identifies admins
+    //   const q = query(adminsCollectionRef, where("role", "==", "admin"));
+    //   const querySnapshot = await getDocs(q);
+    //   const adminList = querySnapshot.docs.map(doc => ({
+    //     id: doc.id,
+    //     ...doc.data()
+    //   }));
+    //   setAdmins(adminList);
+    //   // If there are admins, set the default selected admin to the first one, or "all" if it's the default.
+    //   // If no admins, selectedAdmin remains "all" or can be set to ""
+    //   if (adminList.length > 0 && selectedAdmin === "") { // Only set default if no specific admin selected
+    //     setSelectedAdmin("all"); // Default to all if no other selection has been made
+    //   }
+    // };
 
-    fetchAdmins();
+    // fetchAdmins();
   }, [isOpen]);
 
-  console.log("Admins fetched:", admins);
-  console.log("Admins length:", admins.length);
+  console.log("Team members fetched:", teamMembers);
+  console.log("Team members length:", teamMembers.length);
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
@@ -107,37 +110,26 @@ export default function SendApprovalModal({
     console.log("saveApprovalRequest called with fileUrl:", fileUrl);
     try {
       const requests = [];
-      if (selectedAdmin === "all") {
-        console.log("Sending to all admins.");
-        if (admins.length === 0) {
-          alert("No admins available to send approval requests to.");
-          return;
+      let recipientUids = [];
+      let recipientNames = [];
+
+      if (selectedRecipient) {
+        const recipientData = teamMembers.find(member => member.uid === selectedRecipient);
+        if (recipientData) {
+          recipientUids.push(recipientData.uid);
+          recipientNames.push(recipientData.name);
         }
-        // Send to all admins
-        for (const admin of admins) {
-          console.log("Adding request for admin:", admin.id);
-          requests.push(addDoc(collection(db, "approvalRequests"), {
-            projectId: defaultProject ? defaultProject.id : null,
-            projectName: defaultProject ? defaultProject.name : "",
-            status: "pending",
-            message: message.trim(),
-            fileUrl: fileUrl,
-            fileName: file ? file.name : "",
-            requestedBy: currentUser ? currentUser.id : "anonymous",
-            requestedByName: currentUser ? currentUser.name : "Anonymous",
-            requestedTo: admin.id,
-            requestedToName: admin.name,
-            timestamp: serverTimestamp(),
-          }));
-        }
+      } else if (teamMembers.length > 0) {
+        // Default to sending to all team members if no specific recipient is selected
+        recipientUids = teamMembers.map(member => member.uid);
+        recipientNames = teamMembers.map(member => member.name);
       } else {
-        console.log("Sending to specific admin:", selectedAdmin);
-        // Send to a specific admin
-        const selectedAdminData = admins.find(admin => admin.id === selectedAdmin);
-        if (!selectedAdminData) {
-          alert("Selected admin not found.");
-          return;
-        }
+        alert("No team members available to send approval requests to.");
+        setLoading(false);
+        return;
+      }
+
+      for (let i = 0; i < recipientUids.length; i++) {
         requests.push(addDoc(collection(db, "approvalRequests"), {
           projectId: defaultProject ? defaultProject.id : null,
           projectName: defaultProject ? defaultProject.name : "",
@@ -145,10 +137,10 @@ export default function SendApprovalModal({
           message: message.trim(),
           fileUrl: fileUrl,
           fileName: file ? file.name : "",
-          requestedBy: currentUser ? currentUser.id : "anonymous",
-          requestedByName: currentUser ? currentUser.name : "Anonymous",
-          requestedTo: selectedAdminData.id,
-          requestedToName: selectedAdminData.name,
+          requestedBy: currentUser ? currentUser.uid : "anonymous",
+          requestedByName: currentUser ? currentUser.displayName || currentUser.email : "Anonymous",
+          requestedTo: recipientUids[i],
+          requestedToName: recipientNames[i],
           timestamp: serverTimestamp(),
         }));
       }
@@ -161,7 +153,8 @@ export default function SendApprovalModal({
       }
       setMessage("");
       setFile(null);
-      setSelectedAdmin("all"); // Reset selected admin to "all"
+      setSelectedRecipient(null); 
+      setRecipientSearchTerm('');
     } catch (error) {
       console.error("Error sending approval request(s):", error);
       alert("Failed to send approval request(s).");
@@ -170,7 +163,14 @@ export default function SendApprovalModal({
 
   if (!isOpen) return null;
 
-  console.log("SendApprovalModal is open. Current selectedAdmin:", selectedAdmin);
+  console.log("SendApprovalModal is open. Current selectedRecipient:", selectedRecipient);
+  const filteredSuggestions = teamMembers.filter(member =>
+    member.name.toLowerCase().includes(recipientSearchTerm.toLowerCase()) ||
+    member.email.toLowerCase().includes(recipientSearchTerm.toLowerCase())
+  );
+  console.log("Recipient Search Term:", recipientSearchTerm);
+  console.log("Filtered Suggestions:", filteredSuggestions);
+
   return (
     <div style={{
       position: "fixed",
@@ -199,12 +199,25 @@ export default function SendApprovalModal({
       }}>
         <h2 style={{ margin: 0, color: COLORS.dark, fontSize: "22px", marginBottom: "15px" }}>Send Approval</h2>
         
-        {/* Admin selection dropdown */}
-        <div style={{ marginBottom: "15px" }}>
-          <label style={{ ...INPUT_STYLES.label, marginBottom: "10px", fontSize: "15px" }}>Send to Admin:</label>
-          <select
-            value={selectedAdmin}
-            onChange={(e) => setSelectedAdmin(e.target.value)}
+        {/* Recipient selection with suggestions */}
+        <div style={{ marginBottom: "15px", position: 'relative' }}>
+          <label style={{ ...INPUT_STYLES.label, marginBottom: "10px", fontSize: "15px" }}>Send to:</label>
+          <input
+            type="text"
+            value={recipientSearchTerm}
+            onChange={(e) => {
+              setRecipientSearchTerm(e.target.value);
+              setShowSuggestions(true);
+              setSelectedRecipient(null); // Clear selected recipient if search term changes
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => {
+              // Delay hiding suggestions to allow click on a suggestion item
+              setTimeout(() => {
+                setShowSuggestions(false);
+              }, 100);
+            }}
+            placeholder="Search for a team member..."
             style={{
               ...INPUT_STYLES.base,
               width: "100%",
@@ -212,13 +225,64 @@ export default function SendApprovalModal({
               fontSize: "15px",
             }}
             disabled={loading || uploading}
-          >
-            <option value="all">All Admins</option> {/* Added "All Admins" option */}
-            {admins.length === 0 && selectedAdmin !== "all" && <option value="">No Admins Available</option>}
-            {admins.map(admin => (
-              <option key={admin.id} value={admin.id}>{admin.name}</option>
-            ))}
-          </select>
+          />
+          {showSuggestions && recipientSearchTerm && filteredSuggestions.length > 0 && (
+            <ul style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              backgroundColor: COLORS.white,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: LAYOUT.borderRadius,
+              maxHeight: '200px',
+              overflowY: 'auto',
+              zIndex: 10,
+              listStyle: 'none',
+              padding: 0,
+              margin: '5px 0 0 0',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            }}>
+              {filteredSuggestions.map(member => (
+                <li
+                  key={member.uid}
+                  onMouseDown={() => {
+                    setSelectedRecipient(member.uid);
+                    setRecipientSearchTerm(member.name);
+                    setShowSuggestions(false);
+                  }}
+                  style={{
+                    padding: '10px 15px',
+                    cursor: 'pointer',
+                    borderBottom: `1px solid ${COLORS.border}70`,
+                    '&:hover': {
+                      backgroundColor: COLORS.light,
+                    },
+                  }}
+                >
+                  {member.name}
+                </li>
+              ))}
+            </ul>
+          )}
+          {showSuggestions && recipientSearchTerm && filteredSuggestions.length === 0 && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              backgroundColor: COLORS.white,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: LAYOUT.borderRadius,
+              padding: '10px 15px',
+              zIndex: 10,
+              color: COLORS.lightText,
+              textAlign: 'center',
+              margin: '5px 0 0 0',
+            }}>
+              No matching team members found.
+            </div>
+          )}
         </div>
 
         <div style={{ marginBottom: "20px" }}>
@@ -273,7 +337,7 @@ export default function SendApprovalModal({
           <button
             onClick={() => { console.log("Send Approval button clicked."); setShowConfirmationModal(true); }}
             style={{ ...BUTTON_STYLES.primary, padding: "12px 25px", fontSize: "15px" }}
-            disabled={loading || uploading || (selectedAdmin === "all" && admins.length === 0)} // Disable if "all" is selected and no admins are available
+            disabled={loading || uploading || !selectedRecipient} // Disable if no recipient is selected
           >
             {loading ? 'Sending...' : 'Send Approval'}
           </button>
