@@ -25,7 +25,7 @@ export default function Quote() {
           <p style={{ color: COLORS.danger, fontSize: "18px", textAlign: "center" }}>Please log in to view and manage your quotes.</p>
         ) : (
           <p style={{ color: COLORS.text, fontSize: "16px", textAlign: "center" }}>
-            Quote functionality is not yet implemented. This will display quotes specific to 
+            Quote functionality is not yet implemented. This will display quotes specific to  
             {currentUser.uid ? (
               <Link to={`/profile/${currentUser.uid}`} style={{ textDecoration: 'none', color: COLORS.primary, cursor: "pointer" }}>
                 {currentUser.email}

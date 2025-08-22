@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc, collection } from 'firebase/firestore';
 import { app, db } from '../firebase';
 
@@ -29,6 +29,7 @@ export default function Signup() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -48,6 +49,20 @@ export default function Signup() {
     setError(null);
     setLoading(true);
 
+    // Check if password is at least 6 characters
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      setLoading(false);
+      return;
+    }
+
+    // Check if passwords match
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
@@ -61,8 +76,11 @@ export default function Signup() {
         createdAt: new Date(),
       });
 
-      console.log("User registered and data saved to Firestore:", user);
-      navigate('/'); // Redirect to home or login page after successful registration
+      // Send email verification
+      await sendEmailVerification(user);
+
+      console.log("User registered and verification email sent");
+      navigate('/verify-email'); // Redirect to verification page
     } catch (err) {
       console.error("Registration error:", err);
       setError(err.message);
@@ -99,12 +117,23 @@ export default function Signup() {
           />
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Password (min 6 characters)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             style={styles.input}
             required
             disabled={loading}
+            minLength={6}
+          />
+          <input
+            type="password"
+            placeholder="Confirm Password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            style={styles.input}
+            required
+            disabled={loading}
+            minLength={6}
           />
           {error && <p style={styles.errorText}>{error}</p>}
           <button type="submit" style={styles.button} disabled={loading}>

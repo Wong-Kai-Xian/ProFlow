@@ -11,6 +11,8 @@ import CustomerProfileList from "./pages/CustomerProfileList";
 import ApprovalList from "./pages/ApprovalList"; // Import the new ApprovalList component
 import Login from "./pages/Login"; // Import the new Login component
 import Signup from "./pages/Signup"; // Import the new Signup component
+import VerifyEmail from "./pages/VerifyEmail"; // Import the VerifyEmail component
+import ForgotPassword from "./pages/ForgotPassword"; // Import the ForgotPassword component
 import UserProfile from "./pages/UserProfile"; // Import the new UserProfile component
 import Quote from "./pages/Quote"; // Import the new Quote component
 import TeamPage from "./pages/TeamPage"; // Import the new TeamPage component
@@ -24,7 +26,9 @@ root.render(
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} /> {/* Add Signup route */}
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           
           {/* Protected Routes */}
           <Route 
