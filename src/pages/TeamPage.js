@@ -17,6 +17,7 @@ export default function TeamPage() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteMessage, setInviteMessage] = useState('');
   const [showIncomingInvitationsModal, setShowIncomingInvitationsModal] = useState(false);
+  const [incomingInvitationsCount, setIncomingInvitationsCount] = useState(0);
 
   const refreshTeamData = async () => {
     if (!currentUser) {
@@ -108,6 +109,15 @@ export default function TeamPage() {
         ...doc.data()
       }));
       setPendingInvitations(fetchedPendingInvitations);
+      
+      // Fetch incoming invitations count
+      const incomingInvitationsQuery = query(
+        collection(db, "invitations"),
+        where("toUserEmail", "==", currentUser.email),
+        where("status", "==", "pending")
+      );
+      const incomingInvitationsSnapshot = await getDocs(incomingInvitationsQuery);
+      setIncomingInvitationsCount(incomingInvitationsSnapshot.docs.length);
     } catch (error) {
       console.error("Error fetching team members: ", error);
     }
@@ -281,6 +291,61 @@ export default function TeamPage() {
           >
             <FaSync />
           </button>
+        <button
+          onClick={() => setShowIncomingInvitationsModal(true)} // Open the new incoming invitations modal
+          style={{
+            backgroundColor: COLORS.tertiary, // New color for this button
+            color: COLORS.white,
+            padding: "10px 20px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "16px",
+            fontWeight: "600",
+            boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
+            position: "relative"
+          }}
+        >
+          My Invitations
+          {incomingInvitationsCount > 0 && (
+            <span style={{
+              position: "absolute",
+              top: "-8px",
+              right: "-8px",
+              backgroundColor: COLORS.error || "#ff4444",
+              color: "white",
+              borderRadius: "50%",
+              width: "24px",
+              height: "24px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "12px",
+              fontWeight: "bold",
+              minWidth: "24px"
+            }}>
+              {incomingInvitationsCount > 99 ? '99+' : incomingInvitationsCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={refreshTeamData}
+          style={{
+            backgroundColor: COLORS.light,
+            color: COLORS.darkText,
+            padding: "10px", // Square button
+            borderRadius: "8px",
+            border: `1px solid ${COLORS.border}`,
+            cursor: "pointer",
+            fontSize: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 4px 8px rgba(0, 0, 0, 0.05)"
+          }}
+        >
+          <FaSync />
+        </button>
         </div>
 
         {inviteMessage && (
