@@ -11,7 +11,7 @@ import CreatePostModal from "../components/forum-tabs/CreatePostModal";
 import ManageMembersModal from "../components/forum-component/ManageMembersModal";
 import { COLORS, BUTTON_STYLES } from "../components/profile-component/constants";
 import { db } from "../firebase";
-import { doc, onSnapshot, updateDoc, serverTimestamp, getDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc } from "firebase/firestore"; // Import collection, getDocs, getDoc
 
 export default function Forum() {
   const { id: forumId } = useParams(); // Rename `id` to `forumId` for clarity
@@ -19,9 +19,10 @@ export default function Forum() {
   const [forumData, setForumData] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [posts, setPosts] = useState([]); // This will eventually come from Discussion tab's Firestore logic
-  const [projectDetails, setProjectDetails] = useState(null); // This might be derived or fetched separately if needed
+  const [linkedProjectData, setLinkedProjectData] = useState(null); // State for actual project data
   const [showMemberModal, setShowMemberModal] = useState(false);
-  const [forumMembers, setForumMembers] = useState([]); // Will be populated from forumData
+  const [forumMembers, setForumMembers] = useState([]); // Will be populated from forumData (UIDs)
+  const [enrichedForumMembersDetails, setEnrichedForumMembersDetails] = useState([]); // Enriched member data
   // Mock current user for demonstration purposes. In a real app, this would come from authentication.
   const [currentUser, setCurrentUser] = useState({ id: 'user123', name: 'Test User' });
 
@@ -29,26 +30,67 @@ export default function Forum() {
     if (!forumId) return; // Exit if no forumId
 
     const forumRef = doc(db, "forums", forumId);
-    const unsubscribe = onSnapshot(forumRef, (docSnap) => {
+    const unsubscribeForum = onSnapshot(forumRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = { id: docSnap.id, ...docSnap.data() };
         setForumData(data);
-        setForumMembers(data.members || []); // Update forumMembers from Firestore
-        // Set projectDetails if it's part of the forum data or derived
-        setProjectDetails({
-          name: data.name,
-          companyInfo: data.companyInfo || {},
-          description: data.description,
-          // Include other project-related fields if they exist in forumData
-        });
+        setForumMembers(data.members || []); // Update forumMembers with UIDs
       } else {
         console.log("No such forum document!");
         setForumData(null);
+        setForumMembers([]);
       }
     });
 
-    return () => unsubscribe();
+    return () => unsubscribeForum();
   }, [forumId]);
+
+  // Effect to fetch linked project data in real-time
+  useEffect(() => {
+    if (!forumData?.projectId) {
+      setLinkedProjectData(null);
+      return;
+    }
+
+    const projectRef = doc(db, "projects", forumData.projectId);
+    const unsubscribeProject = onSnapshot(projectRef, (projectSnap) => {
+      if (projectSnap.exists()) {
+        setLinkedProjectData({ id: projectSnap.id, ...projectSnap.data() });
+      } else {
+        setLinkedProjectData(null);
+        console.warn("Linked project not found.", forumData.projectId);
+      }
+    });
+
+    return () => unsubscribeProject();
+  }, [forumData?.projectId]);
+
+  // Effect to fetch details for forum members
+  useEffect(() => {
+    if (!forumMembers || forumMembers.length === 0) {
+      setEnrichedForumMembersDetails([]);
+      return;
+    }
+
+    const fetchMemberDetails = async () => {
+      const fetchedDetails = await Promise.all(
+        forumMembers.map(async (memberUid) => {
+          const userRef = doc(db, "users", memberUid);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            return { id: memberUid, name: userData.displayName || userData.email, email: userData.email, status: 'online', role: 'Member', joinDate: 'N/A' }; // Add default status/role/joinDate
+          } else {
+            console.warn(`User document not found for member ID: ${memberUid}`);
+            return { id: memberUid, name: `Unknown User (${memberUid})`, email: 'N/A', status: 'offline', role: 'Member', joinDate: 'N/A' };
+          }
+        })
+      );
+      setEnrichedForumMembersDetails(fetchedDetails);
+    };
+
+    fetchMemberDetails();
+  }, [forumMembers]);
 
   // Function to update lastActivity in Firestore whenever there's relevant activity
   const updateForumLastActivity = async () => {
@@ -139,11 +181,23 @@ export default function Forum() {
       }}>
         {/* Left column: Project Details + Reminders */}
         <div style={{ gridColumn: 1, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
-          {projectDetails && (
+          {/* Render ProjectDetails with linkedProjectData and no onSave/allProjectNames */}
+          {linkedProjectData ? (
             <ProjectDetails 
-              project={projectDetails} 
-              onSave={(updatedProject) => setProjectDetails(updatedProject)}
+              project={linkedProjectData} 
             />
+          ) : (
+            <div style={{
+              backgroundColor: COLORS.white,
+              borderRadius: '10px',
+              padding: '15px',
+              marginBottom: '15px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              border: '1px solid #ECF0F1'
+            }}>
+              <h3 style={{ margin: 0, color: COLORS.dark, fontSize: "16px", fontWeight: "700" }}>Project Details</h3>
+              <p style={{ color: COLORS.lightText, fontSize: "14px" }}>No project linked.</p>
+            </div>
           )}
           <ForumReminders forumId={forumId} /> {/* Moved ForumReminders here */}
         </div>
@@ -198,6 +252,7 @@ export default function Forum() {
             updateForumLastActivity={updateForumLastActivity} // Pass function to update last activity
             updateForumPostCount={updateForumPostCount} // Pass the new function
             currentUser={currentUser} // Pass currentUser to ForumTabs
+            enrichedForumMembersDetails={enrichedForumMembersDetails} // Pass enriched member details to ForumTabs
           />
         </div>
 
@@ -224,7 +279,7 @@ export default function Forum() {
       <ManageMembersModal
         isOpen={showMemberModal}
         onClose={() => setShowMemberModal(false)}
-        members={forumMembers}
+        members={enrichedForumMembersDetails} // Pass enriched member details to ManageMembersModal
         onAddMember={handleAddMember}
         onRemoveMember={handleRemoveMember}
         forumId={forumId}

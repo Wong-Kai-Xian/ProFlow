@@ -7,7 +7,7 @@ import About from "./forum-tabs/About";
 import ForumReminders from "./forum-tabs/ForumReminders"; // Import ForumReminders
 import { COLORS } from "./profile-component/constants";
 
-export default function ForumTabs({ forumData, posts, setPosts, forumId, updateForumLastActivity, updateForumPostCount, currentUser }) {
+export default function ForumTabs({ forumData, posts, setPosts, forumId, updateForumLastActivity, updateForumPostCount, currentUser, enrichedForumMembersDetails }) {
   const [activeTab, setActiveTab] = useState('Discussion');
   
   // Default forum data if none provided
@@ -56,7 +56,7 @@ export default function ForumTabs({ forumData, posts, setPosts, forumId, updateF
       case 'Files':
         return <Files forumId={forumId} updateForumLastActivity={updateForumLastActivity} />;
       case 'Members':
-        return <Members forumData={currentForum} forumId={forumId} updateForumLastActivity={updateForumLastActivity} />;
+        return <Members forumData={{ ...currentForum, members: enrichedForumMembersDetails }} forumId={forumId} updateForumLastActivity={updateForumLastActivity} />;
       case 'About':
         return <About forumData={currentForum} forumId={forumId} updateForumLastActivity={updateForumLastActivity} />;
       default:
