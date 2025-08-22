@@ -196,7 +196,7 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
               alignItems: "center",
               gap: "5px"
             }}>
-            <FaUserPlus /> Add User
+            <FaUserPlus /> Add
           </button>
         )}
       </div>
