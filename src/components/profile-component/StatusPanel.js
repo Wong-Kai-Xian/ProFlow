@@ -20,6 +20,31 @@ export default function StatusPanel({
   const [newStageName, setNewStageName] = useState(""); // State for new stage name
   const [showIncompleteStageModal, setShowIncompleteStageModal] = useState(false); // State for modal visibility
 
+  // Helper to check if a stage is completed
+  const isStageCompleted = (stageName) => stageData[stageName]?.completed;
+
+  // Helper to check if any previous stage is incomplete
+  const isPreviousStageIncomplete = () => {
+    const currentIndex = stages.indexOf(currentStage);
+    for (let i = 0; i < currentIndex; i++) {
+      if (!isStageCompleted(stages[i])) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Helper to check if any subsequent stage is completed
+  const isNextStageCompleted = () => {
+    const currentIndex = stages.indexOf(currentStage);
+    for (let i = currentIndex + 1; i < stages.length; i++) {
+      if (isStageCompleted(stages[i])) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const handleAddNote = () => {
     if (newNote.trim()) {
       const updatedNotes = [...(stageData[currentStage]?.notes || []), newNote];
@@ -62,14 +87,23 @@ export default function StatusPanel({
     if (currentIndex !== -1 && currentIndex < stages.length - 1) {
       const nextStage = stages[currentIndex + 1];
       setCurrentStage(nextStage);
-      onStagesUpdate(stages, { // Pass updated currentStage to parent along with stageData
-        ...updatedStageData,
-        currentStage: nextStage, // Explicitly pass the new current stage
-      });
+      onStagesUpdate(stages, updatedStageData, nextStage); // Pass updated stages, stageData, and the new currentStage
     } else {
       // If it's the last stage or no next stage, just update stageData
-      onStagesUpdate(stages, updatedStageData);
+      onStagesUpdate(stages, updatedStageData, currentStage); // Ensure currentStage is passed for the last stage as well
     }
+  };
+
+  const handleUncomplete = () => {
+    const updatedStageData = {
+      ...stageData,
+      [currentStage]: {
+        ...stageData[currentStage],
+        completed: false,
+      },
+    };
+    setStageData(updatedStageData);
+    onStagesUpdate(stages, updatedStageData, currentStage);
   };
 
   const handleKeyPress = (e) => {
@@ -335,11 +369,23 @@ export default function StatusPanel({
           }}>
             {currentStage} Notes
           </h4>
-          {stageData[currentStage]?.completed ? (
-            <span style={{ color: COLORS.success, fontWeight: "bold" }}>COMPLETED</span>
+          {isStageCompleted(currentStage) ? (
+            <button
+              onClick={handleUncomplete} // Implement handleUncomplete
+              disabled={isNextStageCompleted()} // Disable if subsequent stages are completed
+              style={{
+                ...BUTTON_STYLES.secondary,
+                background: COLORS.warning, // Orange for uncomplete
+                padding: "4px 8px",
+                fontSize: "12px",
+              }}
+            >
+              Uncomplete
+            </button>
           ) : (
             <button
               onClick={handleMarkComplete}
+              disabled={isPreviousStageIncomplete()} // Disable if previous stages are incomplete
               style={{
                 ...BUTTON_STYLES.primary, // Apply primary button styles
                 background: COLORS.success, // Green color for complete
