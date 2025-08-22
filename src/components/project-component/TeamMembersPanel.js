@@ -29,7 +29,7 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
             const userSnap = await getDoc(userRef);
             if (userSnap.exists()) {
               const userData = userSnap.data();
-              return { id: memberId, name: userData.displayName || userData.email, email: userData.email };
+              return { id: memberId, name: userData.name || userData.email, email: userData.email }; // Prioritize userData.name
             } else {
               console.warn(`User document not found for member ID: ${memberId}`);
               return { id: memberId, name: `Unknown User (${memberId})`, email: 'N/A' };
@@ -122,20 +122,14 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
               }}>
                 {member.name ? member.name[0].toUpperCase() : '?'}
               </div>
-              <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: COLORS.dark }}>
-                <Link to={`/profile/${member.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: COLORS.dark, cursor: "pointer" }}>
-                    {member.name}
-                  </p>
-                </Link>
-              </p>
-              <p style={{ margin: 0, fontSize: "12px", color: COLORS.lightText }}>
-                <Link to={`/profile/${member.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <p style={{ margin: 0, fontSize: "12px", color: COLORS.lightText, cursor: "pointer" }}>
-                    {member.email}
-                  </p>
-                </Link>
-              </p>
+              <Link to={`/profile/${member.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: COLORS.dark, cursor: "pointer" }}>
+                  {member.name}
+                </p>
+                <p style={{ margin: 0, fontSize: "12px", color: COLORS.lightText, cursor: "pointer" }}>
+                  {member.email}
+                </p>
+              </Link>
             </div>
           ))}
         </div>

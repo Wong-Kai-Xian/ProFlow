@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
 import { COLORS } from '../profile-component/constants';
 
-export default function ActiveUsers({ forumData }) {
+export default function ActiveUsers({ members }) {
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Use members from forumData, or an empty array if not available
-  const members = forumData?.members || [];
-
-  // For now, assign a random online status for demonstration
   const usersWithStatus = members.map(member => ({
-    name: member,
-    avatar: member.split(' ').map(n => n[0]).join('').toUpperCase(),
+    id: member.id,
+    name: member.name,
+    avatar: member.name ? member.name[0].toUpperCase() : '?',
+    email: member.email,
     isOnline: Math.random() > 0.5, // Randomly assign online status
     lastSeen: Math.random() > 0.5 ? `${Math.floor(Math.random() * 10) + 1} minutes ago` : null // Random last seen
   }));
@@ -62,7 +60,7 @@ export default function ActiveUsers({ forumData }) {
         <div>
           {/* Online Users */}
           {onlineUsers.map((user, index) => (
-            <div key={user.name} style={{
+            <div key={user.id} style={{
               display: 'flex',
               alignItems: 'center',
               padding: '6px 0',
@@ -110,6 +108,13 @@ export default function ActiveUsers({ forumData }) {
                 </div>
                 <div style={{ 
                   fontSize: '12px', 
+                  color: COLORS.lightText,
+                  marginBottom: '2px'
+                }}>
+                  {user.email}
+                </div>
+                <div style={{ 
+                  fontSize: '12px', 
                   color: user.isOnline ? COLORS.success : COLORS.lightText
                 }}>
                   {user.isOnline ? 'Online' : `Last seen ${user.lastSeen}`}
@@ -130,8 +135,8 @@ export default function ActiveUsers({ forumData }) {
               }}>
                 Recently Active
               </div>
-              {offlineUsers.slice(0, 3).map((user, index) => (
-                <div key={user.name} style={{
+              {offlineUsers.slice(0, 3).map((user) => (
+                <div key={user.id} style={{
                   display: 'flex',
                   alignItems: 'center',
                   padding: '4px 0',
@@ -165,6 +170,13 @@ export default function ActiveUsers({ forumData }) {
                       marginBottom: '2px'
                     }}>
                       {user.name}
+                    </div>
+                    <div style={{ 
+                      fontSize: '11px', 
+                      color: COLORS.lightText,
+                      marginBottom: '2px'
+                    }}>
+                      {user.email}
                     </div>
                     <div style={{ 
                       fontSize: '11px', 

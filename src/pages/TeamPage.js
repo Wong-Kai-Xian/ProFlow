@@ -26,39 +26,76 @@ export default function TeamPage() {
     }
 
     try {
-      // Fetch projects where the current user is a member
-      const projectQuery = query(
+      const allProjectDocuments = [];
+
+      // 1. Fetch projects where the current user is the owner
+      const ownedProjectsQuery = query(
         collection(db, "projects"),
-        where("team", "array-contains", currentUser.email) // Assuming team stores emails
+        where("ownerId", "==", currentUser.uid)
       );
-      const projectSnapshot = await getDocs(projectQuery);
+      const ownedProjectsSnapshot = await getDocs(ownedProjectsQuery);
+      ownedProjectsSnapshot.forEach(doc => allProjectDocuments.push(doc));
+
+      // 2. Fetch projects where the current user is a member (if not already fetched as owner)
+      const memberProjectsQuery = query(
+        collection(db, "projects"),
+        where("team", "array-contains", currentUser.email)
+      );
+      const memberProjectsSnapshot = await getDocs(memberProjectsQuery);
+      memberProjectsSnapshot.forEach(doc => {
+        if (!allProjectDocuments.some(existingDoc => existingDoc.id === doc.id)) {
+          allProjectDocuments.push(doc);
+        }
+      });
+
+      console.log("TeamPage: allProjectDocuments after fetching owned and member projects", allProjectDocuments);
 
       const uniqueMemberEmails = new Set();
-      projectSnapshot.forEach(doc => {
+      allProjectDocuments.forEach(doc => {
         const projectData = doc.data();
         (projectData.team || []).forEach(memberEmail => {
           uniqueMemberEmails.add(memberEmail);
         });
       });
 
-      // Optionally, fetch user details for these emails if needed for display
-      const membersDetails = await Promise.all(Array.from(uniqueMemberEmails).map(async (email) => {
-        const usersQuery = query(collection(db, "users"), where("email", "==", email));
-        const userSnapshot = await getDocs(usersQuery);
-        if (!userSnapshot.empty) {
-          const userData = userSnapshot.docs[0].data();
-          return {
-            uid: userSnapshot.docs[0].id, // Get the UID from the user document
-            email: email,
-            displayName: userData.name || email.split('@')[0] // Use stored name or derive from email
-          };
-        } else {
-          console.warn(`User document not found for email: ${email}`);
-          return { email: email, displayName: email.split('@')[0] }; // Fallback
-        }
-      }));
-      setTeamMembers(membersDetails);
+      // 3. Fetch accepted outgoing invitations by the current user
+      const acceptedInvitationsQuery = query(
+        collection(db, "invitations"),
+        where("fromUserId", "==", currentUser.uid),
+        where("status", "==", "accepted")
+      );
+      const acceptedInvitationsSnapshot = await getDocs(acceptedInvitationsQuery);
+      acceptedInvitationsSnapshot.forEach(invitationDoc => {
+        const invitationData = invitationDoc.data();
+        uniqueMemberEmails.add(invitationData.toUserEmail);
+      });
 
+      console.log("TeamPage: uniqueMemberEmails after all project and accepted invitations processing", uniqueMemberEmails);
+
+      // Fetch user details for all unique member emails
+      const allMemberEmails = Array.from(uniqueMemberEmails);
+      const fetchedMembersDetails = [];
+      if (allMemberEmails.length > 0) {
+        // Firestore `in` query supports up to 10 array elements
+        const chunkSize = 10;
+        for (let i = 0; i < allMemberEmails.length; i += chunkSize) {
+          const chunk = allMemberEmails.slice(i, i + chunkSize);
+          const usersQuery = query(collection(db, "users"), where("email", "in", chunk));
+          const usersSnapshot = await getDocs(usersQuery);
+          usersSnapshot.forEach(doc => {
+            const userData = doc.data();
+            fetchedMembersDetails.push({
+              uid: doc.id,
+              email: userData.email,
+              displayName: userData.name || userData.email
+            });
+          });
+        }
+        setTeamMembers(fetchedMembersDetails);
+        console.log("TeamPage: fetchedMembersDetails for accepted team members", fetchedMembersDetails);
+      } else {
+        setTeamMembers([]);
+      }
       // Fetch pending outgoing invitations from the current user
       const invitationsQuery = query(
         collection(db, "invitations"),

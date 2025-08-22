@@ -12,9 +12,11 @@ import InviteMemberModal from "../components/forum-component/InviteMemberModal";
 import { COLORS, BUTTON_STYLES } from "../components/profile-component/constants";
 import { db } from "../firebase";
 import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc } from "firebase/firestore"; // Import collection, getDocs, getDoc
+import { useAuth } from "../contexts/AuthContext"; // Import useAuth
 
 export default function Forum() {
   const { id: forumId } = useParams(); // Rename `id` to `forumId` for clarity
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
   console.log("Forum.js: forumId from useParams:", forumId);
   const [forumData, setForumData] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -23,8 +25,6 @@ export default function Forum() {
   const [showInviteModal, setShowInviteModal] = useState(false); // State for the new Invite Member modal
   const [forumMembers, setForumMembers] = useState([]); // Will be populated from forumData (UIDs)
   const [enrichedForumMembersDetails, setEnrichedForumMembersDetails] = useState([]); // Enriched member data
-  // Mock current user for demonstration purposes. In a real app, this would come from authentication.
-  const [currentUser, setCurrentUser] = useState({ id: 'user123', name: 'Test User' });
 
   useEffect(() => {
     if (!forumId) return; // Exit if no forumId
@@ -79,7 +79,7 @@ export default function Forum() {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const userData = userSnap.data();
-            return { id: memberUid, name: userData.displayName || userData.email, email: userData.email, status: 'online', role: 'Member', joinDate: 'N/A' }; // Add default status/role/joinDate
+            return { id: memberUid, name: userData.name || userData.email, email: userData.email, status: 'online', role: 'Member', joinDate: 'N/A' }; // Prioritize userData.name
           } else {
             console.warn(`User document not found for member ID: ${memberUid}`);
             return { id: memberUid, name: `Unknown User (${memberUid})`, email: 'N/A', status: 'offline', role: 'Member', joinDate: 'N/A' };
@@ -252,14 +252,14 @@ export default function Forum() {
             forumId={forumId} // Pass forumId to ForumTabs
             updateForumLastActivity={updateForumLastActivity} // Pass function to update last activity
             updateForumPostCount={updateForumPostCount} // Pass the new function
-            currentUser={currentUser} // Pass currentUser to ForumTabs
+            currentUser={currentUser} // Pass currentUser from useAuth to ForumTabs
             enrichedForumMembersDetails={enrichedForumMembersDetails} // Pass enriched member details to ForumTabs
           />
         </div>
 
         {/* Right column: Online Members + Trending Posts */}
         <div style={{ gridColumn: 3, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
-          <ActiveUsers forumData={forumData} />
+          <ActiveUsers members={enrichedForumMembersDetails} />
           <StarredPosts onPostClick={handleTrendingPostClick} forumId={forumId} currentUser={currentUser} />
         </div>
       </div>

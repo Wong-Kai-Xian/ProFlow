@@ -27,11 +27,17 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
       setAllowJoinById(editingProject.allowJoinById !== undefined ? editingProject.allowJoinById : true); // Populate allowJoinById, default to true
     } else {
       // For new projects, pre-fill from customerProfile and companyProfile if available
-      setProjectName(customerProfile?.name || '');
-      setTeamMembersEmails(currentUser ? [currentUser.email] : []); // Add current user to team members for new projects
-      setSelectedStage('Proposal');
-      setProjectDescription(companyProfile?.description || ''); // Use companyProfile.description or default
-      setAllowJoinById(true); // Default to true for new projects
+      if (!projectName) setProjectName(customerProfile?.name || '');
+      // Only set teamMembersEmails if it's currently empty and currentUser exists
+      if (currentUser && teamMembersEmails.length === 0) {
+        setTeamMembersEmails([currentUser.email]);
+      }
+      if (!selectedStage) setSelectedStage('Proposal');
+      if (!projectDescription) setProjectDescription(companyProfile?.description || '');
+      // Only set allowJoinById if it hasn't been explicitly set yet, or if it needs to be reset for a new project
+      if (editingProject === null) { // Only for truly new projects
+        setAllowJoinById(true);
+      }
     }
     
     const fetchTeamMemberUids = async () => {
@@ -83,7 +89,7 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
         description: projectDescription, // Include description
         tasks: editingProject ? editingProject.tasks : 0,
         completedTasks: editingProject ? editingProject.completedTasks : 0,
-        userId: currentUser.uid, // Associate project with the current user
+        ownerId: currentUser.uid, // Associate project with the current user
         allowJoinById: allowJoinById, // Include allowJoinById
         ...(editingProject && { id: editingProject.id }), // Conditionally add id for existing projects
       });

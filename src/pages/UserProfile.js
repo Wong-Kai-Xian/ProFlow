@@ -16,6 +16,8 @@ export default function UserProfile() {
   const [invitations, setInvitations] = useState([]);
   const auth = getAuth();
   const currentUser = auth.currentUser;
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [editingName, setEditingName] = useState('');
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -24,6 +26,7 @@ export default function UserProfile() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           setUserProfile(docSnap.data());
+          setEditingName(docSnap.data().name || ''); // Initialize editingName
         } else {
           setError('User not found.');
         }
@@ -125,6 +128,24 @@ export default function UserProfile() {
     }
   };
 
+  const handleUpdateProfile = async () => {
+    if (!currentUser || currentUser.uid !== userId || !editingName.trim()) return;
+    try {
+      setLoading(true);
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        name: editingName.trim(),
+      });
+      setUserProfile(prev => ({ ...prev, name: editingName.trim() }));
+      setShowEditProfileModal(false);
+      alert('Profile updated successfully!');
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      setError('Failed to update profile: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading) {
     return <div>Loading profile...</div>;
@@ -147,6 +168,19 @@ export default function UserProfile() {
           <h1 style={{ margin: '0 0 15px 0', color: COLORS.dark, fontSize: '28px', fontWeight: '700' }}>{userProfile.name}'s Profile</h1>
           <p style={{ margin: '0 0 8px 0', color: COLORS.text, fontSize: '16px' }}><strong style={{ color: COLORS.dark }}>Email:</strong> {userProfile.email}</p>
           <p style={{ margin: 0, color: COLORS.text, fontSize: '16px' }}><strong style={{ color: COLORS.dark }}>Role:</strong> {userProfile.role}</p>
+          {currentUser && currentUser.uid === userId && (
+            <button 
+              onClick={() => setShowEditProfileModal(true)}
+              style={{
+                ...BUTTON_STYLES.primary,
+                marginTop: '20px',
+                padding: '8px 16px',
+                fontSize: '14px',
+              }}
+            >
+              Edit Profile
+            </button>
+          )}
         </div>
 
       {currentUser && currentUser.uid === userId && (
@@ -192,6 +226,67 @@ export default function UserProfile() {
         </div>
       )}
       </div>
+      {showEditProfileModal && (
+        <EditProfileModal
+          isOpen={showEditProfileModal}
+          onClose={() => setShowEditProfileModal(false)}
+          currentName={editingName}
+          onSave={handleUpdateProfile}
+          onNameChange={setEditingName}
+          loading={loading}
+        />
+      )}
     </div>
   );
 }
+
+function EditProfileModal({ isOpen, onClose, currentName, onSave, onNameChange, loading }) {
+  if (!isOpen) return null;
+
+  return (
+    <div style={modalOverlayStyle}>
+      <div style={modalContentStyle}>
+        <h2 style={{ color: COLORS.dark, marginBottom: '20px' }}>Edit Profile</h2>
+        <input
+          type="text"
+          value={currentName}
+          onChange={(e) => onNameChange(e.target.value)}
+          style={{ ...INPUT_STYLES.base, width: '100%', marginBottom: '20px' }}
+          placeholder="Your Name"
+          disabled={loading}
+        />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button onClick={onClose} style={BUTTON_STYLES.secondary} disabled={loading}>
+            Cancel
+          </button>
+          <button onClick={onSave} style={BUTTON_STYLES.primary} disabled={!currentName.trim() || loading}>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const modalOverlayStyle = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  zIndex: 1000,
+};
+
+const modalContentStyle = {
+  backgroundColor: COLORS.white,
+  padding: '30px',
+  borderRadius: '8px',
+  width: '400px',
+  maxWidth: '90%',
+  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+  textAlign: 'center',
+};
