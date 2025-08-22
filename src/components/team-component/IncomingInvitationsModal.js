@@ -8,6 +8,7 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
   const { currentUser } = useAuth();
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [processingIds, setProcessingIds] = useState(new Set());
 
   const fetchInvitations = async () => {
     if (!currentUser) {
@@ -27,14 +28,16 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
       for (const invitationDoc of querySnapshot.docs) {
         const invitationData = invitationDoc.data();
         
-        // Fetch sender's name from users collection
+        // Fetch sender's name and email from users collection
         let senderName = invitationData.fromUserEmail; // fallback to email
+        let senderEmail = invitationData.fromUserEmail; // keep original email
         try {
           const senderDocRef = doc(db, "users", invitationData.fromUserId);
           const senderDoc = await getDoc(senderDocRef);
           if (senderDoc.exists()) {
             const senderData = senderDoc.data();
             senderName = senderData.name || senderData.displayName || invitationData.fromUserEmail;
+            senderEmail = senderData.email || invitationData.fromUserEmail;
           }
         } catch (senderError) {
           console.error("Error fetching sender details: ", senderError);
@@ -43,7 +46,8 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
         fetchedInvitations.push({
           id: invitationDoc.id,
           ...invitationData,
-          fromUserName: senderName
+          fromUserName: senderName,
+          fromUserEmail: senderEmail
         });
       }
       
@@ -62,7 +66,9 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
   }, [isOpen, currentUser]);
 
   const handleAccept = async (invitationId, fromUserId, toUserEmail) => {
-    if (!currentUser) return;
+    if (!currentUser || processingIds.has(invitationId)) return;
+
+    setProcessingIds(prev => new Set(prev).add(invitationId));
 
     try {
       // 1. Update invitation status to accepted
@@ -96,10 +102,20 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
     } catch (error) {
       console.error("Error accepting invitation: ", error);
       alert("Failed to accept invitation.");
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(invitationId);
+        return newSet;
+      });
     }
   };
 
   const handleReject = async (invitationId) => {
+    if (processingIds.has(invitationId)) return;
+
+    setProcessingIds(prev => new Set(prev).add(invitationId));
+
     try {
       const invitationRef = doc(db, "invitations", invitationId);
       await updateDoc(invitationRef, {
@@ -112,6 +128,12 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
     } catch (error) {
       console.error("Error rejecting invitation: ", error);
       alert("Failed to reject invitation.");
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(invitationId);
+        return newSet;
+      });
     }
   };
 
@@ -164,15 +186,30 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button
                     onClick={() => handleAccept(invitation.id, invitation.fromUserId, invitation.toUserEmail)}
-                    style={{ ...BUTTON_STYLES.primary, backgroundColor: COLORS.success, padding: "8px 15px", fontSize: "14px" }}
+                    disabled={processingIds.has(invitation.id)}
+                    style={{ 
+                      ...BUTTON_STYLES.primary, 
+                      backgroundColor: COLORS.success, 
+                      padding: "8px 15px", 
+                      fontSize: "14px",
+                      opacity: processingIds.has(invitation.id) ? 0.6 : 1,
+                      cursor: processingIds.has(invitation.id) ? 'not-allowed' : 'pointer'
+                    }}
                   >
-                    Accept
+                    {processingIds.has(invitation.id) ? 'Processing...' : 'Accept'}
                   </button>
                   <button
                     onClick={() => handleReject(invitation.id)}
-                    style={{ ...BUTTON_STYLES.secondary, padding: "8px 15px", fontSize: "14px" }}
+                    disabled={processingIds.has(invitation.id)}
+                    style={{ 
+                      ...BUTTON_STYLES.secondary, 
+                      padding: "8px 15px", 
+                      fontSize: "14px",
+                      opacity: processingIds.has(invitation.id) ? 0.6 : 1,
+                      cursor: processingIds.has(invitation.id) ? 'not-allowed' : 'pointer'
+                    }}
                   >
-                    Reject
+                    {processingIds.has(invitation.id) ? 'Processing...' : 'Reject'}
                   </button>
                 </div>
               </div>
