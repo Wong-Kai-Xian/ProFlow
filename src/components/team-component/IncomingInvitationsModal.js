@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { COLORS, BUTTON_STYLES } from '../profile-component/constants';
 
@@ -22,10 +22,31 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
         where("status", "==", "pending")
       );
       const querySnapshot = await getDocs(q);
-      const fetchedInvitations = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const fetchedInvitations = [];
+      
+      for (const invitationDoc of querySnapshot.docs) {
+        const invitationData = invitationDoc.data();
+        
+        // Fetch sender's name from users collection
+        let senderName = invitationData.fromUserEmail; // fallback to email
+        try {
+          const senderDocRef = doc(db, "users", invitationData.fromUserId);
+          const senderDoc = await getDoc(senderDocRef);
+          if (senderDoc.exists()) {
+            const senderData = senderDoc.data();
+            senderName = senderData.name || senderData.displayName || invitationData.fromUserEmail;
+          }
+        } catch (senderError) {
+          console.error("Error fetching sender details: ", senderError);
+        }
+        
+        fetchedInvitations.push({
+          id: invitationDoc.id,
+          ...invitationData,
+          fromUserName: senderName
+        });
+      }
+      
       setInvitations(fetchedInvitations);
     } catch (error) {
       console.error("Error fetching invitations: ", error);
@@ -131,7 +152,10 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
               }}>
                 <div>
                   <p style={{ margin: "0 0 5px 0", fontSize: "18px", fontWeight: "600", color: COLORS.dark }}>
-                    Invitation from: {invitation.fromUserEmail}
+                    Invitation from: {invitation.fromUserName}
+                  </p>
+                  <p style={{ margin: "0 0 5px 0", fontSize: "14px", color: COLORS.lightText }}>
+                    Email: {invitation.fromUserEmail}
                   </p>
                   <p style={{ margin: 0, fontSize: "14px", color: COLORS.lightText }}>
                     Sent on: {new Date(invitation.timestamp.toDate()).toLocaleString()}
