@@ -5,7 +5,6 @@ import CustomerInfo from "../components/profile-component/CustomerInfo";
 import CompanyInfo from "../components/profile-component/CompanyInfo";
 import CompanyReputation from "../components/profile-component/CompanyReputation";
 import StatusPanel from "../components/profile-component/StatusPanel";
-import ActivityRecord from "../components/profile-component/ActivityRecord";
 import Reminders from "../components/profile-component/Reminders";
 import AttachedFiles from "../components/profile-component/AttachedFiles";
 import TaskManager from "../components/profile-component/TaskManager";
