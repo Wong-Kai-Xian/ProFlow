@@ -1,12 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from "../../firebase";
 import { collection, query, where, getDocs, updateDoc, doc, arrayUnion, getDoc } from "firebase/firestore";
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from "../profile-component/constants";
 
 export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamMemberAdded }) {
   const [memberEmail, setMemberEmail] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [availableUsers, setAvailableUsers] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Fetch available users when modal opens
+  useEffect(() => {
+    const fetchAvailableUsers = async () => {
+      if (!isOpen) return;
+      
+      setLoadingUsers(true);
+      try {
+        // Get current project team to exclude them
+        const projectRef = doc(db, "projects", projectId);
+        const projectSnap = await getDoc(projectRef);
+        const currentTeam = projectSnap.exists() ? (projectSnap.data().team || []) : [];
+        const projectCreatorId = projectSnap.exists() ? projectSnap.data().userId : null;
+        
+        // Get all users
+        const usersRef = collection(db, "users");
+        const usersSnapshot = await getDocs(usersRef);
+        
+        const users = [];
+        usersSnapshot.forEach(doc => {
+          const userData = doc.data();
+          const userId = userData.uid || doc.id;
+          
+          // Exclude current team members and project creator
+          if (!currentTeam.includes(userId) && userId !== projectCreatorId) {
+            users.push({
+              id: userId,
+              email: userData.email,
+              name: userData.name || userData.email || 'Unknown User'
+            });
+          }
+        });
+        
+        setAvailableUsers(users.sort((a, b) => a.name.localeCompare(b.name)));
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        setError("Failed to load available users.");
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+
+    fetchAvailableUsers();
+  }, [isOpen, projectId]);
 
   if (!isOpen) return null;
 
@@ -14,26 +61,38 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
     setLoading(true);
     setError(null);
 
-    if (!memberEmail.trim()) {
-      setError("Please enter a team member's email.");
+    // Check if user selected from dropdown or entered email
+    let memberUid = selectedUserId;
+    
+    if (!memberUid && memberEmail.trim()) {
+      // Fallback to email lookup if no dropdown selection
+      try {
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("email", "==", memberEmail.trim()));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+          setError("No user found with this email.");
+          setLoading(false);
+          return;
+        }
+
+        const memberDoc = querySnapshot.docs[0];
+        memberUid = memberDoc.data().uid || memberDoc.id;
+      } catch (emailError) {
+        setError("Error finding user by email.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (!memberUid) {
+      setError("Please select a user or enter an email.");
       setLoading(false);
       return;
     }
 
     try {
-      // 1. Find the user by email
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("email", "==", memberEmail.trim()));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        setError("No user found with this email.");
-        setLoading(false);
-        return;
-      }
-
-      const memberDoc = querySnapshot.docs[0];
-      const memberUid = memberDoc.id; // User ID is the document ID
 
       // 2. Get the project document to check if already a member
       const projectRef = doc(db, "projects", projectId);
@@ -57,6 +116,7 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
         alert("Team member added successfully!");
         onTeamMemberAdded(memberUid); // Notify parent component
         setMemberEmail('');
+        setSelectedUserId('');
         onClose();
       } else {
         setError("Project not found.");
@@ -74,14 +134,67 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
     <div style={modalOverlayStyle}>
       <div style={modalContentStyle}>
         <h3 style={{ color: COLORS.dark, marginBottom: LAYOUT.gap }}>Add Team Member</h3>
-        <input
-          type="email"
-          placeholder="Team Member Email"
-          value={memberEmail}
-          onChange={(e) => setMemberEmail(e.target.value)}
-          style={{ ...INPUT_STYLES.base, marginBottom: LAYOUT.smallGap, width: "100%" }}
-          disabled={loading}
-        />
+        
+        {loadingUsers ? (
+          <p style={{ color: COLORS.lightText, marginBottom: LAYOUT.smallGap }}>Loading available users...</p>
+        ) : (
+          <>
+            {/* User Selection Dropdown */}
+            <div style={{ marginBottom: LAYOUT.smallGap }}>
+              <label style={{ display: 'block', marginBottom: '4px', color: COLORS.dark, fontSize: '14px', fontWeight: '500' }}>
+                Select User
+              </label>
+              <select
+                value={selectedUserId}
+                onChange={(e) => {
+                  setSelectedUserId(e.target.value);
+                  setMemberEmail(''); // Clear email when selecting from dropdown
+                }}
+                style={{ ...INPUT_STYLES.base, width: "100%" }}
+                disabled={loading}
+              >
+                <option value="">-- Select a user --</option>
+                {availableUsers.map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} ({user.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* OR separator */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              margin: `${LAYOUT.smallGap} 0`,
+              color: COLORS.lightText,
+              fontSize: '12px'
+            }}>
+              <div style={{ flex: 1, height: '1px', backgroundColor: COLORS.border }}></div>
+              <span style={{ margin: '0 10px' }}>OR</span>
+              <div style={{ flex: 1, height: '1px', backgroundColor: COLORS.border }}></div>
+            </div>
+
+            {/* Email Input */}
+            <div style={{ marginBottom: LAYOUT.smallGap }}>
+              <label style={{ display: 'block', marginBottom: '4px', color: COLORS.dark, fontSize: '14px', fontWeight: '500' }}>
+                Enter Email
+              </label>
+              <input
+                type="email"
+                placeholder="user@example.com"
+                value={memberEmail}
+                onChange={(e) => {
+                  setMemberEmail(e.target.value);
+                  setSelectedUserId(''); // Clear selection when typing email
+                }}
+                style={{ ...INPUT_STYLES.base, width: "100%" }}
+                disabled={loading}
+              />
+            </div>
+          </>
+        )}
+        
         {error && <p style={{ color: COLORS.danger, marginBottom: LAYOUT.smallGap }}>{error}</p>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: LAYOUT.smallGap }}>
           <button onClick={onClose} style={BUTTON_STYLES.secondary} disabled={loading}>

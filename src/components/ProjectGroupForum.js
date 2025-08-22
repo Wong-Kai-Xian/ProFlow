@@ -6,12 +6,14 @@ import AddGroupForumModal from "./project-component/AddGroupForumModal";
 import Switch from "./Switch";
 import { db } from "../firebase";
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function ProjectGroupForum({ projectId, forums }) {
   const [sortBy, setSortBy] = useState("recent");
   const [showAddForumModal, setShowAddForumModal] = useState(false);
   const [projects, setProjects] = useState([]); // State for projects (for the modal dropdown)
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     // Fetch all projects for the dropdown (this part remains, as projects are not passed as prop)
@@ -45,23 +47,31 @@ export default function ProjectGroupForum({ projectId, forums }) {
   };
 
   const handleCreateNewForum = async (forumData) => {
-    if (!projectId) return; // Only allow creating forum if projectId is present
+    if (!projectId || !currentUser) return; // Only allow creating forum if projectId and currentUser present
     try {
+      // Include current user in forum members automatically
+      const forumMembers = forumData.members || [];
+      if (!forumMembers.includes(currentUser.uid)) {
+        forumMembers.push(currentUser.uid);
+      }
+      
       const newForum = {
         name: typeof forumData === 'string' ? forumData : forumData.name,
         description: forumData.description || '',
-        members: forumData.members || [],
-        memberCount: forumData.members?.length || 0,
+        members: forumMembers,
+        memberCount: forumMembers.length,
         notifications: 0,
         posts: 0,
         lastActivity: serverTimestamp(),
         projectId: projectId,
+        userId: currentUser.uid, // Add creator
       };
       const docRef = await addDoc(collection(db, "forums"), newForum);
       console.log("New project-specific forum added with ID: ", docRef.id);
       setShowAddForumModal(false);
     } catch (error) {
       console.error("Error creating new forum: ", error);
+      alert("Failed to create forum. Please try again.");
     }
   };
 

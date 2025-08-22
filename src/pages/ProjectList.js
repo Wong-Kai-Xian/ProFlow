@@ -35,17 +35,42 @@ export default function ProjectList() {
       return;
     }
 
-    const q = query(collection(db, "projects"), orderBy('name', 'asc'), where("userId", "==", currentUser.uid)); // Filter by userId
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const projectList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setProjects(projectList);
+    // Get projects where user is either the creator OR a team member
+    const projectsRef = collection(db, "projects");
+    
+    // Query 1: Projects created by the user
+    const createdProjectsQuery = query(projectsRef, where("userId", "==", currentUser.uid));
+    
+    // Query 2: Projects where user is a team member
+    const teamProjectsQuery = query(projectsRef, where("team", "array-contains", currentUser.uid));
+    
+    const allProjects = new Map(); // Use Map to avoid duplicates
+    
+    const unsubscribeCreated = onSnapshot(createdProjectsQuery, (snapshot) => {
+      snapshot.docs.forEach(doc => {
+        allProjects.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+      updateProjectsList();
     });
+    
+    const unsubscribeTeam = onSnapshot(teamProjectsQuery, (snapshot) => {
+      snapshot.docs.forEach(doc => {
+        allProjects.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+      updateProjectsList();
+    });
+    
+    const updateProjectsList = () => {
+      const projectList = Array.from(allProjects.values()).sort((a, b) => 
+        a.name.localeCompare(b.name)
+      );
+      setProjects(projectList);
+    };
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeCreated();
+      unsubscribeTeam();
+    };
   }, [currentUser]); // Add currentUser to dependency array
 
   const [searchTerm, setSearchTerm] = useState("");
