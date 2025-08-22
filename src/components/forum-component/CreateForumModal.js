@@ -41,7 +41,7 @@ export default function CreateForumModal({ isOpen, onClose, onConfirm, editingFo
     console.log("handleSubmit called.");
     if (forumName.trim() && currentUser) {
       console.log("Forum name is valid and currentUser exists.", { forumName: forumName.trim(), currentUser: currentUser });
-      const initialMembers = editingForum ? members : (currentUser.email ? [...members, currentUser.email] : members);
+      const initialMembers = editingForum ? members : (currentUser.uid ? [...members, currentUser.uid] : members);
       onConfirm({
         name: forumName.trim(),
         description: description.trim(),

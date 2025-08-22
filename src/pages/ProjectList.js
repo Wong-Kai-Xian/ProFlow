@@ -5,9 +5,11 @@ import CreateProjectModal from "../components/project-component/CreateProjectMod
 import { useNavigate } from "react-router-dom";
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "../components/profile-component/constants";
 import { db } from "../firebase";
-import { collection, getDocs, addDoc, updateDoc, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, updateDoc, doc, getDoc, deleteDoc } from "firebase/firestore"; // Import Firestore functions
 import { onSnapshot, query, orderBy, where } from "firebase/firestore"; // Import onSnapshot, query, orderBy
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
+import EditProjectDetailsModal from '../components/project-component/EditProjectDetailsModal'; // Import EditProjectDetailsModal
 
 // Get initials from project name
 const getInitials = (name) =>
@@ -52,6 +54,8 @@ export default function ProjectList() {
   const [editingProject, setEditingProject] = useState(null);
   const [joinProjectId, setJoinProjectId] = useState(''); // New state for join project ID
   const [joinProjectError, setJoinProjectError] = useState(null); // New state for join project error
+  const [showEditProjectModal, setShowEditProjectModal] = useState(false); // State for edit modal
+  const [projectToEdit, setProjectToEdit] = useState(null); // State to hold project being edited
   const navigate = useNavigate();
 
   const getProgress = (project) => {
@@ -91,7 +95,24 @@ export default function ProjectList() {
   };
 
   const handleEditProject = (project) => {
-    navigate(`/project/${project.id}`);
+    // navigate(`/project/${project.id}`); // Old navigation for inline editing
+    setProjectToEdit(project);
+    setShowEditProjectModal(true);
+  };
+
+  const handleDeleteProject = async (projectId) => {
+    if (!currentUser) return; // Ensure user is logged in
+
+    if (window.confirm("Are you sure you want to delete this project? This action cannot be undone.")) {
+      try {
+        await deleteDoc(doc(db, "projects", projectId));
+        console.log("Project deleted with ID:", projectId);
+        // The onSnapshot listener will handle updating the projects state
+      } catch (error) {
+        console.error("Error deleting project:", error);
+        alert("Failed to delete project.");
+      }
+    }
   };
 
   const handleJoinProject = async () => {
@@ -147,6 +168,22 @@ export default function ProjectList() {
   //   setEditingProject(null);
   //   setShowCreateModal(false);
   // };
+
+  const handleUpdateProjectFromModal = async (updatedProject) => {
+    try {
+      const projectRef = doc(db, "projects", updatedProject.id);
+      await updateDoc(projectRef, {
+        name: updatedProject.name,
+        description: updatedProject.description,
+      });
+      // The onSnapshot listener will handle updating the projects state
+      setShowEditProjectModal(false);
+      setProjectToEdit(null);
+    } catch (error) {
+      console.error("Error updating project:", error);
+      alert("Failed to update project.");
+    }
+  };
 
   const getStageColor = (stage) => {
     switch (stage) {
@@ -334,7 +371,7 @@ export default function ProjectList() {
                     style={{
                       position: "absolute",
                       top: "16px",
-                      right: "16px",
+                      right: "16px", // Keep Edit button on the right
                       background: COLORS.light,
                       border: "none",
                       borderRadius: "6px",
@@ -342,7 +379,8 @@ export default function ProjectList() {
                       cursor: "pointer",
                       fontSize: "12px",
                       color: COLORS.dark,
-                      transition: "all 0.2s ease"
+                      transition: "all 0.2s ease",
+                      zIndex: 1
                     }}
                     onMouseEnter={(e) => {
                       e.target.style.backgroundColor = COLORS.primary;
@@ -355,6 +393,40 @@ export default function ProjectList() {
                   >
                     Edit
                   </button>
+
+                  {/* Delete Button */}
+                  {currentUser && currentUser.uid === project.userId && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteProject(project.id);
+                      }}
+                      style={{
+                        position: "absolute",
+                        top: "16px",
+                        right: "60px", // Position Delete button next to Edit
+                        background: COLORS.danger,
+                        border: "none",
+                        borderRadius: "6px",
+                        padding: "6px 8px",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        color: COLORS.white,
+                        transition: "all 0.2s ease",
+                        zIndex: 1
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = "#c0392b";
+                        e.target.style.transform = "scale(1.05)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = COLORS.danger;
+                        e.target.style.transform = "scale(1)";
+                      }}
+                    >
+                      <FaTrash />
+                    </button>
+                  )}
 
                   {/* Project Logo */}
                   <div style={{
@@ -544,6 +616,15 @@ export default function ProjectList() {
         }}
         onConfirm={handleCreateProject}
         // Removed editingProject prop as editing is now handled on ProjectDetail page
+      />
+      <EditProjectDetailsModal
+        isOpen={showEditProjectModal}
+        onClose={() => {
+          setShowEditProjectModal(false);
+          setProjectToEdit(null);
+        }}
+        project={projectToEdit}
+        onUpdate={handleUpdateProjectFromModal}
       />
     </div>
   );

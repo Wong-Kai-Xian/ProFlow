@@ -9,8 +9,11 @@ import { COLORS, LAYOUT, STAGES, INPUT_STYLES, BUTTON_STYLES } from '../componen
 import StageIndicator from '../components/project-component/StageIndicator'; // Import StageIndicator
 import ApprovalModal from '../components/project-component/ApprovalModal'; // Import ApprovalModal
 import SendApprovalModal from '../components/project-component/SendApprovalModal'; // Import SendApprovalModal
+import AddTeamMemberModal from '../components/project-component/AddTeamMemberModal'; // Import AddTeamMemberModal
+import TeamMembersPanel from '../components/project-component/TeamMembersPanel'; // Import TeamMembersPanel
 import { db } from "../firebase";
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot } from "firebase/firestore"; // Import collection, query, where, onSnapshot
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
 export default function ProjectDetail() {
   const { projectId } = useParams(); // Changed from projectName to projectId
@@ -19,9 +22,10 @@ export default function ProjectDetail() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showSendApprovalModal, setShowSendApprovalModal] = useState(false);
   const [projectForums, setProjectForums] = useState([]); // State to hold project-specific forums
-  // Mock currentUser - replace with actual authenticated user in a real application
-  const [currentUser, setCurrentUser] = useState({ id: 'user123', name: 'Test User', role: 'admin' }); // Set role to 'admin' for testing
+  const { currentUser } = useAuth(); // Get current user from AuthContext
   const [currentApproval, setCurrentApproval] = useState(null); // State to hold the current approval request
+  const [showAddTeamMemberModal, setShowAddTeamMemberModal] = useState(false); // New state for add team member modal
+  const [allProjectNames, setAllProjectNames] = useState([]); // New state to store all project names
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -46,9 +50,10 @@ export default function ProjectDetail() {
 
   // Fetch project-specific forums in real-time
   useEffect(() => {
-    if (projectId) {
+    if (projectId && currentUser) {
       const forumsCollectionRef = collection(db, "forums");
-      const q = query(forumsCollectionRef, where("projectId", "==", projectId));
+      // Fetch forums where projectId matches AND currentUser.uid is in the members array
+      const q = query(forumsCollectionRef, where("projectId", "==", projectId), where("members", "array-contains", currentUser.uid));
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const forumsData = snapshot.docs.map(doc => ({
@@ -60,7 +65,22 @@ export default function ProjectDetail() {
 
       return () => unsubscribe();
     }
-  }, [projectId]);
+  }, [projectId, currentUser]);
+
+  // Fetch all project names for the dropdown in ProjectDetails
+  useEffect(() => {
+    if (!currentUser) {
+      setAllProjectNames([]);
+      return;
+    }
+    const projectsRef = collection(db, "projects");
+    const q = query(projectsRef, where("userId", "==", currentUser.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const names = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
+      setAllProjectNames(names);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
 
   // Fetch approval requests for the current project and stage in real-time
   useEffect(() => {
@@ -181,6 +201,39 @@ export default function ProjectDetail() {
     }
   };
 
+  const handleTeamMemberAdded = (newMemberUid) => {
+    setProjectData(prevProjectData => {
+      if (prevProjectData && !prevProjectData.team.includes(newMemberUid)) {
+        return { ...prevProjectData, team: [...prevProjectData.team, newMemberUid] };
+      }
+      return prevProjectData; // No change if prevProjectData is null or member already exists
+    });
+  };
+
+  const handleRemoveTeamMember = async (memberUid) => {
+    if (!projectData || !currentUser || !projectData.id || projectData.userId !== currentUser.uid) {
+      alert("You don't have permission to remove team members from this project.");
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to remove this member?`)) {
+      try {
+        const projectRef = doc(db, "projects", projectData.id);
+        await updateDoc(projectRef, {
+          team: projectData.team.filter(uid => uid !== memberUid)
+        });
+        setProjectData(prevData => ({ 
+          ...prevData, 
+          team: prevData.team.filter(uid => uid !== memberUid) 
+        }));
+        alert("Team member removed successfully!");
+      } catch (error) {
+        console.error("Error removing team member:", error);
+        alert("Failed to remove team member.");
+      }
+    }
+  };
+
   if (!projectData) {
     return <div style={{ textAlign: "center", padding: "50px", color: COLORS.lightText }}>Loading project details...</div>; // Loading state
   }
@@ -198,17 +251,29 @@ export default function ProjectDetail() {
       }}>
         {/* Left Column */}
         <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap, gridColumn: 1, gridRow: 1 }}>
+          {/* Project Details Card with Edit button */}
           <ProjectDetails 
             project={projectDetails} 
             onSave={handleSaveEditedProjectDetails}
+            allProjectNames={allProjectNames} // Pass all project names
           />
           <div style={{ flexGrow: 0 }}>
             <Reminders projectId={projectId} /> 
           </div>
-          <div style={{ flexGrow: 1 }}>
+          <div style={{ flexGrow: 2, minHeight: "200px" }}>
             <ProjectGroupForum 
               projectId={projectId} 
               forums={projectForums} // Pass project-specific forums to GroupForum
+            />
+          </div>
+          <div style={{ flexGrow: 1, minHeight: "200px" }}>
+            <TeamMembersPanel 
+              projectId={projectId}
+              teamMembers={projectData.team}
+              onAddMemberClick={() => setShowAddTeamMemberModal(true)}
+              onRemoveMember={handleRemoveTeamMember}
+              projectCreatorId={projectData.userId}
+              currentUserUid={currentUser?.uid}
             />
           </div>
         </div>
@@ -237,6 +302,22 @@ export default function ProjectDetail() {
             onStageSelect={handleStageSelect} // New prop for direct stage selection
             canAdvance={canAdvanceStage} // Pass the new prop
           />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <h4 style={{ margin: "0", color: COLORS.dark }}>Team Members</h4>
+            {projectData && currentUser && projectData.userId === currentUser.uid && (
+              <button
+                onClick={() => setShowAddTeamMemberModal(true)}
+                style={{
+                  ...BUTTON_STYLES.secondary,
+                  padding: "8px 16px",
+                  fontSize: "14px",
+                }}
+              >
+                Add Team Member
+              </button>
+            )}
+          </div>
+          {/* Team Members Panel will go here */}
           <ProjectTaskPanel 
             projectTasks={projectTasks}
             setProjectTasks={setProjectTasks}
@@ -260,6 +341,13 @@ export default function ProjectDetail() {
         defaultProject={projectDetails} // Pass current project details
         defaultStatus={currentStage} // Pass current stage as default status
         currentUser={currentUser} // Pass currentUser to the modal
+      />
+      {/* Add Team Member Modal */}
+      <AddTeamMemberModal
+        isOpen={showAddTeamMemberModal}
+        onClose={() => setShowAddTeamMemberModal(false)}
+        projectId={projectId}
+        onTeamMemberAdded={handleTeamMemberAdded}
       />
     </div>
   );

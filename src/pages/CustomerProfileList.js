@@ -366,7 +366,7 @@ export default function CustomerProfileList() {
               const bgColor = stringToColor(customer.customerProfile.name || ""); // Handle potentially undefined name
               const progress = getProgress(customer);
               const currentStageName = customer.currentStage;
-              const currentStageColor = getStatusColor(customer.status); // Reusing status color for the stage
+              const currentStageColor = getStatusColor(customer.currentStage); // Use currentStage for color
 
               return (
                 <div
@@ -445,21 +445,7 @@ export default function CustomerProfileList() {
                   </div>
 
                   {/* Status Badge - moved to top left */}
-                  <div style={{
-                    position: "absolute",
-                    top: "16px",
-                    left: "100px", // Position on the left, after the current stage
-                    padding: "4px 10px",
-                    borderRadius: "12px",
-                    backgroundColor: `${getStatusColor(customer.status)}20`,
-                    color: getStatusColor(customer.status),
-                    fontSize: "12px",
-                    fontWeight: "600",
-                    zIndex: 1 // Ensure it's above the progress bar
-                  }}>
-                    {customer.status}
-                  </div>
-
+                  {/* Removed duplicate status badge */}
                   {/* Customer Avatar */}
                   <div style={{
                     width: "80px",
