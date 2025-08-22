@@ -9,6 +9,7 @@ import InviteMemberModal from '../components/team-component/InviteMemberModal'; 
 
 export default function TeamPage() {
   const [teamMembers, setTeamMembers] = useState([]);
+  const [pendingInvitations, setPendingInvitations] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const { currentUser } = useAuth();
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -18,6 +19,7 @@ export default function TeamPage() {
     const fetchTeamMembers = async () => {
       if (!currentUser) {
         setTeamMembers([]);
+        setPendingInvitations([]);
         return;
       }
       
@@ -55,6 +57,19 @@ export default function TeamPage() {
         }));
         setTeamMembers(membersDetails);
 
+        // Fetch pending outgoing invitations from the current user
+        const invitationsQuery = query(
+          collection(db, "invitations"),
+          where("fromUserId", "==", currentUser.uid),
+          where("status", "==", "pending")
+        );
+        const invitationsSnapshot = await getDocs(invitationsQuery);
+        const fetchedPendingInvitations = invitationsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setPendingInvitations(fetchedPendingInvitations);
+
       } catch (error) {
         console.error("Error fetching team members: ", error);
       }
@@ -65,7 +80,10 @@ export default function TeamPage() {
 
   const handleInvite = (email, userExists, signupUrl) => {
     if (userExists) {
-      setInviteMessage(`Invitation sent to ${email}. They can accept it from their dashboard.`);
+      // A new invitation has been sent, re-fetch pending invitations to update the list
+      // For now, let's just update the message. A full re-fetch might be too heavy.
+      setInviteMessage(`Invitation sent to ${email}. They can accept it from their invitations page.`);
+      // Optionally, add the new pending invitation to the state directly if the full object is available
     } else {
       setInviteMessage(`User with email ${email} not found. Share this link for them to sign up: ${signupUrl}`);
     }
@@ -75,6 +93,10 @@ export default function TeamPage() {
   const filteredMembers = teamMembers.filter(member =>
     member.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredPendingInvitations = pendingInvitations.filter(invitation =>
+    invitation.toUserEmail.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -119,7 +141,7 @@ export default function TeamPage() {
         <div style={{ marginBottom: "30px" }}>
           <input
             type="text"
-            placeholder="Search team members..."
+            placeholder="Search team members and pending invitations..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -141,7 +163,66 @@ export default function TeamPage() {
           />
         </div>
 
+        {/* Pending Invitations Section */}
+        <h2 style={{ color: COLORS.dark, fontSize: "22px", fontWeight: "600", marginBottom: "20px", marginTop: "40px" }}>Pending Invitations</h2>
+        {filteredPendingInvitations.length === 0 ? (
+          <div style={{
+            textAlign: "center",
+            padding: "30px 20px",
+            color: COLORS.lightText,
+            fontSize: "16px",
+            border: `1px dashed ${COLORS.border}`,
+            borderRadius: "8px",
+            backgroundColor: COLORS.white
+          }}>
+            {searchTerm ? `No pending invitations found matching "${searchTerm}"` : "No pending invitations."} 
+          </div>
+        ) : (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gap: "20px",
+            marginBottom: "40px"
+          }}>
+            {filteredPendingInvitations.map((invitation) => (
+              <div key={invitation.id} style={{
+                backgroundColor: COLORS.white,
+                borderRadius: "12px",
+                padding: "20px",
+                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)",
+                border: `1px solid ${COLORS.border}`,
+                display: "flex",
+                alignItems: "center",
+                gap: "15px",
+                opacity: 0.7, // Shaded effect
+                position: "relative",
+                overflow: "hidden"
+              }}>
+                <div style={{
+                  width: "50px",
+                  height: "50px",
+                  borderRadius: "50%",
+                  backgroundColor: COLORS.light,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: COLORS.white,
+                  fontSize: "20px",
+                  fontWeight: "700"
+                }}>
+                  {invitation.toUserEmail[0].toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontSize: "18px", fontWeight: "600", color: COLORS.dark }}>{invitation.toUserEmail}</div>
+                  <div style={{ fontSize: "14px", color: COLORS.lightText }}>Pending</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Team Members List */}
+        <h2 style={{ color: COLORS.dark, fontSize: "22px", fontWeight: "600", marginBottom: "20px" }}>Accepted Team Members</h2>
         {filteredMembers.length === 0 ? (
           <div style={{
             textAlign: "center",
