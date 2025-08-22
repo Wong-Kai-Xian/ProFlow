@@ -10,9 +10,11 @@ import Reminders from "../components/profile-component/Reminders";
 import AttachedFiles from "../components/profile-component/AttachedFiles";
 import TaskManager from "../components/profile-component/TaskManager";
 import SendApprovalModal from "../components/project-component/SendApprovalModal"; // Import SendApprovalModal
-import { STAGES, COLORS, LAYOUT, BUTTON_STYLES } from "../components/profile-component/constants";
+import { COLORS, LAYOUT, BUTTON_STYLES } from "../components/profile-component/constants";
 import { db } from "../firebase"; // Import db
 import { doc, getDoc, updateDoc, collection, serverTimestamp } from "firebase/firestore"; // Import Firestore functions
+
+const STAGES = ["Working", "Qualified", "Converted"];
 
 export default function CustomerProfile() {
   const { id } = useParams();
@@ -29,9 +31,32 @@ export default function CustomerProfile() {
   const [files, setFiles] = useState([]);
   const [currentStage, setCurrentStage] = useState(STAGES[0]);
   const [stageData, setStageData] = useState({});
+  const [stages, setStages] = useState(STAGES);
   const [projects, setProjects] = useState([]); // To store associated projects
   const [status, setStatus] = useState("Active"); // Default status
   const [lastContact, setLastContact] = useState("N/A"); // Default last contact
+
+  const handleStagesUpdate = async (updatedStages, updatedStageData, newCurrentStageName) => {
+    setStages(updatedStages);
+    setStageData(updatedStageData);
+
+    let dataToUpdate = { stages: updatedStages, stageData: updatedStageData };
+
+    if (newCurrentStageName) {
+      setCurrentStage(newCurrentStageName);
+      dataToUpdate.currentStage = newCurrentStageName;
+    }
+
+    if (id && id !== 'new') {
+      const customerRef = doc(db, "customerProfiles", id);
+      try {
+        await updateDoc(customerRef, dataToUpdate);
+        console.log("Stages, stage data, and current stage updated in Firestore.");
+      } catch (error) {
+        console.error("Error updating stages in Firestore:", error);
+      }
+    }
+  };
 
   useEffect(() => {
     const fetchCustomer = async () => {
@@ -47,8 +72,9 @@ export default function CustomerProfile() {
           setActivities(data.activities || []);
           setReminders(data.reminders || []);
           setFiles(data.files || []);
-          setCurrentStage(data.currentStage || STAGES[0]);
+          setCurrentStage(data.currentStage || STAGES[0]); // Ensure currentStage is set from data or defaults to first stage
           setStageData(data.stageData || {});
+          setStages(data.stages || STAGES);
           setProjects(data.projects || []);
           setStatus(data.status || "Active");
           setLastContact(data.lastContact || "N/A");
@@ -66,7 +92,8 @@ export default function CustomerProfile() {
         setActivities([]);
         setReminders([]);
         setFiles([]);
-        setCurrentStage(STAGES[0]);
+        setCurrentStage(STAGES[0]); // Default to first stage for new customers
+        setStages(STAGES);
         setStageData({
           "Working": { notes: [], tasks: [], completed: false },
           "Qualified": { notes: [], tasks: [], completed: false },
@@ -80,7 +107,7 @@ export default function CustomerProfile() {
     };
 
     fetchCustomer();
-  }, [id, navigate]); // Depend on 'id' and 'navigate'
+  }, [id, navigate, setStages, setStageData]); // Depend on 'id', 'navigate', 'setStages', and 'setStageData'
 
   const handleSaveCustomer = async () => {
     setLoading(true);
@@ -93,6 +120,7 @@ export default function CustomerProfile() {
       files,
       currentStage,
       stageData,
+      stages,
       projects,
       status,
       lastContact: lastContact === "N/A" ? serverTimestamp() : lastContact, // Set timestamp on first save
@@ -204,11 +232,13 @@ export default function CustomerProfile() {
         {/* Middle Column */}
         <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap }}>
           <StatusPanel
-            stages={STAGES}
+            stages={stages}
             currentStage={currentStage}
             setCurrentStage={setCurrentStage}
             stageData={stageData}
             setStageData={setStageData}
+            setStages={setStages}
+            onStagesUpdate={handleStagesUpdate} // Pass the new handler
             renderStageContent={(stage, currentStageData, setCurrentStageData) => (
               <TaskManager 
                 stage={stage}

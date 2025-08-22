@@ -4,6 +4,9 @@ import { COLORS, INPUT_STYLES, BUTTON_STYLES } from "./constants";
 import IncompleteStageModal from "./IncompleteStageModal"; // Import the new modal
 import { FaEdit } from 'react-icons/fa'; // Import FaEdit
 
+// Define the stages for progress tracking
+const STAGES = ["Working", "Qualified", "Converted"];
+
 export default function StatusPanel({
   stages,
   currentStage,
@@ -11,11 +14,12 @@ export default function StatusPanel({
   stageData,
   setStageData,
   renderStageContent,
-  setStages // Receive setStages prop
+  setStages, // Receive setStages prop
+  onStagesUpdate // New prop to update stages in parent and database
 }) {
   const [newNote, setNewNote] = useState("");
-  const [editingStageIndex, setEditingStageIndex] = useState(null); // New state for editing index
-  const [newStageName, setNewStageName] = useState(""); // New state for new stage name
+  const [editingStageIndex, setEditingStageIndex] = useState(null); // State for editing stage name
+  const [newStageName, setNewStageName] = useState(""); // State for new stage name
   const [showIncompleteStageModal, setShowIncompleteStageModal] = useState(false); // State for modal visibility
 
   const handleAddNote = () => {
@@ -46,13 +50,28 @@ export default function StatusPanel({
   };
 
   const handleMarkComplete = () => {
-    setStageData(prevStageData => ({
-      ...prevStageData,
+    const updatedStageData = {
+      ...stageData,
       [currentStage]: {
-        ...prevStageData[currentStage],
+        ...stageData[currentStage],
         completed: true,
       },
-    }));
+    };
+    setStageData(updatedStageData);
+
+    // Automatically advance to the next stage
+    const currentIndex = stages.indexOf(currentStage);
+    if (currentIndex !== -1 && currentIndex < stages.length - 1) {
+      const nextStage = stages[currentIndex + 1];
+      setCurrentStage(nextStage);
+      onStagesUpdate(stages, { // Pass updated currentStage to parent along with stageData
+        ...updatedStageData,
+        currentStage: nextStage, // Explicitly pass the new current stage
+      });
+    } else {
+      // If it's the last stage or no next stage, just update stageData
+      onStagesUpdate(stages, updatedStageData);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -70,19 +89,43 @@ export default function StatusPanel({
     setNewStageName(e.target.value);
   };
 
-  const handleStageNameSave = (index) => {
+  const handleStageNameSave = (index, oldStageName) => {
     if (newStageName.trim()) {
-      const updatedStages = [...stages];
-      updatedStages[index] = newStageName;
-      setStages(updatedStages);
+      const newName = newStageName.trim();
+      
+      if (oldStageName && oldStageName !== newName) {
+        // Create a new updatedStages array with the renamed stage
+        const updatedStages = stages.map((stage, i) => 
+          i === index ? newName : stage
+        );
+
+        // Update stageData: move content from oldStageName to newName
+        const updatedStageData = { ...stageData };
+        if (updatedStageData[oldStageName]) {
+          updatedStageData[newName] = updatedStageData[oldStageName];
+          delete updatedStageData[oldStageName];
+        }
+        
+        // Update currentStage if it was the renamed stage
+        if (currentStage === oldStageName) {
+          setCurrentStage(newName);
+        }
+        
+        // Set state in parent component (CustomerProfile.js)
+        setStages(updatedStages);
+        setStageData(updatedStageData);
+        // Pass the new currentStage name if it was renamed
+        const newCurrentStageIfRenamed = (currentStage === oldStageName) ? newName : currentStage;
+        onStagesUpdate(updatedStages, updatedStageData, newCurrentStageIfRenamed);
+      }
     }
     setEditingStageIndex(null);
     setNewStageName("");
   };
 
-  const handleStageNameKeyPress = (e, index) => {
+  const handleStageNameKeyPress = (e, index, stage) => {
     if (e.key === 'Enter') {
-      handleStageNameSave(index);
+      handleStageNameSave(index, stage);
     }
   };
 
@@ -94,7 +137,16 @@ export default function StatusPanel({
       ...stageData,
       [newStage]: {
         notes: [],
-        tasks: [] // Initialize tasks for new stage
+        tasks: [],
+        completed: false
+      },
+    });
+    onStagesUpdate([...stages, newStage], { // Pass updated stages and stageData to parent
+      ...stageData,
+      [newStage]: {
+        notes: [],
+        tasks: [],
+        completed: false
       },
     });
   };
@@ -107,8 +159,8 @@ export default function StatusPanel({
     }
     const currentIndex = stages.indexOf(currentStage);
     const updatedStages = stages.filter(stage => stage !== currentStage);
-    const updatedStageData = { ...stageData }; // Copy existing stageData
-    delete updatedStageData[currentStage]; // Delete data for the current stage
+    const updatedStageData = { ...stageData };
+    delete updatedStageData[currentStage];
     
     setStages(updatedStages);
     
@@ -126,7 +178,8 @@ export default function StatusPanel({
     }
     
     setCurrentStage(newCurrentStage);
-    setStageData(updatedStageData); // Update stageData with the deleted stage removed
+    setStageData(updatedStageData);
+    onStagesUpdate(updatedStages, updatedStageData); // Pass updated stages and stageData to parent
   };
 
   const handleStageClick = (stage, clickedIndex) => {
@@ -151,8 +204,7 @@ export default function StatusPanel({
       if (canProceed) {
         setCurrentStage(stage);
       } else {
-        // alert("Please complete the current and all preceding stages before proceeding to this stage.");
-        setShowIncompleteStageModal(true); // Show the modal instead of alert
+        setShowIncompleteStageModal(true);
       }
     }
   };
@@ -176,13 +228,13 @@ export default function StatusPanel({
   return (
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-        <h3 style={{ margin: "0", color: COLORS.text }}>Status</h3>
+        <h3 style={{ margin: "0", color: COLORS.text }}>Stage</h3>
         <div>
           <button
             onClick={handleAddStage}
             style={{
-              ...BUTTON_STYLES.primary, // Apply primary button styles
-              marginRight: "10px" // Added margin-right
+              ...BUTTON_STYLES.primary,
+              marginRight: "10px"
             }}
           >
             Add Stage
@@ -190,8 +242,8 @@ export default function StatusPanel({
           <button
             onClick={handleDeleteStage}
             style={{
-              ...BUTTON_STYLES.primary, // Apply primary button styles
-              background: COLORS.danger, // Red color for delete
+              ...BUTTON_STYLES.primary,
+              background: COLORS.danger,
             }}
           >
             Del Stage
@@ -199,7 +251,7 @@ export default function StatusPanel({
         </div>
       </div>
       
-      {/* Stage Navigation */}
+            {/* Stage Navigation */}
       <div style={{ 
         display: "flex", 
         justifyContent: "space-around", 
@@ -214,7 +266,7 @@ export default function StatusPanel({
               textAlign: "center", 
               flex: 1,
               transition: "all 0.2s ease",
-              opacity: isStageClickable(index) ? 1 : 0.5 // Dim if not clickable
+              opacity: isStageClickable(index) ? 1 : 0.5
             }}
           >
             <div
@@ -248,8 +300,8 @@ export default function StatusPanel({
                   type="text"
                   value={newStageName}
                   onChange={handleStageNameChange}
-                  onBlur={() => handleStageNameSave(index)}
-                  onKeyPress={(e) => handleStageNameKeyPress(e, index)}
+                  onBlur={() => handleStageNameSave(index, stage)}
+                  onKeyPress={(e) => handleStageNameKeyPress(e, index, stage)}
                   style={{
                     width: "100%",
                     padding: "2px 4px",
