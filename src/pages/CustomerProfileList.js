@@ -85,7 +85,6 @@ export default function CustomerProfileList() {
         files: doc.data().files || [],
         stageData: doc.data().stageData || {},
         projects: doc.data().projects || [], // Ensure projects is an array
-        status: doc.data().status || "Active",
         lastContact: doc.data().lastContact || "N/A",
         stages: doc.data().stages || STAGES, // Ensure stages are loaded
       }));
@@ -96,7 +95,6 @@ export default function CustomerProfileList() {
   }, [currentUser]); // Add currentUser to dependency array
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
   const navigate = useNavigate();
 
   const filteredCustomers = customers.filter(customer => {
@@ -105,8 +103,7 @@ export default function CustomerProfileList() {
       customer.companyProfile?.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.customerProfile?.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    const matchesStatus = statusFilter === "All" || customer.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   const getStatusColor = (currentStage) => {
@@ -143,7 +140,6 @@ export default function CustomerProfileList() {
           "Converted": { notes: [], tasks: [], completed: false },
         },
         projects: [],
-        status: STAGES[0], // Default status now follows initial stage
         lastContact: serverTimestamp(), // Set timestamp on first save
         userId: currentUser.uid, // Associate customer profile with the current user
       };
@@ -318,7 +314,8 @@ export default function CustomerProfileList() {
               }}
             />
 
-            {/* Status Filter */}
+            {/* Status Filter - REMOVED */}
+            {/*
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -335,6 +332,7 @@ export default function CustomerProfileList() {
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
+            */}
           </div>
         )}
 

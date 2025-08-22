@@ -33,7 +33,6 @@ export default function CustomerProfile() {
   const [stageData, setStageData] = useState({});
   const [stages, setStages] = useState(STAGES);
   const [projects, setProjects] = useState([]); // To store associated projects
-  const [status, setStatus] = useState("Active"); // Default status
   const [lastContact, setLastContact] = useState("N/A"); // Default last contact
 
   const handleStagesUpdate = async (updatedStages, updatedStageData, newCurrentStageName) => {
@@ -76,7 +75,6 @@ export default function CustomerProfile() {
           setStageData(data.stageData || {});
           setStages(data.stages || STAGES);
           setProjects(data.projects || []);
-          setStatus(data.status || "Active");
           setLastContact(data.lastContact || "N/A");
         } else {
           console.log("No such customer document!");
@@ -100,7 +98,6 @@ export default function CustomerProfile() {
           "Converted": { notes: [], tasks: [], completed: false },
         });
         setProjects([]);
-        setStatus("Active");
         setLastContact("N/A");
       }
       setLoading(false);
@@ -122,7 +119,6 @@ export default function CustomerProfile() {
       stageData,
       stages,
       projects,
-      status,
       lastContact: lastContact === "N/A" ? serverTimestamp() : lastContact, // Set timestamp on first save
     };
 
