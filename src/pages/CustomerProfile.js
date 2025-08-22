@@ -9,9 +9,10 @@ import Reminders from "../components/profile-component/Reminders";
 import AttachedFiles from "../components/profile-component/AttachedFiles";
 import TaskManager from "../components/profile-component/TaskManager";
 import SendApprovalModal from "../components/project-component/SendApprovalModal"; // Import SendApprovalModal
+import CreateProjectModal from "../components/project-component/CreateProjectModal"; // Import CreateProjectModal
 import { COLORS, LAYOUT, BUTTON_STYLES } from "../components/profile-component/constants";
 import { db } from "../firebase"; // Import db
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore"; // Import Firestore functions
+import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc } from "firebase/firestore"; // Import Firestore functions
 
 const STAGES = ["Working", "Qualified", "Converted"];
 
@@ -19,6 +20,7 @@ export default function CustomerProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [showSendApprovalModal, setShowSendApprovalModal] = useState(false); // New state for SendApprovalModal
+  const [showCreateProjectModal, setShowCreateProjectModal] = useState(false); // State for CreateProjectModal
   const [loading, setLoading] = useState(true); // Loading state
 
   // Initialize state variables with default values for new customer or null for existing to be loaded
@@ -33,6 +35,14 @@ export default function CustomerProfile() {
   const [stages, setStages] = useState(STAGES);
   const [projects, setProjects] = useState([]); // To store associated projects
   const [lastContact, setLastContact] = useState("N/A"); // Default last contact
+
+  // Helper to check if a stage is completed
+  const isStageCompleted = (stageName) => stageData[stageName]?.completed;
+
+  // Helper to check if all stages are completed
+  const areAllStagesCompleted = () => {
+    return stages.every(stage => isStageCompleted(stage));
+  };
 
   const handleStagesUpdate = async (updatedStages, updatedStageData, newCurrentStageName) => {
     setStages(updatedStages);
@@ -54,6 +64,10 @@ export default function CustomerProfile() {
         console.error("Error updating stages in Firestore:", error);
       }
     }
+  };
+
+  const handleConvertToProject = () => {
+    setShowCreateProjectModal(true);
   };
 
   useEffect(() => {
@@ -132,6 +146,43 @@ export default function CustomerProfile() {
       navigate('/customerlist'); // Navigate back to the list after saving
     } catch (error) {
       console.error("Error saving customer: ", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveProjectFromConversion = async (projectData) => {
+    setLoading(true);
+    try {
+      // Pre-fill fields from customerProfile and companyProfile
+      const preFilledProjectData = {
+        ...projectData,
+        company: companyProfile.company || projectData.company || '',
+        industry: companyProfile.industry || projectData.industry || '',
+        contactPerson: customerProfile.name || projectData.contactPerson || '',
+        contactEmail: customerProfile.email || projectData.contactEmail || '',
+        contactPhone: customerProfile.phone || projectData.contactPhone || '',
+        status: "Waiting for Approval", // Set initial status
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        customerId: id, // Link to the current customer
+      };
+
+      const projectsCollectionRef = collection(db, "projects");
+      const newProjectRef = await addDoc(projectsCollectionRef, preFilledProjectData);
+
+      // Update the customer's projects array with the new project ID
+      const customerRef = doc(db, "customerProfiles", id);
+      await updateDoc(customerRef, {
+        projects: [...projects, newProjectRef.id],
+      });
+
+      console.log("Project created from conversion with ID:", newProjectRef.id);
+      setShowCreateProjectModal(false);
+      navigate(`/project/${newProjectRef.id}`);
+    } catch (error) {
+      console.error("Error creating project from conversion:", error);
+      alert("Failed to create project.");
     } finally {
       setLoading(false);
     }
@@ -234,6 +285,7 @@ export default function CustomerProfile() {
             setStageData={setStageData}
             setStages={setStages}
             onStagesUpdate={handleStagesUpdate} // Pass the new handler
+            onConvertToProject={handleConvertToProject} // Pass the new handler
             renderStageContent={(stage, currentStageData, setCurrentStageData) => (
               <TaskManager 
                 stage={stage}
@@ -253,7 +305,24 @@ export default function CustomerProfile() {
           />
           
           <AttachedFiles files={files} onFileAdd={handleFileAdd} onFileRemove={handleFileRemove} onFileRename={handleFileRename} />
-          <button
+              <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.smallGap, marginTop: LAYOUT.smallGap }}>
+          {areAllStagesCompleted() && (
+            <button
+              onClick={handleConvertToProject}
+              style={{
+                ...BUTTON_STYLES.primary,
+                background: COLORS.accent, // A distinct color for this action
+                padding: "10px 20px",
+                fontSize: "16px",
+                fontWeight: "600",
+                borderRadius: "8px",
+                alignSelf: "flex-end",
+              }}
+            >
+              Convert to Project
+            </button>
+          )}
+              <button
             onClick={() => setShowSendApprovalModal(true)}
             style={{
               ...BUTTON_STYLES.secondary,
@@ -264,7 +333,8 @@ export default function CustomerProfile() {
             }}
           >
             Send Approval
-          </button>
+              </button>
+          </div>
         </div>
 
       </div>
@@ -273,6 +343,15 @@ export default function CustomerProfile() {
         onClose={() => setShowSendApprovalModal(false)}
         onSendApproval={(data) => console.log("Customer Profile - Approval data sent:", data)}
         allProjects={projects} // Pass customer's projects (from state)
+      />
+
+      {/* Create Project Modal */}
+      <CreateProjectModal
+        isOpen={showCreateProjectModal}
+        onClose={() => setShowCreateProjectModal(false)}
+        customerProfile={customerProfile} // Pass customer data for pre-filling
+        companyProfile={companyProfile} // Pass company data for pre-filling
+        onSave={handleSaveProjectFromConversion} // Function to handle saving the new project
       />
     </div>
   );

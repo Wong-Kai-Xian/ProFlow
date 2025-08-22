@@ -13,12 +13,18 @@ export default function StatusPanel({
   setStageData,
   renderStageContent,
   setStages, // Receive setStages prop
-  onStagesUpdate // New prop to update stages in parent and database
+  onStagesUpdate, // New prop to update stages in parent and database
+  onConvertToProject // New prop to convert to project
 }) {
   const [newNote, setNewNote] = useState("");
   const [editingStageIndex, setEditingStageIndex] = useState(null); // State for editing stage name
   const [newStageName, setNewStageName] = useState(""); // State for new stage name
   const [showIncompleteStageModal, setShowIncompleteStageModal] = useState(false); // State for modal visibility
+
+  // Helper to check if all stages are completed
+  // const areAllStagesCompleted = () => {
+  //   return stages.every(stage => isStageCompleted(stage));
+  // };
 
   // Helper to check if a stage is completed
   const isStageCompleted = (stageName) => stageData[stageName]?.completed;

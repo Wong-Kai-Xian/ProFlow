@@ -25,6 +25,9 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
     );
   }
 
+  const isWaitingForApproval = project.status === "Waiting for Approval";
+  const effectiveReadOnly = readOnly || isWaitingForApproval; // Combine existing readOnly with new approval status
+
   const handleSave = () => {
     if (typeof onSave === 'function') {
       onSave(editableProject);
@@ -64,11 +67,36 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
       maxHeight: "250px", 
       display: "flex", 
       flexDirection: "column", 
-      overflow: (isEditing && !readOnly) ? "hidden" : "hidden" // Keep outer card hidden, inner div will scroll
+      overflow: (isEditing && !effectiveReadOnly) ? "hidden" : "hidden", // Keep outer card hidden, inner div will scroll
+      position: "relative", // Needed for absolute positioning of overlay
+      opacity: isWaitingForApproval ? 0.6 : 1, // Grey out effect
+      pointerEvents: isWaitingForApproval ? "none" : "auto", // Disable interactions
     }}>
+      {isWaitingForApproval && (
+        <div style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(255, 255, 255, 0.7)", // White overlay for grey-out
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 10, // Ensure it's on top
+          borderRadius: "12px",
+          flexDirection: "column",
+          gap: "10px",
+          textAlign: "center"
+        }}>
+          <h4 style={{ color: COLORS.primary, margin: 0, fontSize: "18px" }}>Waiting for Approval</h4>
+          <p style={{ color: COLORS.dark, margin: 0, fontSize: "14px" }}>This project is awaiting review and cannot be edited.</p>
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
         <h3 style={{ margin: 0, color: COLORS.dark, fontSize: "16px", fontWeight: "700" }}>Project Details</h3>
-        {!readOnly && typeof onSave === 'function' && (!isEditing ? (
+        {!effectiveReadOnly && typeof onSave === 'function' && (!isEditing ? (
           <button onClick={() => setIsEditing(true)} style={BUTTON_STYLES.secondary}>
             Edit
           </button>
@@ -84,13 +112,13 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
         ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: (isEditing && !readOnly) ? "auto" : "hidden", paddingRight: "5px" }}> {/* Apply scroll here */}
+      <div style={{ flex: 1, overflowY: (isEditing && !effectiveReadOnly) ? "auto" : "hidden", paddingRight: "5px" }}> {/* Apply scroll here */}
         {/* Editable Info at the top */}
         <div style={{ marginBottom: LAYOUT.smallGap }}>
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
             <strong style={{ fontWeight: "600" }}>Project Name:</strong> 
             <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {(isEditing && !readOnly) ? (
+              {(isEditing && !effectiveReadOnly) ? (
                 <input 
                   type="text" 
                   name="name" 
@@ -113,7 +141,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
             <strong style={{ fontWeight: "600" }}>Company:</strong> 
             <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {(isEditing && !readOnly) ? (
+              {(isEditing && !effectiveReadOnly) ? (
                 <input type="text" name="companyInfo.name" value={editableProject.companyInfo?.name || ''} onChange={handleChange} style={INPUT_STYLES.base} />
               ) : (
                 project.companyInfo?.name || 'N/A'
@@ -123,7 +151,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
             <strong style={{ fontWeight: "600" }}>Industry:</strong> 
             <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {(isEditing && !readOnly) ? (
+              {(isEditing && !effectiveReadOnly) ? (
                 <input type="text" name="companyInfo.industry" value={editableProject.companyInfo?.industry || ''} onChange={handleChange} style={INPUT_STYLES.base} />
               ) : (
                 project.companyInfo?.industry || 'N/A'
@@ -133,7 +161,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
             <strong style={{ fontWeight: "600" }}>Contact:</strong> 
             <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {(isEditing && !readOnly) ? (
+              {(isEditing && !effectiveReadOnly) ? (
                 <input type="text" name="companyInfo.contact" value={editableProject.companyInfo?.contact || ''} onChange={handleChange} style={INPUT_STYLES.base} />
               ) : (
                 project.companyInfo?.contact || 'N/A'
@@ -147,7 +175,7 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
           <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px", fontWeight: "600" }}>
             <strong>Description:</strong>
           </p>
-          {(isEditing && !readOnly) ? (
+          {(isEditing && !effectiveReadOnly) ? (
             <textarea
               name="description"
               value={editableProject.description || ''}
