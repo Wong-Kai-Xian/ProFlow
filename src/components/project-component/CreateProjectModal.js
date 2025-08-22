@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
 import { useAuth } from '../../contexts/AuthContext'; // Import useAuth
+import { Link } from 'react-router-dom'; // Import Link
+import { db } from '../../firebase'; // Import db
+import { collection, query, where, getDocs } from 'firebase/firestore'; // Import firestore functions
 
 export default function CreateProjectModal({ isOpen, onClose, onConfirm, editingProject }) {
   const [projectName, setProjectName] = useState('');
-  const [teamMembers, setTeamMembers] = useState([]);
+  const [teamMembersEmails, setTeamMembersEmails] = useState([]); // Stores only emails
+  const [teamMembers, setTeamMembers] = useState([]); // Stores enriched member objects {uid, email, displayName}
   const [newMember, setNewMember] = useState('');
   const [selectedStage, setSelectedStage] = useState('Proposal');
   const [projectDescription, setProjectDescription] = useState(''); // New state for project description
@@ -17,35 +21,63 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
   React.useEffect(() => {
     if (editingProject) {
       setProjectName(editingProject.name || '');
-      setTeamMembers(editingProject.team || []);
+      setTeamMembersEmails(editingProject.team || []);
       setSelectedStage(editingProject.stage || 'Proposal');
       setProjectDescription(editingProject.description || ''); // Populate description
       setAllowJoinById(editingProject.allowJoinById !== undefined ? editingProject.allowJoinById : true); // Populate allowJoinById, default to true
     } else {
       setProjectName('');
-      setTeamMembers(currentUser ? [currentUser.email] : []); // Add current user to team members for new projects
+      setTeamMembersEmails(currentUser ? [currentUser.email] : []); // Add current user to team members for new projects
       setSelectedStage('Proposal');
       setProjectDescription(''); // Reset description
       setAllowJoinById(true); // Default to true for new projects
     }
-  }, [editingProject, currentUser]); // Add currentUser to dependency array
+    
+    const fetchTeamMemberUids = async () => {
+      const memberDetails = await Promise.all(
+        teamMembersEmails.map(async (email) => {
+          const usersQuery = query(collection(db, "users"), where("email", "==", email));
+          const userSnapshot = await getDocs(usersQuery);
+          if (!userSnapshot.empty) {
+            const userData = userSnapshot.docs[0].data();
+            return { 
+              uid: userSnapshot.docs[0].id, // Get the UID from the user document
+              email: email,
+              displayName: userData.name || email.split('@')[0] // Use stored name or derive from email
+            };
+          } else {
+            console.warn(`User document not found for email: ${email}`);
+            return { email: email, displayName: email.split('@')[0] }; // Fallback
+          }
+        })
+      );
+      setTeamMembers(memberDetails);
+    };
+
+    if (teamMembersEmails.length > 0) {
+      fetchTeamMemberUids();
+    } else {
+      setTeamMembers([]); // Clear if no emails
+    }
+
+  }, [editingProject, currentUser, teamMembersEmails]); // Add currentUser and teamMembersEmails to dependency array
 
   const handleAddMember = () => {
-    if (newMember.trim() && !teamMembers.includes(newMember.trim())) {
-      setTeamMembers([...teamMembers, newMember.trim()]);
+    if (newMember.trim() && !teamMembersEmails.includes(newMember.trim())) {
+      setTeamMembersEmails([...teamMembersEmails, newMember.trim()]);
       setNewMember('');
     }
   };
 
   const handleRemoveMember = (memberToRemove) => {
-    setTeamMembers(teamMembers.filter(member => member !== memberToRemove));
+    setTeamMembersEmails(teamMembersEmails.filter(member => member !== memberToRemove));
   };
 
   const handleSubmit = () => {
     if (projectName.trim() && currentUser) {
       onConfirm({
         name: projectName.trim(),
-        team: teamMembers,
+        team: teamMembersEmails,
         stage: selectedStage,
         description: projectDescription, // Include description
         tasks: editingProject ? editingProject.tasks : 0,
@@ -56,7 +88,7 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
       });
       // Reset form
       setProjectName('');
-      setTeamMembers(currentUser ? [currentUser.email] : []); // Reset to include current user
+      setTeamMembersEmails(currentUser ? [currentUser.email] : []); // Reset to include current user
       setNewMember('');
       setSelectedStage('Proposal');
       setProjectDescription(''); // Reset description
@@ -66,7 +98,7 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
 
   const handleCancel = () => {
     setProjectName('');
-    setTeamMembers(currentUser ? [currentUser.email] : []); // Reset to include current user
+    setTeamMembersEmails(currentUser ? [currentUser.email] : []); // Reset to include current user
     setNewMember('');
     setSelectedStage('Proposal');
     setProjectDescription(''); // Reset description
@@ -234,9 +266,15 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
                   fontSize: '14px',
                   color: COLORS.dark
                 }}>
-                  <span>{member}</span>
+                  {member.uid ? (
+                    <Link to={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
+                      <span style={{ cursor: 'pointer', color: COLORS.dark }}>{member.displayName}</span>
+                    </Link>
+                  ) : (
+                    <span style={{ color: COLORS.dark }}>{member.displayName}</span>
+                  )}
                   <button
-                    onClick={() => handleRemoveMember(member)}
+                    onClick={() => handleRemoveMember(member.email)} // Pass email for removal
                     style={{
                       background: 'none',
                       border: 'none',

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { COLORS, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
 import { FaCopy } from 'react-icons/fa';
+import { Link } from 'react-router-dom'; // Import Link
 
 export default function InviteMemberModal({ isOpen, onClose, forumId, forumName, members, onAddMember }) {
   const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -164,13 +165,16 @@ export default function InviteMemberModal({ isOpen, onClose, forumId, forumName,
           }}>
             {members.length > 0 ? (
               members.map((member, index) => (
-                <span key={index} style={{
-                  backgroundColor: COLORS.light,
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  fontSize: '14px',
-                  color: COLORS.dark
-                }}>{member.email || member.name}</span>
+                <Link to={`/profile/${member.id}`} key={index} style={{ textDecoration: 'none' }}>
+                  <span style={{
+                    backgroundColor: COLORS.light,
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    fontSize: '14px',
+                    color: COLORS.dark,
+                    cursor: 'pointer'
+                  }}>{member.name || member.email}</span>
+                </Link>
               ))
             ) : (
               <span style={{ color: COLORS.lightText, fontStyle: 'italic' }}>No members yet.</span>

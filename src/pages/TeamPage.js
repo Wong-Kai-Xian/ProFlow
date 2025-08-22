@@ -4,6 +4,7 @@ import { COLORS, INPUT_STYLES } from '../components/profile-component/constants'
 import { db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import { Link } from 'react-router-dom'; // Import Link
 
 export default function TeamPage() {
   const [teamMembers, setTeamMembers] = useState([]);
@@ -34,11 +35,20 @@ export default function TeamPage() {
         });
 
         // Optionally, fetch user details for these emails if needed for display
-        const membersDetails = Array.from(uniqueMemberEmails).map(email => ({
-          email: email,
-          // You might want to fetch more user details from a 'users' collection if available
-          // For now, just using email as display name
-          displayName: email.split('@')[0]
+        const membersDetails = await Promise.all(Array.from(uniqueMemberEmails).map(async (email) => {
+          const usersQuery = query(collection(db, "users"), where("email", "==", email));
+          const userSnapshot = await getDocs(usersQuery);
+          if (!userSnapshot.empty) {
+            const userData = userSnapshot.docs[0].data();
+            return { 
+              uid: userSnapshot.docs[0].id, // Get the UID from the user document
+              email: email,
+              displayName: userData.name || email.split('@')[0] // Use stored name or derive from email
+            };
+          } else {
+            console.warn(`User document not found for email: ${email}`);
+            return { email: email, displayName: email.split('@')[0] }; // Fallback
+          }
         }));
         setTeamMembers(membersDetails);
 
@@ -137,8 +147,17 @@ export default function TeamPage() {
                   {member.displayName[0].toUpperCase()}
                 </div>
                 <div>
-                  <div style={{ fontSize: "18px", fontWeight: "600", color: COLORS.dark }}>{member.displayName}</div>
-                  <div style={{ fontSize: "14px", color: COLORS.lightText }}>{member.email}</div>
+                 {member.uid ? (
+                   <Link to={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
+                     <div style={{ fontSize: "18px", fontWeight: "600", color: COLORS.primary, cursor: "pointer" }}>{member.displayName}</div>
+                     <div style={{ fontSize: "14px", color: COLORS.lightText, cursor: "pointer" }}>{member.email}</div>
+                   </Link>
+                 ) : (
+                   <>
+                     <div style={{ fontSize: "18px", fontWeight: "600", color: COLORS.dark }}>{member.displayName}</div>
+                     <div style={{ fontSize: "14px", color: COLORS.lightText }}>{member.email}</div>
+                   </>
+                 )}
                 </div>
               </div>
             ))}

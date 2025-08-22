@@ -15,6 +15,7 @@ import customerDataArray from "./profile-component/customerData.js"; // Import c
 import { db } from "../firebase"; // Import db from firebase.js
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, getDoc, query, where, onSnapshot } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import { Link } from 'react-router-dom'; // Import Link
 
 export default function Contacts() {
   const navigate = useNavigate();
@@ -93,9 +94,21 @@ export default function Contacts() {
           });
         });
 
-        const membersDetails = Array.from(uniqueMemberEmails).map(email => ({
-          email: email,
-          displayName: email.split('@')[0] // Simple display name for now
+        // Optionally, fetch user details for these emails if needed for display
+        const membersDetails = await Promise.all(Array.from(uniqueMemberEmails).map(async (email) => {
+          const usersQuery = query(collection(db, "users"), where("email", "==", email));
+          const userSnapshot = await getDocs(usersQuery);
+          if (!userSnapshot.empty) {
+            const userData = userSnapshot.docs[0].data();
+            return { 
+              uid: userSnapshot.docs[0].id, // Get the UID from the user document
+              email: email,
+              displayName: userData.name || email.split('@')[0] // Use stored name or derive from email
+            };
+          } else {
+            console.warn(`User document not found for email: ${email}`);
+            return { email: email, displayName: email.split('@')[0] }; // Fallback
+          }
         }));
         setTeamMembersList(membersDetails);
 
@@ -339,7 +352,7 @@ export default function Contacts() {
       minHeight: 0,
     }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.gap }}>
         <h3 style={{ margin: "0 auto 0 0", color: COLORS.text, fontSize: "18px" }}>Contacts</h3> {/* Adjusted margin for spacing */}
         <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
           {view === "clients" && currentUser && (
@@ -353,7 +366,7 @@ export default function Contacts() {
 
       {/* View Switch */}
       {currentUser && (
-        <div style={{ display: "flex", gap: LAYOUT.smallGap, marginBottom: LAYOUT.smallGap, border: `1px solid ${COLORS.lightBorder}`, borderRadius: LAYOUT.borderRadius }}>
+        <div style={{ display: "flex", gap: LAYOUT.gap, marginBottom: LAYOUT.smallGap, border: `1px solid ${COLORS.lightBorder}`, borderRadius: LAYOUT.borderRadius }}>
           <button
             onClick={() => setView("clients")}
             style={{ 
@@ -469,8 +482,17 @@ export default function Contacts() {
                   boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
                 }}>
                   <div style={{ marginBottom: "8px", width: "100%" }}>
-                    <strong style={{ color: COLORS.text, wordBreak: "break-word" }}>{member.displayName}</strong><br/>
-                    <span style={{ fontSize: "12px", color: COLORS.lightText, wordBreak: "break-word" }}>{member.email}</span>
+                    {member.uid ? (
+                      <Link to={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
+                        <strong style={{ color: COLORS.primary, wordBreak: "break-word", cursor: "pointer" }}>{member.displayName}</strong><br/>
+                        <span style={{ fontSize: "12px", color: COLORS.lightText, wordBreak: "break-word", cursor: "pointer" }}>{member.email}</span>
+                      </Link>
+                    ) : (
+                      <>
+                        <strong style={{ color: COLORS.text, wordBreak: "break-word" }}>{member.displayName}</strong><br/>
+                        <span style={{ fontSize: "12px", color: COLORS.lightText, wordBreak: "break-word" }}>{member.email}</span>
+                      </>
+                    )}
                   </div>
                   <div style={{ display: "flex", gap: "8px", justifyContent: "flex-start", width: "100%", marginTop: "8px" }}>
                     {/* WhatsApp and Email buttons for team members, assuming phone and email are available */}

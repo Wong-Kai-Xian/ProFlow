@@ -5,6 +5,7 @@ import { db } from "../../firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { FaUserPlus, FaUserMinus } from 'react-icons/fa'; // Import icons
 import { BUTTON_STYLES } from '../profile-component/constants'; // Import BUTTON_STYLES
+import { Link } from 'react-router-dom'; // Import Link
 
 export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberClick, onRemoveMember, projectCreatorId, currentUserUid }) {
   const [membersData, setMembersData] = useState([]);
@@ -122,10 +123,18 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
                 {member.name ? member.name[0].toUpperCase() : '?'}
               </div>
               <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: COLORS.dark }}>
-                {member.name}
+                <Link to={`/profile/${member.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: COLORS.dark, cursor: "pointer" }}>
+                    {member.name}
+                  </p>
+                </Link>
               </p>
               <p style={{ margin: 0, fontSize: "12px", color: COLORS.lightText }}>
-                {member.email}
+                <Link to={`/profile/${member.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <p style={{ margin: 0, fontSize: "12px", color: COLORS.lightText, cursor: "pointer" }}>
+                    {member.email}
+                  </p>
+                </Link>
               </p>
             </div>
           ))}

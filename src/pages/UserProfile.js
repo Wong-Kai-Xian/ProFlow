@@ -3,7 +3,8 @@ import { useParams } from 'react-router-dom';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { db } from '../firebase';
-import './UserProfile.css'; // We'll create this file for styling
+import TopBar from '../components/TopBar'; // Import TopBar
+import { COLORS, BUTTON_STYLES, INPUT_STYLES, LAYOUT, CARD_STYLES } from '../components/profile-component/constants'; // Import constants
 
 export default function UserProfile() {
   const { userId } = useParams();
@@ -138,49 +139,59 @@ export default function UserProfile() {
   }
 
   return (
-    <div className="user-profile-container">
-      <h1>{userProfile.name}'s Profile</h1>
-      <p>Email: {userProfile.email}</p>
-      <p>Role: {userProfile.role}</p>
+    <div style={{ backgroundColor: COLORS.background, minHeight: '100vh', fontFamily: "Arial, sans-serif" }}>
+      <TopBar />
+      <div style={{ maxWidth: '900px', margin: '30px auto', padding: '0 20px' }}>
+        {/* User Profile Info Card */}
+        <div style={{ ...CARD_STYLES.base, marginBottom: LAYOUT.gap, padding: '30px' }}>
+          <h1 style={{ margin: '0 0 15px 0', color: COLORS.dark, fontSize: '28px', fontWeight: '700' }}>{userProfile.name}'s Profile</h1>
+          <p style={{ margin: '0 0 8px 0', color: COLORS.text, fontSize: '16px' }}><strong style={{ color: COLORS.dark }}>Email:</strong> {userProfile.email}</p>
+          <p style={{ margin: 0, color: COLORS.text, fontSize: '16px' }}><strong style={{ color: COLORS.dark }}>Role:</strong> {userProfile.role}</p>
+        </div>
 
       {currentUser && currentUser.uid === userId && (
-        <div className="user-actions">
-          <h2>Join Project or Forum</h2>
-          <div className="join-section">
+        <div style={{ marginBottom: LAYOUT.gap }}>
+          <h2 style={{ color: COLORS.dark, fontSize: '22px', fontWeight: '600', marginBottom: LAYOUT.gap }}>Join Project or Forum</h2>
+          <div style={{ ...CARD_STYLES.base, padding: '20px', marginBottom: LAYOUT.smallGap, display: 'flex', alignItems: 'center', gap: LAYOUT.smallGap }}>
             <input
               type="text"
               placeholder="Project ID"
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
+              style={{ ...INPUT_STYLES.base, flex: 1, padding: '10px' }}
             />
-            <button onClick={handleJoinProject} disabled={loading}>Join Project</button>
+            <button onClick={handleJoinProject} disabled={loading} style={BUTTON_STYLES.primary}>Join Project</button>
           </div>
-          <div className="join-section">
+          <div style={{ ...CARD_STYLES.base, padding: '20px', display: 'flex', alignItems: 'center', gap: LAYOUT.smallGap }}>
             <input
               type="text"
               placeholder="Forum ID"
               value={forumId}
               onChange={(e) => setForumId(e.target.value)}
+              style={{ ...INPUT_STYLES.base, flex: 1, padding: '10px' }}
             />
-            <button onClick={handleJoinForum} disabled={loading}>Join Forum</button>
+            <button onClick={handleJoinForum} disabled={loading} style={BUTTON_STYLES.primary}>Join Forum</button>
           </div>
 
-          <h2>Pending Invitations</h2>
+          <h2 style={{ color: COLORS.dark, fontSize: '22px', fontWeight: '600', margin: `${LAYOUT.gap} 0 ${LAYOUT.smallGap} 0` }}>Pending Invitations</h2>
           {invitations.length > 0 ? (
-            <div className="invitations-list">
+            <div style={{ display: 'grid', gap: LAYOUT.smallGap }}>
               {invitations.map(inv => (
-                <div key={inv.id} className="invitation-item">
-                  <p>You're invited to {inv.type} "{inv.targetName}" by {inv.senderName}.</p>
-                  <button onClick={() => handleInvitationResponse(inv.id, true)} disabled={loading}>Accept</button>
-                  <button onClick={() => handleInvitationResponse(inv.id, false)} disabled={loading}>Reject</button>
+                <div key={inv.id} style={{ ...CARD_STYLES.base, padding: '15px', display: 'flex', flexDirection: 'column', gap: LAYOUT.smallGap }}>
+                  <p style={{ margin: 0, color: COLORS.text, fontSize: '15px' }}>You're invited to <strong style={{ color: COLORS.primary }}>{inv.type} "{inv.targetName}"</strong> by <strong style={{ color: COLORS.dark }}>{inv.senderName}</strong>.</p>
+                  <div style={{ display: 'flex', gap: LAYOUT.smallGap, marginTop: LAYOUT.smallGap }}>
+                    <button onClick={() => handleInvitationResponse(inv.id, true)} disabled={loading} style={BUTTON_STYLES.success}>Accept</button>
+                    <button onClick={() => handleInvitationResponse(inv.id, false)} disabled={loading} style={{ ...BUTTON_STYLES.secondary, background: COLORS.danger, color: COLORS.white }}>Reject</button>
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p>No pending invitations.</p>
+            <p style={{ color: COLORS.lightText, fontSize: '15px', textAlign: 'center', padding: '20px', ...CARD_STYLES.base }}>No pending invitations.</p>
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

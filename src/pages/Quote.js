@@ -2,6 +2,7 @@ import React from 'react';
 import TopBar from '../components/TopBar';
 import { COLORS } from '../components/profile-component/constants';
 import { useAuth } from '../contexts/AuthContext';
+import { Link } from 'react-router-dom';
 
 export default function Quote() {
   const { currentUser } = useAuth();
@@ -24,7 +25,14 @@ export default function Quote() {
           <p style={{ color: COLORS.danger, fontSize: "18px", textAlign: "center" }}>Please log in to view and manage your quotes.</p>
         ) : (
           <p style={{ color: COLORS.text, fontSize: "16px", textAlign: "center" }}>
-            Quote functionality is not yet implemented. This will display quotes specific to {currentUser.email}.
+            Quote functionality is not yet implemented. This will display quotes specific to 
+            {currentUser.uid ? (
+              <Link to={`/profile/${currentUser.uid}`} style={{ textDecoration: 'none', color: COLORS.primary, cursor: "pointer" }}>
+                {currentUser.email}
+              </Link>
+            ) : (
+              <span>{currentUser.email}</span>
+            )}.
           </p>
         )}
       </div>
