@@ -6,11 +6,9 @@ import Dashboard from "../components/Dashboard";
 import Contacts from "../components/Contacts"; 
 import UpcomingEvents from "../components/UpcomingEvents";
 import ProjectsTab from "../components/ProjectsTab";
-import HomeGroupForum from "../components/HomeGroupForum"; // Use HomeGroupForum
-import { COLORS, LAYOUT, BUTTON_STYLES } from "../components/profile-component/constants"; // Import COLORS and LAYOUT
-import { db } from "../firebase"; // Import db
-import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore"; // Import Firestore functions
-import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import HomeGroupForum from "../components/HomeGroupForum";
+import { useAuth } from '../contexts/AuthContext';
+import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getPageHeaderStyle, getContentContainerStyle } from '../styles/designSystem';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -33,39 +31,22 @@ export default function Home() {
   };
 
   return (
-    <div style={{
-      fontFamily: "Arial, sans-serif",
-      position: "relative",
-      background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
-      minHeight: "100vh",
-      width: "100%",
-      display: "flex",
-      flexDirection: "column",
-      margin: "0",
-      padding: "0",
-      overflowX: "hidden",
-      boxSizing: "border-box"
-    }}>
+    <div style={getPageContainerStyle()}>
       <TopBar />
 
-
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: `${leftWidth}px 1fr ${rightWidth}px`,
-          gridTemplateRows: "1fr",
-          gap: "20px",
-          padding: "20px",
-          transition: "grid-template-columns 0.3s ease",
-          flex: 1,
-          minHeight: "calc(100vh - 200px)",
-          overflowX: "hidden",
-          width: "100%",
-          maxWidth: "1400px",
-          margin: "0 auto",
-          boxSizing: "border-box"
-        }}>
+      <div style={{
+        ...getContentContainerStyle(),
+        paddingTop: DESIGN_SYSTEM.spacing['2xl']
+      }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `${leftWidth}px 1fr ${rightWidth}px`,
+            gridTemplateRows: "1fr",
+            gap: DESIGN_SYSTEM.spacing.lg,
+            transition: "grid-template-columns 0.3s ease",
+            minHeight: "calc(100vh - 250px)"
+          }}>
         {/* Left Panel */}
         <div
           style={{
@@ -82,88 +63,66 @@ export default function Home() {
           {!leftCollapsed && currentUser && (
             <>
               {/* Projects Section */}
-              <div style={{ 
+              <div style={{
+                ...getCardStyle('home'),
                 height: "350px",
-                marginBottom: "20px",
-                background: "rgba(255, 255, 255, 0.95)",
-                borderRadius: "20px",
-                boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
-                border: "1px solid rgba(255, 255, 255, 0.3)",
-                backdropFilter: "blur(15px)",
-                overflow: "hidden",
-                flexShrink: 0,
-                position: "relative"
+                marginBottom: DESIGN_SYSTEM.spacing.base,
+                display: "flex",
+                flexDirection: "column"
               }}>
                 <div style={{
-                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  padding: "16px 20px",
-                  color: "white",
-                  borderRadius: "20px 20px 0 0",
-                  marginBottom: "12px"
+                  background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+                  padding: DESIGN_SYSTEM.spacing.base,
+                  color: DESIGN_SYSTEM.colors.text.inverse
                 }}>
                   <h3 style={{
                     margin: "0",
-                    fontSize: "18px",
-                    fontWeight: "700",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px"
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
                   }}>
                     Projects Hub
                   </h3>
                   <p style={{
                     margin: "4px 0 0 0",
-                    fontSize: "13px",
-                    opacity: 0.9,
-                    fontWeight: "400"
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                    opacity: 0.9
                   }}>
                     Manage and track your projects
                   </p>
                 </div>
-                <div style={{ height: "calc(100% - 80px)", overflow: "hidden" }}>
+                <div style={{ flex: 1, overflow: "hidden" }}>
                   <ProjectsTab />
                 </div>
               </div>
 
               {/* Contacts Section */}
-              <div style={{ 
+              <div style={{
+                ...getCardStyle('home'),
                 height: "340px",
-                background: "rgba(255, 255, 255, 0.95)",
-                borderRadius: "20px",
-                boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
-                border: "1px solid rgba(255, 255, 255, 0.3)",
-                backdropFilter: "blur(15px)",
-                overflow: "hidden",
-                flexShrink: 0,
-                position: "relative"
+                display: "flex",
+                flexDirection: "column"
               }}>
                 <div style={{
-                  background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-                  padding: "16px 20px",
-                  color: "white",
-                  borderRadius: "20px 20px 0 0",
-                  marginBottom: "12px"
+                  background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+                  padding: DESIGN_SYSTEM.spacing.base,
+                  color: DESIGN_SYSTEM.colors.text.inverse
                 }}>
                   <h3 style={{
                     margin: "0",
-                    fontSize: "18px",
-                    fontWeight: "700",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px"
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
                   }}>
                     Contacts
                   </h3>
                   <p style={{
                     margin: "4px 0 0 0",
-                    fontSize: "13px",
-                    opacity: 0.9,
-                    fontWeight: "400"
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                    opacity: 0.9
                   }}>
                     Connect with your customers
                   </p>
                 </div>
-                <div style={{ height: "calc(100% - 80px)", overflow: "hidden" }}>
+                <div style={{ flex: 1, overflow: "hidden" }}>
                   <Contacts onSelectCustomer={goToCustomerProfile} />
                 </div>
               </div>
@@ -176,27 +135,26 @@ export default function Home() {
             onMouseEnter={() => setLeftButtonHovered(true)}
             onMouseLeave={() => setLeftButtonHovered(false)}
             style={{
-              ...BUTTON_STYLES.flat,
               position: "absolute",
               top: "50%",
               right: -20,
               transform: "translateY(-50%)",
               width: 20,
               height: 80,
-              background: leftButtonHovered ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.7)",
-              color: leftButtonHovered ? "#2d3748" : "#4a5568",
-              border: "1px solid rgba(255,255,255,0.3)",
-              backdropFilter: "blur(10px)",
-              borderRadius: LAYOUT.smallBorderRadius + " 0 0 " + LAYOUT.smallBorderRadius,
+              background: leftButtonHovered ? DESIGN_SYSTEM.colors.background.primary : DESIGN_SYSTEM.colors.secondary[100],
+              color: leftButtonHovered ? DESIGN_SYSTEM.colors.text.primary : DESIGN_SYSTEM.colors.text.secondary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.base} 0 0 ${DESIGN_SYSTEM.borderRadius.base}`,
               padding: 0,
-              fontSize: "18px",
-              fontWeight: "bold",
+              fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+              fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold,
+              fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "none",
+              boxShadow: DESIGN_SYSTEM.shadows.sm,
               cursor: "pointer",
-              transition: "all 0.2s ease-in-out",
+              transition: "all 0.2s ease",
             }}
           >
             {leftCollapsed ? ">" : "<"}
@@ -207,17 +165,35 @@ export default function Home() {
         <div style={{
           gridColumn: 2, 
           gridRow: 1,
+          ...getCardStyle('home'),
           height: "800px",
-          maxWidth: "100%",
-          background: "rgba(255, 255, 255, 0.95)",
-          borderRadius: "20px",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.15)",
-          border: "1px solid rgba(255, 255, 255, 0.2)",
-          backdropFilter: "blur(10px)",
-          overflow: "hidden",
-          boxSizing: "border-box"
+          display: "flex",
+          flexDirection: "column"
         }}>
-          <Dashboard />
+          <div style={{
+            background: DESIGN_SYSTEM.pageThemes.home.gradient,
+            padding: DESIGN_SYSTEM.spacing.base,
+            color: DESIGN_SYSTEM.colors.text.inverse,
+            borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+          }}>
+            <h2 style={{
+              margin: "0",
+              fontSize: DESIGN_SYSTEM.typography.fontSize.xl,
+              fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+            }}>
+              Dashboard
+            </h2>
+            <p style={{
+              margin: "4px 0 0 0",
+              fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+              opacity: 0.9
+            }}>
+              Overview of your work and progress
+            </p>
+          </div>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <Dashboard />
+          </div>
         </div>
 
         {/* Right Panel */}
@@ -237,89 +213,66 @@ export default function Home() {
           {!rightCollapsed && currentUser && (
             <>
               {/* Upcoming Events Section */}
-              <div style={{ 
+              <div style={{
+                ...getCardStyle('home'),
                 height: "320px",
-                marginBottom: "20px",
-                background: "rgba(255, 255, 255, 0.95)",
-                borderRadius: "20px",
-                boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
-                border: "1px solid rgba(255, 255, 255, 0.3)",
-                backdropFilter: "blur(15px)",
-                overflow: "hidden",
-                flexShrink: 0,
-                position: "relative"
+                marginBottom: DESIGN_SYSTEM.spacing.base,
+                display: "flex",
+                flexDirection: "column"
               }}>
                 <div style={{
-                  background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-                  padding: "16px 20px",
-                  color: "white",
-                  borderRadius: "20px 20px 0 0",
-                  marginBottom: "12px"
+                  background: DESIGN_SYSTEM.pageThemes.home.gradient,
+                  padding: DESIGN_SYSTEM.spacing.base,
+                  color: DESIGN_SYSTEM.colors.text.inverse
                 }}>
                   <h3 style={{
                     margin: "0",
-                    fontSize: "18px",
-                    fontWeight: "700",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px"
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
                   }}>
                     Upcoming Events
                   </h3>
                   <p style={{
                     margin: "4px 0 0 0",
-                    fontSize: "13px",
-                    opacity: 0.9,
-                    fontWeight: "400"
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                    opacity: 0.9
                   }}>
                     Stay on top of your schedule
                   </p>
                 </div>
-                <div style={{ height: "calc(100% - 80px)", overflow: "hidden" }}>
+                <div style={{ flex: 1, overflow: "hidden" }}>
                   <UpcomingEvents />
                 </div>
               </div>
 
               {/* General Forum Section */}
-              <div style={{ 
+              <div style={{
+                ...getCardStyle('home'),
                 height: "340px",
-                marginTop: "20px",
-                background: "rgba(255, 255, 255, 0.95)",
-                borderRadius: "20px",
-                boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
-                border: "1px solid rgba(255, 255, 255, 0.3)",
-                backdropFilter: "blur(15px)",
-                overflow: "hidden",
-                flexShrink: 0,
-                position: "relative"
+                display: "flex",
+                flexDirection: "column"
               }}>
                 <div style={{
-                  background: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
-                  padding: "16px 20px",
-                  color: "#2d3748",
-                  borderRadius: "20px 20px 0 0",
-                  marginBottom: "12px"
+                  background: DESIGN_SYSTEM.pageThemes.forums.gradient,
+                  padding: DESIGN_SYSTEM.spacing.base,
+                  color: DESIGN_SYSTEM.colors.text.inverse
                 }}>
                   <h3 style={{
                     margin: "0",
-                    fontSize: "18px",
-                    fontWeight: "700",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px"
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
                   }}>
                     General Forum
                   </h3>
                   <p style={{
                     margin: "4px 0 0 0",
-                    fontSize: "13px",
-                    opacity: 0.8,
-                    fontWeight: "400"
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                    opacity: 0.9
                   }}>
                     Community discussions and updates
                   </p>
                 </div>
-                <div style={{ height: "calc(100% - 80px)", overflow: "hidden" }}>
+                <div style={{ flex: 1, overflow: "hidden" }}>
                   <HomeGroupForum />
                 </div>
               </div>
@@ -332,27 +285,26 @@ export default function Home() {
             onMouseEnter={() => setRightButtonHovered(true)}
             onMouseLeave={() => setRightButtonHovered(false)}
             style={{
-              ...BUTTON_STYLES.flat,
               position: "absolute",
               top: "50%",
               left: -20,
               transform: "translateY(-50%)",
               width: 20,
               height: 80,
-              background: rightButtonHovered ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.7)",
-              color: rightButtonHovered ? "#2d3748" : "#4a5568",
-              border: "1px solid rgba(255,255,255,0.3)",
-              backdropFilter: "blur(10px)",
-              borderRadius: "0 " + LAYOUT.smallBorderRadius + " " + LAYOUT.smallBorderRadius + " 0",
+              background: rightButtonHovered ? DESIGN_SYSTEM.colors.background.primary : DESIGN_SYSTEM.colors.secondary[100],
+              color: rightButtonHovered ? DESIGN_SYSTEM.colors.text.primary : DESIGN_SYSTEM.colors.text.secondary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: `0 ${DESIGN_SYSTEM.borderRadius.base} ${DESIGN_SYSTEM.borderRadius.base} 0`,
               padding: 0,
-              fontSize: "18px",
-              fontWeight: "bold",
+              fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+              fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold,
+              fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "none",
+              boxShadow: DESIGN_SYSTEM.shadows.sm,
               cursor: "pointer",
-              transition: "all 0.2s ease-in-out",
+              transition: "all 0.2s ease",
             }}
           >
             {rightCollapsed ? "<" : ">"}
@@ -360,29 +312,29 @@ export default function Home() {
         </div>
       </div>
       
+      </div>
+      
       {/* Footer Bar */}
       <div style={{
         height: "40px",
-        backgroundColor: COLORS.secondary,
-        color: COLORS.white,
+        backgroundColor: DESIGN_SYSTEM.colors.secondary[800],
+        color: DESIGN_SYSTEM.colors.text.inverse,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 2rem",
-        fontSize: "14px",
-        width: "100%",
-        margin: "0",
-        boxSizing: "border-box" /* Added boxSizing */
+        padding: `0 ${DESIGN_SYSTEM.spacing.xl}`,
+        fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+        fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary
       }}>
-        <div style={{ display: "flex", gap: "2rem" }}>
-          <span style={{ cursor: "pointer" }}>Help</span>
-          <span style={{ cursor: "pointer" }}>Support</span>
-          <span style={{ cursor: "pointer" }}>Documentation</span>
+        <div style={{ display: "flex", gap: DESIGN_SYSTEM.spacing.xl }}>
+          <span style={{ cursor: "pointer", opacity: 0.8, transition: "opacity 0.2s" }}>Help</span>
+          <span style={{ cursor: "pointer", opacity: 0.8, transition: "opacity 0.2s" }}>Support</span>
+          <span style={{ cursor: "pointer", opacity: 0.8, transition: "opacity 0.2s" }}>Documentation</span>
         </div>
-        <div style={{ display: "flex", gap: "2rem" }}>
+        <div style={{ display: "flex", gap: DESIGN_SYSTEM.spacing.xl }}>
           <span>© 2025 ProFlow</span>
-          <span style={{ cursor: "pointer" }}>Privacy</span>
-          <span style={{ cursor: "pointer" }}>Terms</span>
+          <span style={{ cursor: "pointer", opacity: 0.8, transition: "opacity 0.2s" }}>Privacy</span>
+          <span style={{ cursor: "pointer", opacity: 0.8, transition: "opacity 0.2s" }}>Terms</span>
         </div>
       </div>
     </div>

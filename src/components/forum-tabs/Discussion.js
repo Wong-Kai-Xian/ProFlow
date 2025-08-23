@@ -6,6 +6,7 @@ import { storage } from "../../firebase";
 import { ref, deleteObject } from "firebase/storage";
 import CreatePostModal from "./CreatePostModal"; // Import CreatePostModal
 import ConfirmationModal from "./ConfirmationModal"; // Import ConfirmationModal
+import UserAvatar from "../shared/UserAvatar";
 
 // Helper to format timestamp
 const formatTimestamp = (timestamp) => {
@@ -210,21 +211,16 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
       }}>
         <div style={{ display: "flex", alignItems: "center" }}>
           {/* User Avatar */}
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '18px',
-            fontWeight: '700',
-            marginRight: '12px',
-            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-          }}>
-            {post.author ? post.author.split(' ').map(n => n[0]).join('') : 'AN'}
+          <div style={{ marginRight: '12px' }}>
+            <UserAvatar 
+              user={{ 
+                name: post.author,
+                photoURL: post.authorPhotoURL 
+              }} 
+              size={48}
+              showBorder={true}
+              borderColor="rgba(102, 126, 234, 0.3)"
+            />
           </div>
           <div style={{ flexGrow: 1 }}>
             <strong style={{ 

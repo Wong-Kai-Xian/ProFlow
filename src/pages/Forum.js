@@ -4,15 +4,15 @@ import TopBar from "../components/TopBar";
 import ForumTabs from "../components/ForumTabs";
 import ProjectDetails from "../components/project-component/ProjectDetails";
 import ForumReminders from "../components/forum-tabs/ForumReminders";
-import StarredPosts from "../components/forum-tabs/StarredPosts"; // Updated import
+import StarredPosts from "../components/forum-tabs/StarredPosts";
 import ActiveUsers from "../components/forum-tabs/ActiveUsers";
 import FloatingCreateButton from "../components/forum-tabs/FloatingCreateButton";
 import CreatePostModal from "../components/forum-tabs/CreatePostModal";
-import InviteMemberModal from "../components/forum-component/InviteMemberModal"; // Import the new InviteMemberModal
-import { COLORS, BUTTON_STYLES } from "../components/profile-component/constants";
+import InviteMemberModal from "../components/forum-component/InviteMemberModal";
 import { db } from "../firebase";
-import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc } from "firebase/firestore"; // Import collection, getDocs, getDoc
-import { useAuth } from "../contexts/AuthContext"; // Import useAuth
+import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc } from "firebase/firestore";
+import { useAuth } from "../contexts/AuthContext";
+import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 
 export default function Forum() {
   const { id: forumId } = useParams(); // Rename `id` to `forumId` for clarity
@@ -179,86 +179,155 @@ export default function Forum() {
   };
 
   if (!forumData) {
-    return <div style={{ textAlign: "center", padding: "50px", color: COLORS.lightText }}>Loading forum details...</div>;
+    return (
+      <div style={getPageContainerStyle()}>
+        <TopBar />
+        <div style={{ textAlign: "center", padding: "50px", color: DESIGN_SYSTEM.colors.text.secondary }}>
+          Loading forum details...
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif' }}>
+    <div style={getPageContainerStyle()}>
       <TopBar />
       <div style={{
-        display: "grid",
-        gridTemplateColumns: "280px 1fr 280px",
-        gridTemplateRows: "auto 1fr",
-        gap: "20px",
-        padding: "10px",
-        minHeight: "90vh"
+        ...getContentContainerStyle(),
+        paddingTop: DESIGN_SYSTEM.spacing['2xl']
       }}>
-        {/* Left column: Project Details + Reminders */}
-        <div style={{ gridColumn: 1, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
-          {/* Render ProjectDetails with linkedProjectData and no onSave/allProjectNames */}
-          {linkedProjectData ? (
-            <ProjectDetails 
-              project={linkedProjectData} 
-              readOnly={true} // Ensure ProjectDetails is read-only in the forum context
-            />
-          ) : (
-            <div style={{
-              backgroundColor: COLORS.white,
-              borderRadius: '10px',
-              padding: '15px',
-              marginBottom: '15px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              border: '1px solid #ECF0F1'
-            }}>
-              <h3 style={{ margin: 0, color: COLORS.dark, fontSize: "16px", fontWeight: "700" }}>Project Details</h3>
-              <p style={{ color: COLORS.lightText, fontSize: "14px" }}>No project linked.</p>
-            </div>
-          )}
-          <ForumReminders forumId={forumId} /> {/* Moved ForumReminders here */}
-        </div>
-
-        {/* Middle Column - Tabbed Content (Posts Focus) */}
-        <div style={{ gridColumn: 2, gridRow: "1 / span 2" }}>
-          {/* Forum Header with Manage Members Button */}
+        {/* Enhanced Forum Header */}
+        <div style={{
+          background: DESIGN_SYSTEM.pageThemes.forums.gradient,
+          borderRadius: DESIGN_SYSTEM.borderRadius.xl,
+          padding: DESIGN_SYSTEM.spacing.xl,
+          marginBottom: DESIGN_SYSTEM.spacing.lg,
+          boxShadow: DESIGN_SYSTEM.shadows.lg,
+          color: DESIGN_SYSTEM.colors.text.inverse
+        }}>
           <div style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "20px",
-            padding: "16px 20px",
-            backgroundColor: COLORS.white,
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)"
+            alignItems: "center"
           }}>
             <div>
-              <h2 style={{ 
-                margin: "0 0 4px 0", 
-                color: COLORS.dark, 
-                fontSize: "20px", 
-                fontWeight: "700" 
+              <h1 style={{
+                margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
+                fontSize: DESIGN_SYSTEM.typography.fontSize['3xl'],
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold
               }}>
                 {forumData?.name}
-              </h2>
-              <p style={{ 
-                margin: 0, 
-                color: COLORS.lightText, 
-                fontSize: "14px" 
+              </h1>
+              <p style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                opacity: 0.9
               }}>
-                {forumData?.members?.length || 0} members
+                {forumData?.description || 'Team collaboration space'} • {forumData?.members?.length || 0} members
               </p>
             </div>
             <button
-              onClick={() => setShowInviteModal(true)} // Open the new InviteMemberModal
+              onClick={() => setShowInviteModal(true)}
               style={{
-                ...BUTTON_STYLES.primary,
-                padding: "10px 16px",
-                fontSize: "14px",
-                fontWeight: "600"
+                ...getButtonStyle('primary', 'forums'),
+                backgroundColor: "rgba(255, 255, 255, 0.2)",
+                backdropFilter: "blur(10px)",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
+                padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                boxShadow: "0 4px 15px rgba(255, 255, 255, 0.2)"
               }}
             >
               Invite Members
             </button>
           </div>
+        </div>
+
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "320px 1fr 300px",
+          gridTemplateRows: "1fr",
+          gap: DESIGN_SYSTEM.spacing.xl,
+          minHeight: "calc(100vh - 300px)"
+        }}>
+        {/* Left column: Project Details + Reminders */}
+        <div style={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: DESIGN_SYSTEM.spacing.base, 
+          overflowY: "auto",
+          maxHeight: "calc(100vh - 320px)"
+        }}>
+          {/* Project Details Section */}
+          <div style={getCardStyle('forums')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.forums.accent,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Project Details
+              </h3>
+            </div>
+            <div style={{ padding: 0 }}>
+              {linkedProjectData ? (
+                <ProjectDetails 
+                  project={linkedProjectData} 
+                  readOnly={true}
+                />
+              ) : (
+                <div style={{
+                  padding: DESIGN_SYSTEM.spacing.base,
+                  textAlign: "center"
+                }}>
+                  <p style={{ 
+                    color: DESIGN_SYSTEM.colors.text.secondary, 
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                    margin: 0
+                  }}>
+                    No project linked to this forum.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Reminders Section */}
+          <div style={getCardStyle('forums')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.forums.accent,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Reminders
+              </h3>
+            </div>
+            <div style={{ padding: 0 }}>
+              <ForumReminders forumId={forumId} />
+            </div>
+          </div>
+        </div>
+
+        {/* Middle Column - Main Forum Content */}
+        <div style={{ 
+          display: "flex", 
+          flexDirection: "column",
+          minHeight: "calc(100vh - 320px)"
+        }}>
           <ForumTabs 
             forumData={forumData} 
             posts={posts} 
@@ -272,9 +341,55 @@ export default function Forum() {
         </div>
 
         {/* Right column: Online Members + Trending Posts */}
-        <div style={{ gridColumn: 3, gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
-          <ActiveUsers members={enrichedForumMembersDetails} />
-          <StarredPosts onPostClick={handleTrendingPostClick} forumId={forumId} currentUser={currentUser} />
+        <div style={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: DESIGN_SYSTEM.spacing.base, 
+          overflowY: "auto",
+          maxHeight: "calc(100vh - 320px)"
+        }}>
+          {/* Active Users Section */}
+          <div style={getCardStyle('forums')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.forums.accent,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Active Members
+              </h3>
+            </div>
+            <div style={{ padding: 0 }}>
+              <ActiveUsers members={enrichedForumMembersDetails} />
+            </div>
+          </div>
+          
+          {/* Starred Posts Section */}
+          <div style={getCardStyle('forums')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.forums.accent,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Starred Posts
+              </h3>
+            </div>
+            <div style={{ padding: 0 }}>
+              <StarredPosts onPostClick={handleTrendingPostClick} forumId={forumId} currentUser={currentUser} />
+            </div>
+          </div>
+        </div>
         </div>
       </div>
 

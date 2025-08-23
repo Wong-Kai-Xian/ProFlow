@@ -1,12 +1,35 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import UserAvatar from './shared/UserAvatar';
 
 export default function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const [userProfile, setUserProfile] = useState(null);
+
+  // Fetch user profile data including photo
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (currentUser?.uid) {
+        try {
+          const docRef = doc(db, 'users', currentUser.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setUserProfile(docSnap.data());
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+        }
+      }
+    };
+
+    fetchUserProfile();
+  }, [currentUser?.uid]);
 
   const getLinkStyle = (path) => {
     const isActive = location.pathname === path;
@@ -201,22 +224,16 @@ export default function TopBar() {
         <div style={{ marginLeft: 'auto', position: 'relative' }}>
           <div 
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            style={{
-              cursor: 'pointer',
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              backgroundColor: '#3498DB',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 'bold',
-              fontSize: '18px',
-              color: 'white',
-              marginRight: '25px' /* Increased margin-right for more spacing */
-            }}
+            style={{ marginRight: '25px', cursor: 'pointer' }}
           >
-            {currentUser.email ? currentUser.email[0].toUpperCase() : 'U'} {/* Display first letter of email or 'U' */}
+            <UserAvatar 
+              user={{
+                ...currentUser,
+                ...userProfile,
+                email: currentUser.email
+              }} 
+              size={42} 
+            />
           </div>
 
           {isDropdownOpen && (

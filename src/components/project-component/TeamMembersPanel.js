@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Card from '../profile-component/Card';
-import { COLORS, LAYOUT } from '../profile-component/constants';
+import { DESIGN_SYSTEM, getCardStyle, getButtonStyle } from '../../styles/designSystem';
 import { db } from "../../firebase";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { FaUserPlus, FaUserMinus } from 'react-icons/fa'; // Import icons
-import { BUTTON_STYLES } from '../profile-component/constants'; // Import BUTTON_STYLES
 import { Link } from 'react-router-dom'; // Import Link
+import UserAvatar from '../shared/UserAvatar';
 
 export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberClick, onRemoveMember, projectCreatorId, currentUserUid, currentUser }) {
   const [membersData, setMembersData] = useState([]);
@@ -183,13 +183,13 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
 
   return (
     <Card style={{ flex: 1, overflow: "auto", height: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.gap }}>
-        <h3 style={{ color: COLORS.dark, margin: 0 }}>Team Members</h3>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: DESIGN_SYSTEM.spacing.base }}>
+        <h3 style={{ color: DESIGN_SYSTEM.colors.text.primary, margin: 0 }}>Team Members</h3>
         {isProjectCreator && (
           <button 
             onClick={onAddMemberClick} 
             style={{ 
-              ...BUTTON_STYLES.secondary, 
+              ...getButtonStyle('secondary', 'projects'), 
               padding: "6px 12px", 
               fontSize: "13px",
               display: "flex",
@@ -200,24 +200,24 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
           </button>
         )}
       </div>
-      {loading && <p style={{ color: COLORS.lightText }}>Loading team members...</p>}
-      {error && <p style={{ color: COLORS.danger }}>{error}</p>}
+      {loading && <p style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>Loading team members...</p>}
+      {error && <p style={{ color: DESIGN_SYSTEM.colors.error }}>{error}</p>}
       {!loading && membersData.length === 0 && (
-        <p style={{ color: COLORS.lightText }}>No team members assigned yet. The project creator is always included.</p>
+        <p style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>No team members assigned yet. The project creator is always included.</p>
       )}
       {!loading && membersData.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: LAYOUT.smallGap }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: DESIGN_SYSTEM.spacing.sm }}>
           {membersData.map((member) => (
             <div key={member.id} style={{
-              backgroundColor: COLORS.light,
-              padding: LAYOUT.smallGap,
-              borderRadius: LAYOUT.borderRadius,
+              backgroundColor: DESIGN_SYSTEM.colors.background.secondary,
+              padding: DESIGN_SYSTEM.spacing.sm,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               textAlign: "center",
-              boxShadow: LAYOUT.cardShadow,
+              boxShadow: DESIGN_SYSTEM.shadows.sm,
               position: "relative", // For positioning the remove button
             }}>
               {isProjectCreator && member.id !== projectCreatorId && (
@@ -229,7 +229,7 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
                     right: "5px",
                     background: "none",
                     border: "none",
-                    color: COLORS.danger,
+                    color: DESIGN_SYSTEM.colors.error,
                     cursor: "pointer",
                     fontSize: "14px",
                     padding: "5px"
@@ -238,30 +238,23 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
                   <FaUserMinus />
                 </button>
               )}
-              <div style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "50%",
-                backgroundColor: COLORS.primary,
-                color: COLORS.white,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "18px",
-                fontWeight: "bold",
-                marginBottom: "8px",
-              }}>
-                {member.name ? member.name[0].toUpperCase() : '?'}
+              <div style={{ marginBottom: "8px" }}>
+                <UserAvatar 
+                  user={member} 
+                  size={40}
+                  showBorder={true}
+                  borderColor={DESIGN_SYSTEM.colors.primary[500]}
+                />
               </div>
               <Link to={`/profile/${member.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: COLORS.dark, cursor: "pointer" }}>
+                <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: DESIGN_SYSTEM.colors.text.primary, cursor: "pointer" }}>
                   {member.name}
                   {member.isCreator && (
                     <span style={{ 
                       marginLeft: "4px", 
                       fontSize: "10px", 
-                      backgroundColor: COLORS.primary, 
-                      color: COLORS.white, 
+                      backgroundColor: DESIGN_SYSTEM.colors.primary[500], 
+                      color: DESIGN_SYSTEM.colors.text.inverse, 
                       padding: "2px 4px", 
                       borderRadius: "3px",
                       fontWeight: "500"
@@ -273,8 +266,8 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
                     <span style={{ 
                       marginLeft: "4px", 
                       fontSize: "10px", 
-                      backgroundColor: COLORS.success, 
-                      color: COLORS.white, 
+                      backgroundColor: DESIGN_SYSTEM.colors.success, 
+                      color: DESIGN_SYSTEM.colors.text.inverse, 
                       padding: "2px 4px", 
                       borderRadius: "3px",
                       fontWeight: "500"
@@ -283,7 +276,7 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
                     </span>
                   )}
                 </p>
-                <p style={{ margin: 0, fontSize: "12px", color: COLORS.lightText, cursor: "pointer" }}>
+                <p style={{ margin: 0, fontSize: "12px", color: DESIGN_SYSTEM.colors.text.secondary, cursor: "pointer" }}>
                   {member.email}
                 </p>
               </Link>

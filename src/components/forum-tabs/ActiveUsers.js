@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { COLORS } from '../profile-component/constants';
+import UserAvatar from '../shared/UserAvatar';
 
 export default function ActiveUsers({ members }) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -70,20 +71,11 @@ export default function ActiveUsers({ members }) {
                 position: 'relative',
                 marginRight: '8px'
               }}>
-                <div style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  backgroundColor: getAvatarColor(user.name),
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  color: 'white'
-                }}>
-                  {user.avatar}
-                </div>
+                <UserAvatar 
+                  user={user} 
+                  size={36}
+                  showBorder={false}
+                />
                 {user.isOnline && (
                   <div style={{
                     position: 'absolute',

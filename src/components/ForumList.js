@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "./profile-component/constants";
+import { DESIGN_SYSTEM, getCardStyle, getButtonStyle } from '../styles/designSystem';
 import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
 
 // Get initials from forum name
@@ -82,9 +82,9 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
         <div style={{ display: "flex", gap: "8px" }}>
           <button 
             style={{ 
-              ...BUTTON_STYLES.secondary,
-              backgroundColor: sortBy === "alphabetic" ? COLORS.primary : COLORS.light,
-              color: sortBy === "alphabetic" ? COLORS.white : COLORS.dark,
+              ...getButtonStyle('secondary', 'forums'),
+              backgroundColor: sortBy === "alphabetic" ? DESIGN_SYSTEM.colors.primary[500] : DESIGN_SYSTEM.colors.background.secondary,
+              color: sortBy === "alphabetic" ? DESIGN_SYSTEM.colors.text.inverse : DESIGN_SYSTEM.colors.text.primary,
               padding: "8px 16px",
               fontSize: "14px"
             }}
@@ -94,9 +94,9 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
           </button>
           <button 
             style={{ 
-              ...BUTTON_STYLES.secondary,
-              backgroundColor: sortBy === "notifications" ? COLORS.primary : COLORS.light,
-              color: sortBy === "notifications" ? COLORS.white : COLORS.dark,
+              ...getButtonStyle('secondary', 'forums'),
+              backgroundColor: sortBy === "notifications" ? DESIGN_SYSTEM.colors.primary[500] : DESIGN_SYSTEM.colors.background.secondary,
+              color: sortBy === "notifications" ? DESIGN_SYSTEM.colors.text.inverse : DESIGN_SYSTEM.colors.text.primary,
               padding: "8px 16px",
               fontSize: "14px"
             }}
@@ -106,9 +106,9 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
           </button>
           <button 
             style={{ 
-              ...BUTTON_STYLES.secondary,
-              backgroundColor: sortBy === "recent" ? COLORS.primary : COLORS.light,
-              color: sortBy === "recent" ? COLORS.white : COLORS.dark,
+              ...getButtonStyle('secondary', 'forums'),
+              backgroundColor: sortBy === "recent" ? DESIGN_SYSTEM.colors.primary[500] : DESIGN_SYSTEM.colors.background.secondary,
+              color: sortBy === "recent" ? DESIGN_SYSTEM.colors.text.inverse : DESIGN_SYSTEM.colors.text.primary,
               padding: "8px 16px",
               fontSize: "14px"
             }}
@@ -127,20 +127,20 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{
-            ...INPUT_STYLES.base,
+            fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
             width: "100%",
             maxWidth: "400px",
             padding: "12px 16px",
             fontSize: "16px",
             borderRadius: "8px",
-            border: `2px solid ${COLORS.border}`,
+            border: `2px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
             transition: "border-color 0.3s ease"
           }}
           onFocus={(e) => {
-            e.target.style.borderColor = COLORS.primary;
+            e.target.style.borderColor = DESIGN_SYSTEM.colors.primary[500];
           }}
           onBlur={(e) => {
-            e.target.style.borderColor = COLORS.border;
+            e.target.style.borderColor = DESIGN_SYSTEM.colors.secondary[300];
           }}
         />
       </div>
@@ -150,7 +150,7 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
         <div style={{
           textAlign: "center",
           padding: "60px 20px",
-          color: COLORS.lightText,
+          color: DESIGN_SYSTEM.colors.background.secondaryText,
           fontSize: "18px"
         }}>
           {searchTerm ? `No forums found matching "${searchTerm}"` : "No forums available"}
@@ -201,23 +201,23 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                       position: "absolute",
                       top: "16px",
                       right: "16px",
-                      background: COLORS.light,
+                      background: DESIGN_SYSTEM.colors.background.secondary,
                       border: "none",
                       borderRadius: "6px",
                       padding: "6px 8px",
                       cursor: "pointer",
                       fontSize: "12px",
-                      color: COLORS.dark,
+                      color: DESIGN_SYSTEM.colors.text.primary,
                       transition: "all 0.2s ease",
                       zIndex: 1
                     }}
                     onMouseEnter={(e) => {
-                      e.target.style.backgroundColor = COLORS.primary;
-                      e.target.style.color = COLORS.white;
+                      e.target.style.backgroundColor = DESIGN_SYSTEM.colors.primary[500];
+                      e.target.style.color = DESIGN_SYSTEM.colors.text.inverse;
                     }}
                     onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = COLORS.light;
-                      e.target.style.color = COLORS.dark;
+                      e.target.style.backgroundColor = DESIGN_SYSTEM.colors.background.secondary;
+                      e.target.style.color = DESIGN_SYSTEM.colors.text.primary;
                     }}
                   >
                     Edit
@@ -235,10 +235,10 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                       position: "absolute",
                       top: "16px",
                       right: onEditForum ? "50px" : "16px", // Adjust position if Edit button is present
-                      background: COLORS.danger, // Red background
+                      background: DESIGN_SYSTEM.colors.error, // Red background
                       border: "none",
                       cursor: "pointer",
-                      color: COLORS.white, // White icon color
+                      color: DESIGN_SYSTEM.colors.text.inverse, // White icon color
                       fontSize: "14px", // Match edit button font size for visual consistency
                       padding: "6px 8px", // Match edit button padding
                       borderRadius: "6px", // Make it square with rounded corners
@@ -256,7 +256,7 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                       e.currentTarget.style.transform = "scale(1.05)";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = COLORS.danger; // Revert to original red on mouse leave
+                      e.currentTarget.style.backgroundColor = DESIGN_SYSTEM.colors.error; // Revert to original red on mouse leave
                       e.currentTarget.style.transform = "scale(1)";
                     }}
                   >
@@ -270,8 +270,8 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                     top: "16px",
                     right: (onEditForum || onDeleteForum) ? (onEditForum && onDeleteForum ? "94px" : "50px") : "16px", // Adjust position if Edit/Delete button is present
                     fontSize: "12px",
-                    color: COLORS.white,
-                    background: COLORS.danger,
+                    color: DESIGN_SYSTEM.colors.text.inverse,
+                    background: DESIGN_SYSTEM.colors.error,
                     borderRadius: "50%",
                     width: "24px",
                     height: "24px",
@@ -310,7 +310,7 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                   {/* Forum Content */}
                   <h3 style={{
                     margin: "0 0 8px 0",
-                    color: COLORS.dark,
+                    color: DESIGN_SYSTEM.colors.text.primary,
                     fontSize: "20px",
                     fontWeight: "700",
                     lineHeight: "1.3"
@@ -323,7 +323,10 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                 <div style={{ padding: "0 24px 24px 24px" }}>
 
                 {/* Forum ID - Clickable to Copy */}
-                <div style={{ marginBottom: "16px" }}>
+                <div style={{ 
+                  marginBottom: DESIGN_SYSTEM.spacing.base, // Reduced margin bottom
+                  marginTop: DESIGN_SYSTEM.spacing.lg // Increased margin top to move it lower further
+                }}>
                   <div 
                     onClick={(e) => {
                       e.stopPropagation();
@@ -379,30 +382,30 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                       e.target.style.boxShadow = "none";
                     }}
                   >
-                    <span style={{ fontWeight: "600" }}>Forum ID: {forum.id}</span>
-                    <span style={{ 
+                    <span style={{ fontWeight: "600" }}>Click to copy Forum ID</span>
+                    {/* <span style={{ 
                       fontSize: "11px", 
                       opacity: 0.7,
                       fontStyle: "italic",
                       color: "#047857"
                     }}>
                       click to copy
-                    </span>
+                    </span> */}
                   </div>
                 </div>
 
                 {/* Project Name (if available) */}
-                {forum.projectId && (
+                {(forum.projectId || !forum.projectId) && (
                   <div style={{
-                    color: COLORS.primary,
+                    color: DESIGN_SYSTEM.colors.primary[500],
                     fontSize: "13px",
                     fontWeight: "600",
                     marginBottom: "12px",
-                    background: `linear-gradient(135deg, ${COLORS.primary}15, ${COLORS.primary}25)`,
+                    background: `linear-gradient(135deg, ${DESIGN_SYSTEM.colors.primary[500]}15, ${DESIGN_SYSTEM.colors.primary[500]}25)`,
                     padding: "8px 12px",
                     borderRadius: "8px",
                     display: "inline-block",
-                    border: `1px solid ${COLORS.primary}30`
+                    border: `1px solid ${DESIGN_SYSTEM.colors.primary[500]}30`
                   }}>
                     Project: {getProjectName(forum.projectId)}
                   </div>
@@ -444,7 +447,7 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
 
                 {/* Description */}
                 <p style={{
-                  color: COLORS.lightText,
+                  color: DESIGN_SYSTEM.colors.background.secondaryText,
                   fontSize: "15px",
                   margin: "0 0 16px 0",
                   lineHeight: "1.4",
@@ -459,7 +462,7 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                 {/* Last Activity */}
                 <div style={{
                   fontSize: "13px",
-                  color: COLORS.lightText,
+                  color: DESIGN_SYSTEM.colors.background.secondaryText,
                   padding: "12px 16px",
                   backgroundColor: "#f8f9fb",
                   borderRadius: "8px",

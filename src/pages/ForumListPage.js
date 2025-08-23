@@ -4,10 +4,10 @@ import TopBar from "../components/TopBar";
 import ForumList from "../components/ForumList";
 import CreateForumModal from "../components/forum-component/CreateForumModal";
 import JoinForumModal from "../components/forum-component/JoinForumModal";
-import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "../components/profile-component/constants";
-import { db } from "../firebase"; // Import db
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, serverTimestamp, where, getDoc } from "firebase/firestore"; // Import Firestore functions and query
-import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import { db } from "../firebase";
+import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, serverTimestamp, where, getDoc } from "firebase/firestore";
+import { useAuth } from '../contexts/AuthContext';
+import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 
 export default function ForumListPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -148,27 +148,30 @@ export default function ForumListPage() {
   };
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", minHeight: "100vh", backgroundColor: COLORS.background }}>
+    <div style={getPageContainerStyle()}>
       <TopBar />
       
-      <div style={{ padding: "30px", maxWidth: "1200px", margin: "0 auto" }}>
+      <div style={{
+        ...getContentContainerStyle(),
+        paddingTop: DESIGN_SYSTEM.spacing['2xl'] // Reverted padding to original value
+      }}>
         {/* Enhanced Header Section */}
         <div style={{ 
           display: "flex", 
           justifyContent: "space-between", 
           alignItems: "center", 
-          marginBottom: "30px",
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          padding: "30px",
-          borderRadius: "16px",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.1)"
+          marginBottom: DESIGN_SYSTEM.spacing.xl,
+          background: DESIGN_SYSTEM.pageThemes.forums.gradient,
+          padding: DESIGN_SYSTEM.spacing.xl,
+          borderRadius: DESIGN_SYSTEM.borderRadius.xl,
+          boxShadow: DESIGN_SYSTEM.shadows.lg
         }}>
           <div>
             <h1 style={{ 
-              margin: "0 0 8px 0", 
-              color: "white", 
-              fontSize: "32px", 
-              fontWeight: "700" 
+              margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`, 
+              color: DESIGN_SYSTEM.colors.text.inverse, 
+              fontSize: DESIGN_SYSTEM.typography.fontSize['3xl'], 
+              fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold
             }}>
               Discussion Forums
             </h1>
@@ -185,7 +188,7 @@ export default function ForumListPage() {
               <button
                 onClick={() => setShowJoinModal(true)}
                 style={{
-                  ...BUTTON_STYLES.secondary,
+                  ...getButtonStyle('secondary', 'forums'),
                   background: "rgba(255,255,255,0.15)",
                   backdropFilter: "blur(10px)",
                   border: "1px solid rgba(255,255,255,0.3)",
@@ -210,7 +213,7 @@ export default function ForumListPage() {
               <button
                 onClick={() => setShowCreateModal(true)}
                 style={{
-                  ...BUTTON_STYLES.primary,
+                  ...getButtonStyle('primary', 'forums'),
                   background: "rgba(255,255,255,0.2)",
                   backdropFilter: "blur(10px)",
                   border: "1px solid rgba(255,255,255,0.3)",
@@ -243,7 +246,7 @@ export default function ForumListPage() {
           <div style={{
             textAlign: "center",
             padding: "60px 20px",
-            color: COLORS.lightText,
+            color: DESIGN_SYSTEM.colors.text.secondary,
             fontSize: "18px"
           }}>
             No forums yet. Create your first forum or join one!
@@ -252,7 +255,7 @@ export default function ForumListPage() {
           <div style={{
             textAlign: "center",
             padding: "60px 20px",
-            color: COLORS.danger,
+            color: DESIGN_SYSTEM.colors.error,
             fontSize: "18px"
           }}>
             Please log in to view and manage forums.

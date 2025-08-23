@@ -294,7 +294,7 @@ export default function TeamPage() {
                 e.target.style.boxShadow = incomingInvitationsCount > 0 ? "0 12px 30px rgba(240, 147, 251, 0.4)" : "0 12px 30px rgba(79, 172, 254, 0.4)";
               }}
             >
-              📨 My Invitations
+              My Invitations
               {incomingInvitationsCount > 0 && (
                 <span style={{
                   background: "rgba(255, 255, 255, 0.9)",
@@ -419,7 +419,7 @@ export default function TeamPage() {
               margin: 0,
               letterSpacing: "-0.025em"
             }}>
-              ⏳ Pending Invitations
+              Pending Invitations
             </h2>
             {filteredPendingInvitations.length > 0 && (
               <span style={{
@@ -547,7 +547,7 @@ export default function TeamPage() {
               margin: 0,
               letterSpacing: "-0.025em"
             }}>
-              👥 Team Members
+              Team Members
             </h2>
             {filteredMembers.length > 0 && (
               <span style={{

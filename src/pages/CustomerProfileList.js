@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
-import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "../components/profile-component/constants";
+import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 // import customerDataArray from "../components/profile-component/customerData.js"; // Remove mock data import
 import { db } from "../firebase"; // Import db
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore"; // Import Firestore functions
@@ -108,10 +108,10 @@ export default function CustomerProfileList() {
 
   const getStatusColor = (currentStage) => {
     switch (currentStage) {
-      case 'Working': return COLORS.primary; // Blue
-      case 'Qualified': return COLORS.success; // Green
-      case 'Converted': return COLORS.accent; // A different color for converted
-      default: return COLORS.lightText; // Default color
+      case 'Working': return DESIGN_SYSTEM.colors.primary[500]; // Blue
+      case 'Qualified': return DESIGN_SYSTEM.colors.success; // Green
+      case 'Converted': return DESIGN_SYSTEM.colors.accent; // A different color for converted
+      default: return DESIGN_SYSTEM.colors.text.secondary; // Default color
     }
   };
 
@@ -238,43 +238,58 @@ export default function CustomerProfileList() {
   };
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", minHeight: "100vh", backgroundColor: COLORS.background }}>
+    <div style={getPageContainerStyle()}>
       <TopBar />
 
-      <div style={{ padding: "30px" }}>
+      <div style={{
+        ...getContentContainerStyle(),
+        paddingTop: DESIGN_SYSTEM.spacing['2xl']
+      }}>
         <div style={{ 
           display: "flex", 
           justifyContent: "space-between", 
           alignItems: "center", 
-          marginBottom: "30px" 
+          marginBottom: DESIGN_SYSTEM.spacing.xl,
+          padding: DESIGN_SYSTEM.spacing.xl,
+          background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+          borderRadius: DESIGN_SYSTEM.borderRadius.xl,
+          color: DESIGN_SYSTEM.colors.text.inverse,
+          boxShadow: DESIGN_SYSTEM.shadows.lg
         }}>
-          <h1 style={{ 
-            margin: 0, 
-            color: COLORS.dark, 
-            fontSize: "28px", 
-            fontWeight: "700" 
-          }}>
-            Customer Profiles
-          </h1>
+          <div>
+            <h1 style={{ 
+              margin: `0 0 ${DESIGN_SYSTEM.spacing.sm} 0`, 
+              fontSize: DESIGN_SYSTEM.typography.fontSize['3xl'], 
+              fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold
+            }}>
+              Customer Relationships
+            </h1>
+            <p style={{ 
+              margin: 0, 
+              fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+              opacity: 0.9 
+            }}>
+              Manage your customer relationships and track progress • {filteredCustomers.length} customers
+            </p>
+          </div>
           {currentUser && (
             <button
               onClick={() => setShowAddCustomerModal(true)}
               style={{
-                ...BUTTON_STYLES.primary,
-                padding: "12px 24px",
-                fontSize: "16px",
-                fontWeight: "600",
-                borderRadius: "8px",
-                boxShadow: "0 4px 12px rgba(52, 152, 219, 0.3)",
-                transition: "all 0.3s ease"
+                ...getButtonStyle('primary', 'customers'),
+                padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                boxShadow: "0 4px 15px rgba(255, 255, 255, 0.3)"
               }}
               onMouseEnter={(e) => {
                 e.target.style.transform = "translateY(-2px)";
-                e.target.style.boxShadow = "0 6px 16px rgba(52, 152, 219, 0.4)";
+                e.target.style.boxShadow = "0 6px 20px rgba(255, 255, 255, 0.4)";
               }}
               onMouseLeave={(e) => {
                 e.target.style.transform = "translateY(0)";
-                e.target.style.boxShadow = "0 4px 12px rgba(52, 152, 219, 0.3)";
+                e.target.style.boxShadow = "0 4px 15px rgba(255, 255, 255, 0.3)";
               }}
             >
               Add New Customer
@@ -297,20 +312,22 @@ export default function CustomerProfileList() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
-                ...INPUT_STYLES.base,
+                fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
                 width: "100%",
                 maxWidth: "400px",
-                padding: "12px 16px",
-                fontSize: "16px",
-                borderRadius: "8px",
-                border: `2px solid ${COLORS.border}`,
+                padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                border: `2px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+                color: DESIGN_SYSTEM.colors.text.primary,
                 transition: "border-color 0.3s ease"
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = COLORS.primary;
+                e.target.style.borderColor = DESIGN_SYSTEM.colors.primary[500];
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = COLORS.border;
+                e.target.style.borderColor = DESIGN_SYSTEM.colors.secondary[300];
               }}
             />
 
@@ -341,7 +358,7 @@ export default function CustomerProfileList() {
           <div style={{
             textAlign: "center",
             padding: "60px 20px",
-            color: COLORS.lightText,
+            color: DESIGN_SYSTEM.colors.text.secondary,
             fontSize: "18px"
           }}>
             {searchTerm ? `No customers found matching "${searchTerm}"` : "No customers yet. Add your first customer!"}
@@ -350,7 +367,7 @@ export default function CustomerProfileList() {
           <div style={{
             textAlign: "center",
             padding: "60px 20px",
-            color: COLORS.danger,
+            color: DESIGN_SYSTEM.colors.error,
             fontSize: "18px"
           }}>
             Please log in to view and manage customer profiles.
@@ -359,8 +376,9 @@ export default function CustomerProfileList() {
           <div style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
-            gap: "24px",
-            marginBottom: "30px"
+            gap: DESIGN_SYSTEM.spacing.lg,
+            marginBottom: DESIGN_SYSTEM.spacing.xl,
+            padding: `0 ${DESIGN_SYSTEM.spacing.base}`
           }}>
             {filteredCustomers.map((customer) => {
               const bgColor = stringToColor(customer.customerProfile.name || ""); // Handle potentially undefined name
@@ -372,23 +390,20 @@ export default function CustomerProfileList() {
                 <div
                   key={customer.id}
                   style={{
-                    backgroundColor: COLORS.white,
-                    borderRadius: "12px",
-                    padding: "24px",
-                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-                    border: `1px solid ${COLORS.border}`,
+                    ...getCardStyle('customers'),
                     cursor: "pointer",
-                    transition: "all 0.3s ease",
+                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                     position: "relative",
-                    overflow: "hidden" // To contain the progress bar animation
+                    overflow: "hidden",
+                    padding: DESIGN_SYSTEM.spacing.lg // Ensure consistent padding inside the card
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-4px)";
-                    e.currentTarget.style.boxShadow = "0 8px 25px rgba(0, 0, 0, 0.12)";
+                    e.currentTarget.style.transform = "translateY(-6px)";
+                    e.currentTarget.style.boxShadow = DESIGN_SYSTEM.shadows.xl;
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.08)";
+                    e.currentTarget.style.boxShadow = DESIGN_SYSTEM.shadows.md;
                   }}
                   onClick={() => handleCustomerClick(customer)}
                 >
@@ -401,15 +416,25 @@ export default function CustomerProfileList() {
                       }}
                       style={{
                         position: "absolute",
-                        top: "16px",
-                        right: "24px", // Position on the right
-                        background: "none",
+                        top: DESIGN_SYSTEM.spacing.base,
+                        right: DESIGN_SYSTEM.spacing.lg, // Adjust position to match project list if needed
+                        background: DESIGN_SYSTEM.colors.error,
                         border: "none",
-                        color: COLORS.danger,
-                        fontSize: "18px",
+                        borderRadius: DESIGN_SYSTEM.borderRadius.sm,
+                        padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
                         cursor: "pointer",
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.base, // Match smaller font size for icon
+                        color: DESIGN_SYSTEM.colors.text.inverse,
+                        transition: "all 0.2s ease",
                         zIndex: 2, // Ensure it's above other elements
-                        padding: "5px",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#c0392b"; // Darker red on hover
+                        e.currentTarget.style.transform = "scale(1.05)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = DESIGN_SYSTEM.colors.error; // Revert to original red on mouse leave
+                        e.currentTarget.style.transform = "scale(1)";
                       }}
                     >
                       <FaTrash />
@@ -424,120 +449,103 @@ export default function CustomerProfileList() {
                     width: `${progress}%`,
                     height: "8px",
                     backgroundColor: currentStageColor,
-                    borderRadius: "12px 12px 0 0",
+                    borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`, // Match card borderRadius
                     transition: "width 0.5s ease-in-out"
                   }} />
 
                   {/* Current Stage Indicator */}
                   <div style={{
                     position: "absolute",
-                    top: "16px",
-                    left: "16px", // Position on the left
-                    padding: "4px 10px",
-                    borderRadius: "12px",
+                    top: DESIGN_SYSTEM.spacing.base,
+                    left: DESIGN_SYSTEM.spacing.lg,
+                    padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                    borderRadius: DESIGN_SYSTEM.borderRadius.lg,
                     backgroundColor: `${currentStageColor}20`,
                     color: currentStageColor,
-                    fontSize: "12px",
-                    fontWeight: "600",
-                    zIndex: 1 // Ensure it's above the progress bar
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                    zIndex: 1
                   }}>
                     {currentStageName}
                   </div>
-
-                  {/* Status Badge - moved to top left */}
-                  {/* Removed duplicate status badge */}
-                  {/* Customer Avatar */}
-                  <div style={{
-                    width: "80px",
-                    height: "80px",
-                    borderRadius: "50%",
-                    backgroundColor: bgColor,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "32px",
-                    color: COLORS.white,
-                    fontWeight: "700",
-                    marginBottom: "20px",
-                    marginTop: "30px" // Adjusted to give space for new elements
+                  
+                  <div style={{ 
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    marginBottom: DESIGN_SYSTEM.spacing.lg,
+                    marginTop: DESIGN_SYSTEM.spacing.xl // Give space for the top elements
                   }}>
-                    {getInitials(customer.customerProfile.name || "")}
-                  </div>
-
-                  {/* Customer Info */}
-                  <h3 style={{ 
-                    margin: "0 0 8px 0", 
-                    color: COLORS.dark, 
-                    fontSize: "20px", 
-                    fontWeight: "700",
-                    lineHeight: "1.3"
-                  }}>
-                    {customer.customerProfile.name}
-                  </h3>
-
-                  <p style={{
-                    margin: "0 0 12px 0",
-                    color: COLORS.lightText,
-                    fontSize: "16px",
-                    fontWeight: "500"
-                  }}>
-                    {customer.companyProfile.company}
-                  </p>
-
-                  <div style={{ marginBottom: "16px" }}>
+                    {/* Customer Avatar */}
                     <div style={{
-                      fontSize: "14px",
-                      color: COLORS.lightText,
-                      marginBottom: "4px"
+                      width: DESIGN_SYSTEM.spacing['3xl'], 
+                      height: DESIGN_SYSTEM.spacing['3xl'], 
+                      borderRadius: DESIGN_SYSTEM.borderRadius.full,
+                      backgroundColor: bgColor,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.xl,
+                      fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold,
+                      color: DESIGN_SYSTEM.colors.text.inverse,
+                      marginBottom: DESIGN_SYSTEM.spacing.lg
                     }}>
-                      📧 {customer.customerProfile.email}
+                      {getInitials(customer.customerProfile.name || customer.companyProfile.company || "N/A")}
                     </div>
-                    <div style={{
-                      fontSize: "14px",
-                      color: COLORS.lightText,
-                      marginBottom: "4px"
+                    
+                    <h3 style={{
+                      margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`, 
+                      color: DESIGN_SYSTEM.colors.text.primary,
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                      fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                      textAlign: 'center'
                     }}>
-                      📞 {customer.customerProfile.phone}
-                    </div>
+                      {customer.customerProfile.name || customer.companyProfile.company}
+                    </h3>
+                    <p style={{
+                      margin: 0,
+                      color: DESIGN_SYSTEM.colors.text.secondary,
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                      textAlign: 'center'
+                    }}>
+                      {customer.customerProfile.email || customer.companyProfile.industry}
+                    </p>
                   </div>
-
-                  {/* Project Stats */}
-                  <div style={{
+  
+                  <div style={{ 
                     display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "12px 16px",
-                    backgroundColor: COLORS.light,
-                    borderRadius: "8px",
-                    marginTop: "16px"
+                    justifyContent: "space-around",
+                    width: "100%",
+                    paddingTop: DESIGN_SYSTEM.spacing.lg,
+                    borderTop: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+                    marginTop: DESIGN_SYSTEM.spacing.lg // Add margin top for separation
                   }}>
                     <div style={{ textAlign: "center" }}>
                       <div style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color: COLORS.primary
-                      }}>
-                        {customer.projects?.length || 0}
-                      </div>
-                      <div style={{
-                        fontSize: "12px",
-                        color: COLORS.lightText,
-                        fontWeight: "500"
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                        fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                        color: DESIGN_SYSTEM.colors.text.primary
                       }}>
                         Projects
                       </div>
+                      <div style={{
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                        color: DESIGN_SYSTEM.colors.text.secondary
+                      }}>
+                        {customer.projects.length}
+                      </div>
                     </div>
                     <div style={{ textAlign: "center" }}>
                       <div style={{
-                        fontSize: "14px",
-                        fontWeight: "600",
-                        color: COLORS.dark
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                        fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                        color: DESIGN_SYSTEM.colors.text.primary
                       }}>
                         Last Contact
                       </div>
                       <div style={{
-                        fontSize: "13px",
-                        color: COLORS.lightText
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                        color: DESIGN_SYSTEM.colors.text.secondary
                       }}>
                         {customer.lastContact !== "N/A" ? new Date(customer.lastContact).toLocaleDateString() : "N/A"}
                       </div>

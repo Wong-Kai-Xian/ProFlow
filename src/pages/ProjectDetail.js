@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
-import ProjectDetails from '../components/project-component/ProjectDetails'; // Import ProjectDetails
-import Reminders from '../components/project-component/Reminders'; // Import Reminders
-import ProjectTaskPanel from '../components/project-component/ProjectTaskPanel'; // Import ProjectTaskPanel
-import ProjectGroupForum from '../components/ProjectGroupForum'; // Use ProjectGroupForum
-import { COLORS, LAYOUT, STAGES, INPUT_STYLES, BUTTON_STYLES } from '../components/profile-component/constants';
-import StageIndicator from '../components/project-component/StageIndicator'; // Import StageIndicator
-import ApprovalModal from '../components/project-component/ApprovalModal'; // Import ApprovalModal
-import SendApprovalModal from '../components/project-component/SendApprovalModal'; // Import SendApprovalModal
-import AddTeamMemberModal from '../components/project-component/AddTeamMemberModal'; // Import AddTeamMemberModal
-import TeamMembersPanel from '../components/project-component/TeamMembersPanel'; // Import TeamMembersPanel
+import ProjectDetails from '../components/project-component/ProjectDetails';
+import Reminders from '../components/project-component/Reminders';
+import ProjectTaskPanel from '../components/project-component/ProjectTaskPanel';
+import ProjectGroupForum from '../components/ProjectGroupForum';
+import StageIndicator from '../components/project-component/StageIndicator';
+import ApprovalModal from '../components/project-component/ApprovalModal';
+import SendApprovalModal from '../components/project-component/SendApprovalModal';
+import AddTeamMemberModal from '../components/project-component/AddTeamMemberModal';
+import TeamMembersPanel from '../components/project-component/TeamMembersPanel';
 import { db } from "../firebase";
-import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs } from "firebase/firestore"; // Import collection, query, where, onSnapshot
-import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
+import { useAuth } from '../contexts/AuthContext';
+import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
+
+const STAGES = ["Planning", "Development", "Testing", "Completed"];
 
 export default function ProjectDetail() {
   const { projectId } = useParams(); // Changed from projectName to projectId
@@ -272,39 +274,203 @@ export default function ProjectDetail() {
   };
 
   if (!projectData) {
-    return <div style={{ textAlign: "center", padding: "50px", color: COLORS.lightText }}>Loading project details...</div>; // Loading state
+    return (
+      <div style={getPageContainerStyle()}>
+        <TopBar />
+        <div style={{ textAlign: "center", padding: "50px", color: DESIGN_SYSTEM.colors.text.secondary }}>
+          Loading project details...
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", background: COLORS.background, minHeight: "100vh" }}>
+    <div style={getPageContainerStyle()}>
       <TopBar />
+      
+      <div style={{
+        ...getContentContainerStyle(),
+        paddingTop: DESIGN_SYSTEM.spacing['2xl']
+      }}>
+        {/* Enhanced Project Header */}
+        <div style={{
+          background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+          borderRadius: DESIGN_SYSTEM.borderRadius.xl,
+          padding: DESIGN_SYSTEM.spacing.xl,
+          marginBottom: DESIGN_SYSTEM.spacing.lg,
+          boxShadow: DESIGN_SYSTEM.shadows.lg,
+          color: DESIGN_SYSTEM.colors.text.inverse
+        }}>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+          }}>
+            <div>
+              <h1 style={{
+                margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
+                fontSize: DESIGN_SYSTEM.typography.fontSize['3xl'],
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold
+              }}>
+                {projectData?.name || 'Project Details'}
+              </h1>
+              <p style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                opacity: 0.9
+              }}>
+                {projectData?.description || 'Manage project tasks and collaborate with your team'} • Stage: {projectData?.stage || 'Unknown'}
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: DESIGN_SYSTEM.spacing.base }}>
+              {currentUser && currentUser.uid === projectData?.userId && (
+                <button
+                  onClick={() => setShowAddTeamMemberModal(true)}
+                  style={{
+                    ...getButtonStyle('primary', 'projects'),
+                    backgroundColor: "rgba(255, 255, 255, 0.2)",
+                    backdropFilter: "blur(10px)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                    borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                    color: DESIGN_SYSTEM.colors.text.inverse,
+                    boxShadow: "0 4px 15px rgba(255, 255, 255, 0.2)"
+                  }}
+                >
+                  Add Member
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
       <div style={{
         display: "grid",
-        gridTemplateColumns: "1fr 3fr", // Left column narrower, right column wider
-        gridTemplateRows: "1fr", // Single row
-        gap: LAYOUT.gap,
-        padding: LAYOUT.gap,
-        minHeight: "90vh",
+          gridTemplateColumns: "380px 1fr",
+          gridTemplateRows: "1fr",
+          gap: DESIGN_SYSTEM.spacing.xl,
+          minHeight: "calc(100vh - 300px)"
       }}>
         {/* Left Column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap, gridColumn: 1, gridRow: 1 }}>
-          {/* Project Details Card with Edit button */}
+        <div style={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: DESIGN_SYSTEM.spacing.lg,
+          gridColumn: 1, 
+          gridRow: 1,
+          maxHeight: "90vh",
+          overflowY: "auto"
+        }}>
+          {/* Project Details Card */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flexShrink: 0
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Project Details
+              </h3>
+            </div>
+            <div style={{ padding: 0 }}>
           <ProjectDetails 
             project={projectDetails} 
             onSave={handleSaveEditedProjectDetails}
-            allProjectNames={allProjectNames} // Pass all project names
-            readOnly={false} // Explicitly set to editable mode
-          />
-          <div style={{ flexGrow: 0 }}>
+                allProjectNames={allProjectNames}
+                readOnly={false}
+              />
+            </div>
+          </div>
+          
+          {/* Reminders Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flexShrink: 0
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Reminders
+              </h3>
+            </div>
+            <div style={{ padding: 0 }}>
             <Reminders projectId={projectId} /> 
           </div>
-          <div style={{ flexGrow: 2, minHeight: "200px" }}>
+          </div>
+          
+          {/* Project Forum Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flex: "1 1 350px", 
+            minHeight: "300px",
+            maxHeight: "400px",
+            display: "flex",
+            flexDirection: "column"
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.forums.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Project Forum
+              </h3>
+            </div>
+            <div style={{ flex: 1, overflow: "hidden" }}>
             <ProjectGroupForum 
               projectId={projectId} 
-              forums={projectForums} // Pass project-specific forums to GroupForum
+                forums={projectForums}
             />
           </div>
-          <div style={{ flexGrow: 1, minHeight: "200px" }}>
+          </div>
+          
+          {/* Team Members Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flex: "1 1 300px", 
+            minHeight: "250px",
+            maxHeight: "350px",
+            display: "flex",
+            flexDirection: "column"
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Team Members
+              </h3>
+            </div>
+            <div style={{ flex: 1, overflow: "hidden" }}>
             <TeamMembersPanel 
               projectId={projectId}
               teamMembers={projectData.team}
@@ -314,43 +480,102 @@ export default function ProjectDetail() {
               currentUserUid={currentUser?.uid}
               currentUser={currentUser}
             />
+            </div>
           </div>
         </div>
 
-        {/* Right Column (spanning middle and right) */}
-        <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap, gridColumn: 2, gridRow: 1 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <h4 style={{ margin: "0", color: COLORS.text }}>Project Stages</h4>
+        {/* Right Column */}
+        <div style={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: DESIGN_SYSTEM.spacing.lg, 
+          gridColumn: 2, 
+          gridRow: 1 
+        }}>
+          {/* Project Stages Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            padding: 0
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Project Stages
+              </h3>
             <button
               onClick={() => setShowSendApprovalModal(true)}
               style={{
-                ...BUTTON_STYLES.primary,
-                padding: "8px 16px",
-                fontSize: "14px",
+                  ...getButtonStyle('secondary', 'projects'),
+                  background: 'rgba(255,255,255,0.2)',
+                  color: DESIGN_SYSTEM.colors.text.inverse,
+                  border: `1px solid rgba(255,255,255,0.3)`,
+                  padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm
               }}
             >
               Send Approval
             </button>
           </div>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
           <StageIndicator 
             currentStage={currentStage} 
             allStages={STAGES} 
             onAdvanceStage={handleAdvanceStage} 
             onGoBackStage={handleGoBackStage} 
             isCurrentStageTasksComplete={isCurrentStageTasksComplete}
-            onStageSelect={handleStageSelect} // New prop for direct stage selection
-            canAdvance={canAdvanceStage} // Pass the new prop
-          />
-          {/* Removed redundant team member buttons - they're already in the left panel */}
+                onStageSelect={handleStageSelect}
+                canAdvance={canAdvanceStage}
+              />
+            </div>
+          </div>
+
+          {/* Project Tasks Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flex: 1,
+            display: "flex",
+            flexDirection: "column"
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Project Tasks
+              </h3>
+            </div>
+            <div style={{ flex: 1, overflow: "hidden" }}>
           <ProjectTaskPanel 
             projectTasks={projectTasks}
             setProjectTasks={setProjectTasks}
             currentStage={currentStage} 
             projectId={projectId}
-            setProjectData={setProjectData} // Pass setProjectData down
+                setProjectData={setProjectData}
+                projectMembers={projectTeamMembersDetails}
           />
         </div>
       </div>
+        </div>
+      </div>
+      </div>
+      
       {showApprovalModal && (
         <ApprovalModal
           isOpen={showApprovalModal}

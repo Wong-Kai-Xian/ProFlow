@@ -4,28 +4,11 @@ import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-componen
 import TaskFormModal from './TaskFormModal'; // Re-using TaskFormModal for adding and editing
 import TaskChatModal from './TaskChatModal';
 import AddSubtitleModal from './AddSubtitleModal';
+import UserAvatar from '../shared/UserAvatar';
 import { db } from "../../firebase"; // Import db
 import { doc, updateDoc } from "firebase/firestore"; // Import Firestore functions
 
-// Helper to generate a consistent color from a string (e.g., for assigned user initials)
-const stringToColor = (str) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  let color = '#';
-  for (let i = 0; i < 3; i++) {
-    let value = (hash >> (i * 8)) & 0xFF;
-    color += ('00' + value.toString(16)).substr(-2);
-  }
-  return color;
-};
 
-// Helper to get initials
-const getInitials = (name) => {
-  if (!name) return '';
-  const parts = name.split(' ');
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-};
 
 // TaskItem Sub-component
 const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onEdit }) => {
@@ -105,21 +88,13 @@ const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onE
         flexShrink: 0
       }}>
         {task.assignedTo ? (
-          <span style={{
-            width: "24px",
-            height: "24px",
-            borderRadius: "50%",
-            background: stringToColor(task.assignedTo),
-            color: "white",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            fontSize: "11px",
-            fontWeight: "bold",
-            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-          }} title={`Assigned to: ${task.assignedTo}`}>
-            {getInitials(task.assignedTo)}
-          </span>
+          <div title={`Assigned to: ${task.assignedTo}`}>
+            <UserAvatar 
+              user={{ name: task.assignedTo }} 
+              size={24}
+              showBorder={false}
+            />
+          </div>
         ) : (
           <span style={{ color: COLORS.lightText, fontSize: "12px", fontStyle: "italic" }}>Unassigned</span>
         )}
@@ -245,7 +220,7 @@ const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onE
   );
 };
 
-export default function ProjectTaskPanel({ projectTasks, setProjectTasks, currentStage, projectId, setProjectData }) {
+export default function ProjectTaskPanel({ projectTasks, setProjectTasks, currentStage, projectId, setProjectData, projectMembers = [] }) {
   const [panelTitle, setPanelTitle] = useState("Project Tasks");
   const [showTaskFormModal, setShowTaskFormModal] = useState(false); // Renamed from showAddTaskModal
   const [currentSubtitleIndex, setCurrentSubtitleIndex] = useState(null); // Renamed from currentSubtitleIndexForTask
@@ -715,13 +690,14 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
         }}
         onSaveTask={currentEditTask ? handleSaveEditedTask : handleAddTask}
         initialTaskData={currentEditTask}
+        projectMembers={projectMembers}
       />
 
       {/* Task Chat Modal */}
       <TaskChatModal
         isOpen={showTaskChatModal}
         onClose={() => setShowTaskChatModal(false)}
-        task={currentChatTask}
+        taskId={currentChatTask?.id}
         projectId={projectId} // Pass projectId here
       />
 

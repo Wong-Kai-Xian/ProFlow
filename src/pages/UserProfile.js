@@ -2,9 +2,35 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+
 import { db } from '../firebase';
 import TopBar from '../components/TopBar'; // Import TopBar
-import { COLORS, BUTTON_STYLES, INPUT_STYLES, LAYOUT, CARD_STYLES } from '../components/profile-component/constants'; // Import constants
+import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem'; // Import design system
+import UserAvatar from '../components/shared/UserAvatar';
+
+const modalOverlayStyle = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  zIndex: 1000,
+};
+
+const modalContentStyle = {
+  backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+  padding: DESIGN_SYSTEM.spacing.xl,
+  borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+  width: '800px',
+  maxWidth: '95%',
+  maxHeight: '95vh',
+  boxShadow: DESIGN_SYSTEM.shadows.lg,
+  textAlign: 'center',
+};
 
 export default function UserProfile() {
   const { userId } = useParams();
@@ -17,7 +43,19 @@ export default function UserProfile() {
   const auth = getAuth();
   const currentUser = auth.currentUser;
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
-  const [editingName, setEditingName] = useState('');
+  const [editingProfile, setEditingProfile] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    jobTitle: '',
+    company: '',
+    bio: '',
+    linkedin: '',
+    twitter: '',
+    website: ''
+  });
+
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -25,8 +63,20 @@ export default function UserProfile() {
         const docRef = doc(db, 'users', userId);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setUserProfile(docSnap.data());
-          setEditingName(docSnap.data().name || ''); // Initialize editingName
+          const userData = docSnap.data();
+          setUserProfile(userData);
+          setEditingProfile({
+            name: userData.name || '',
+            email: userData.email || '',
+            phone: userData.phone || '',
+            address: userData.address || '',
+            jobTitle: userData.jobTitle || '',
+            company: userData.company || '',
+            bio: userData.bio || '',
+            linkedin: userData.linkedin || '',
+            twitter: userData.twitter || '',
+            website: userData.website || ''
+          });
         } else {
           setError('User not found.');
         }
@@ -129,14 +179,19 @@ export default function UserProfile() {
   };
 
   const handleUpdateProfile = async () => {
-    if (!currentUser || currentUser.uid !== userId || !editingName.trim()) return;
+    if (!currentUser || currentUser.uid !== userId || !editingProfile.name.trim()) return;
     try {
       setLoading(true);
+
+      const updatedProfile = {
+        ...editingProfile,
+        name: editingProfile.name.trim()
+      };
+
       const userRef = doc(db, 'users', userId);
-      await updateDoc(userRef, {
-        name: editingName.trim(),
-      });
-      setUserProfile(prev => ({ ...prev, name: editingName.trim() }));
+      await updateDoc(userRef, updatedProfile);
+
+      setUserProfile(prev => ({ ...prev, ...updatedProfile }));
       setShowEditProfileModal(false);
       alert('Profile updated successfully!');
     } catch (err) {
@@ -160,22 +215,209 @@ export default function UserProfile() {
   }
 
   return (
-    <div style={{ backgroundColor: COLORS.background, minHeight: '100vh', fontFamily: "Arial, sans-serif" }}>
+    <div style={getPageContainerStyle()}>
       <TopBar />
-      <div style={{ maxWidth: '900px', margin: '30px auto', padding: '0 20px' }}>
-        {/* User Profile Info Card */}
-        <div style={{ ...CARD_STYLES.base, marginBottom: LAYOUT.gap, padding: '30px' }}>
-          <h1 style={{ margin: '0 0 15px 0', color: COLORS.dark, fontSize: '28px', fontWeight: '700' }}>{userProfile.name}'s Profile</h1>
-          <p style={{ margin: '0 0 8px 0', color: COLORS.text, fontSize: '16px' }}><strong style={{ color: COLORS.dark }}>Email:</strong> {userProfile.email}</p>
-          <p style={{ margin: 0, color: COLORS.text, fontSize: '16px' }}><strong style={{ color: COLORS.dark }}>Role:</strong> {userProfile.role}</p>
+
+      <div style={{
+        ...getContentContainerStyle(),
+        paddingTop: DESIGN_SYSTEM.spacing['2xl']
+      }}>
+        {/* Professional Header */}
+        <div style={{
+          background: DESIGN_SYSTEM.pageThemes.profile.gradient,
+          color: DESIGN_SYSTEM.colors.text.inverse,
+          padding: `${DESIGN_SYSTEM.spacing['2xl']} 0`,
+          textAlign: 'center',
+          marginBottom: DESIGN_SYSTEM.spacing.xl,
+          boxShadow: DESIGN_SYSTEM.shadows.lg
+        }}>
+          <div style={{ maxWidth: '1200px', margin: '0 auto', padding: `0 ${DESIGN_SYSTEM.spacing.xl}` }}>
+            <h1 style={{
+              margin: `0 0 ${DESIGN_SYSTEM.spacing.sm} 0`,
+              fontSize: DESIGN_SYSTEM.typography.fontSize['3xl'],
+              fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold,
+              textShadow: DESIGN_SYSTEM.shadows.sm
+            }}>
+              User Profile Management
+            </h1>
+            <p style={{
+              margin: 0,
+              fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+              opacity: 0.9
+            }}>
+              Complete user profile and account management
+            </p>
+          </div>
+        </div>
+
+        <div style={{
+          maxWidth: '1200px',
+          margin: `0 auto`,
+          padding: `0 ${DESIGN_SYSTEM.spacing.xl}`,
+          display: 'grid',
+          gridTemplateColumns: '400px 1fr',
+          gap: DESIGN_SYSTEM.spacing.xl
+        }}>
+
+          {/* Left Column - Profile Card */}
+          <div style={{
+            ...getCardStyle('profile'),
+            padding: DESIGN_SYSTEM.spacing['2xl'],
+            textAlign: 'center',
+            height: 'fit-content',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: DESIGN_SYSTEM.spacing.lg
+            }}>
+              <UserAvatar
+                user={userProfile}
+                size={120}
+                showBorder={true}
+                borderColor={DESIGN_SYSTEM.colors.primary[500]}
+              />
+            </div>
+
+            <h1 style={{
+              margin: `${DESIGN_SYSTEM.spacing.lg} 0 ${DESIGN_SYSTEM.spacing.sm} 0`,
+              color: DESIGN_SYSTEM.colors.text.primary,
+              fontSize: DESIGN_SYSTEM.typography.fontSize['2xl'],
+              fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold
+            }}>
+              {userProfile.name || 'User'}
+            </h1>
+
+            <p style={{
+              margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
+              color: DESIGN_SYSTEM.colors.primary[500],
+              fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+              fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium
+            }}>
+              {userProfile.jobTitle || userProfile.role || 'Team Member'}
+            </p>
+
+            <p style={{
+              margin: `0 0 ${DESIGN_SYSTEM.spacing.lg} 0`,
+              color: DESIGN_SYSTEM.colors.text.secondary,
+              fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+            }}>
+              {userProfile.company || 'Company not specified'}
+            </p>
+
+            {userProfile.bio && (
+              <div style={{
+                background: DESIGN_SYSTEM.colors.background.secondary,
+                borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                padding: DESIGN_SYSTEM.spacing.base,
+                margin: `${DESIGN_SYSTEM.spacing.lg} 0`,
+                textAlign: 'left'
+              }}>
+                <h4 style={{ margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`, color: DESIGN_SYSTEM.colors.text.primary }}>About</h4>
+                <p style={{ margin: 0, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, lineHeight: DESIGN_SYSTEM.typography.lineHeight.loose }}>
+                  {userProfile.bio}
+                </p>
+              </div>
+            )}
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: DESIGN_SYSTEM.spacing.base,
+              margin: `${DESIGN_SYSTEM.spacing.xl} 0`,
+              textAlign: 'left'
+            }}>
+              <div>
+                <strong style={{ color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Email:</strong>
+                <p style={{ margin: `${DESIGN_SYSTEM.spacing.xs} 0 0 0`, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, wordBreak: 'break-word' }}>{userProfile.email}</p>
+              </div>
+              {userProfile.phone && (
+                <div>
+                  <strong style={{ color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Phone:</strong>
+                  <p style={{ margin: `${DESIGN_SYSTEM.spacing.xs} 0 0 0`, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>{userProfile.phone}</p>
+                </div>
+              )}
+              {userProfile.address && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <strong style={{ color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Address:</strong>
+                  <p style={{ margin: `${DESIGN_SYSTEM.spacing.xs} 0 0 0`, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>{userProfile.address}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Social Links */}
+            {(userProfile.linkedin || userProfile.twitter || userProfile.website) && (
+              <div style={{
+                borderTop: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+                paddingTop: DESIGN_SYSTEM.spacing.lg,
+                margin: `${DESIGN_SYSTEM.spacing.lg} 0 0 0`
+              }}>
+                <h4 style={{ margin: `0 0 ${DESIGN_SYSTEM.spacing.sm} 0`, color: DESIGN_SYSTEM.colors.text.primary }}>Connect</h4>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: DESIGN_SYSTEM.spacing.base }}>
+                  {userProfile.linkedin && (
+                    <a href={userProfile.linkedin} target="_blank" rel="noopener noreferrer" style={{
+                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                      background: DESIGN_SYSTEM.colors.accent.linkedin,
+                      color: DESIGN_SYSTEM.colors.text.inverse,
+                      borderRadius: DESIGN_SYSTEM.borderRadius.sm,
+                      textDecoration: 'none',
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.xs
+                    }}>
+                      LinkedIn
+                    </a>
+                  )}
+                  {userProfile.twitter && (
+                    <a href={userProfile.twitter} target="_blank" rel="noopener noreferrer" style={{
+                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                      background: DESIGN_SYSTEM.colors.accent.twitter,
+                      color: DESIGN_SYSTEM.colors.text.inverse,
+                      borderRadius: DESIGN_SYSTEM.borderRadius.sm,
+                      textDecoration: 'none',
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.xs
+                    }}>
+                      Twitter
+                    </a>
+                  )}
+                  {userProfile.website && (
+                    <a href={userProfile.website} target="_blank" rel="noopener noreferrer" style={{
+                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                      background: DESIGN_SYSTEM.colors.primary[500],
+                      color: DESIGN_SYSTEM.colors.text.inverse,
+                      borderRadius: DESIGN_SYSTEM.borderRadius.sm,
+                      textDecoration: 'none',
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.xs
+                    }}>
+                      Website
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
           {currentUser && currentUser.uid === userId && (
             <button 
               onClick={() => setShowEditProfileModal(true)}
               style={{
-                ...BUTTON_STYLES.primary,
-                marginTop: '20px',
-                padding: '8px 16px',
-                fontSize: '14px',
+                  ...getButtonStyle('primary', 'profile'),
+                  padding: `${DESIGN_SYSTEM.spacing.lg} ${DESIGN_SYSTEM.spacing['2xl']}`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                  marginTop: DESIGN_SYSTEM.spacing.xl,
+                  width: '100%',
+                  boxShadow: DESIGN_SYSTEM.shadows.md
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = DESIGN_SYSTEM.shadows.lg;
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = DESIGN_SYSTEM.shadows.md;
               }}
             >
               Edit Profile
@@ -183,56 +425,191 @@ export default function UserProfile() {
           )}
         </div>
 
+          {/* Right Column - Functions */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.xl }}>
+
       {currentUser && currentUser.uid === userId && (
-        <div style={{ marginBottom: LAYOUT.gap }}>
-          <h2 style={{ color: COLORS.dark, fontSize: '22px', fontWeight: '600', marginBottom: LAYOUT.gap }}>Join Project or Forum</h2>
-          <div style={{ ...CARD_STYLES.base, padding: '20px', marginBottom: LAYOUT.smallGap, display: 'flex', alignItems: 'center', gap: LAYOUT.smallGap }}>
+              <>
+                {/* Join Projects/Forums Section */}
+                <div style={{
+                  ...getCardStyle('profile'),
+                  padding: DESIGN_SYSTEM.spacing.xl
+                }}>
+                  <h2 style={{
+                    color: DESIGN_SYSTEM.colors.text.primary,
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.xl,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                    marginBottom: DESIGN_SYSTEM.spacing.lg,
+                    textAlign: 'center'
+                  }}>
+                    Join Project or Forum
+                  </h2>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.base }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm }}>
             <input
               type="text"
-              placeholder="Project ID"
+                        placeholder="Enter Project ID"
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
-              style={{ ...INPUT_STYLES.base, flex: 1, padding: '10px' }}
-            />
-            <button onClick={handleJoinProject} disabled={loading} style={BUTTON_STYLES.primary}>Join Project</button>
-          </div>
-          <div style={{ ...CARD_STYLES.base, padding: '20px', display: 'flex', alignItems: 'center', gap: LAYOUT.smallGap }}>
-            <input
-              type="text"
-              placeholder="Forum ID"
-              value={forumId}
-              onChange={(e) => setForumId(e.target.value)}
-              style={{ ...INPUT_STYLES.base, flex: 1, padding: '10px' }}
-            />
-            <button onClick={handleJoinForum} disabled={loading} style={BUTTON_STYLES.primary}>Join Forum</button>
+                        style={{
+                          fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+                          backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+                          border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                          padding: DESIGN_SYSTEM.spacing.base,
+                          flex: 1,
+                          padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.sm}`,
+                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                          border: `2px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+                          fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                          color: DESIGN_SYSTEM.colors.text.primary
+                        }}
+                      />
+                      <button
+                        onClick={handleJoinProject}
+                        disabled={loading}
+                        style={{
+                          ...getButtonStyle('primary', 'profile'),
+                          padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
+                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                          fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                          fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                        }}
+                      >
+                        Join Project
+                      </button>
           </div>
 
-          <h2 style={{ color: COLORS.dark, fontSize: '22px', fontWeight: '600', margin: `${LAYOUT.gap} 0 ${LAYOUT.smallGap} 0` }}>Pending Invitations</h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm }}>
+            <input
+              type="text"
+                        placeholder="Enter Forum ID"
+              value={forumId}
+              onChange={(e) => setForumId(e.target.value)}
+                        style={{
+                          fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+                          backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+                          border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                          padding: DESIGN_SYSTEM.spacing.base,
+                          flex: 1,
+                          padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.sm}`,
+                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                          border: `2px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+                          fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                          color: DESIGN_SYSTEM.colors.text.primary
+                        }}
+                      />
+                      <button
+                        onClick={handleJoinForum}
+                        disabled={loading}
+                        style={{
+                          ...getButtonStyle('primary', 'profile'),
+                          padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
+                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                          fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                          fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                        }}
+                      >
+                        Join Forum
+                      </button>
+                    </div>
+                  </div>
+          </div>
+
+                {/* Invitations Section */}
+                <div style={{
+                  ...getCardStyle('profile'),
+                  padding: DESIGN_SYSTEM.spacing.xl
+                }}>
+                  <h2 style={{
+                    color: DESIGN_SYSTEM.colors.text.primary,
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.xl,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                    marginBottom: DESIGN_SYSTEM.spacing.lg,
+                    textAlign: 'center'
+                  }}>
+                    Pending Invitations
+                  </h2>
+
           {invitations.length > 0 ? (
-            <div style={{ display: 'grid', gap: LAYOUT.smallGap }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.base }}>
               {invitations.map(inv => (
-                <div key={inv.id} style={{ ...CARD_STYLES.base, padding: '15px', display: 'flex', flexDirection: 'column', gap: LAYOUT.smallGap }}>
-                  <p style={{ margin: 0, color: COLORS.text, fontSize: '15px' }}>You're invited to <strong style={{ color: COLORS.primary }}>{inv.type} "{inv.targetName}"</strong> by <strong style={{ color: COLORS.dark }}>{inv.senderName}</strong>.</p>
-                  <div style={{ display: 'flex', gap: LAYOUT.smallGap, marginTop: LAYOUT.smallGap }}>
-                    <button onClick={() => handleInvitationResponse(inv.id, true)} disabled={loading} style={BUTTON_STYLES.success}>Accept</button>
-                    <button onClick={() => handleInvitationResponse(inv.id, false)} disabled={loading} style={{ ...BUTTON_STYLES.secondary, background: COLORS.danger, color: COLORS.white }}>Reject</button>
+                        <div key={inv.id} style={{
+                          background: DESIGN_SYSTEM.pageThemes.profile.cardGradient,
+                          borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                          padding: DESIGN_SYSTEM.spacing.base,
+                          border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`
+                        }}>
+                          <p style={{
+                            margin: `0 0 ${DESIGN_SYSTEM.spacing.sm} 0`,
+                            color: DESIGN_SYSTEM.colors.text.primary,
+                            fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                            lineHeight: DESIGN_SYSTEM.typography.lineHeight.loose
+                          }}>
+                            <strong style={{ color: DESIGN_SYSTEM.colors.text.primary }}>{inv.senderName}</strong> invited you to join <strong style={{ color: DESIGN_SYSTEM.colors.primary[500] }}>{inv.type} "{inv.targetName}"</strong>
+                          </p>
+                          <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.sm }}>
+                            <button
+                              onClick={() => handleInvitationResponse(inv.id, true)}
+                              disabled={loading}
+                              style={{
+                                ...getButtonStyle('primary', 'profile'),
+                                flex: 1,
+                                padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
+                                borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                                fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                              }}
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={() => handleInvitationResponse(inv.id, false)}
+                              disabled={loading}
+                              style={{
+                                ...getButtonStyle('primary', 'profile'),
+                                background: DESIGN_SYSTEM.colors.error, // Use error color for reject
+                                flex: 1,
+                                padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
+                                borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                                fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                              }}
+                            >
+                              Reject
+                            </button>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p style={{ color: COLORS.lightText, fontSize: '15px', textAlign: 'center', padding: '20px', ...CARD_STYLES.base }}>No pending invitations.</p>
+                    <p style={{
+                      color: DESIGN_SYSTEM.colors.text.secondary,
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                      textAlign: 'center',
+                      padding: `${DESIGN_SYSTEM.spacing.lg} ${DESIGN_SYSTEM.spacing.base}`,
+                      background: DESIGN_SYSTEM.colors.background.secondary,
+                      borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                      margin: 0
+                    }}>
+                      No pending invitations
+                    </p>
           )}
         </div>
+              </>
       )}
+          </div>
+        </div>
       </div>
       {showEditProfileModal && (
-        <EditProfileModal
+        <ComprehensiveEditProfileModal
           isOpen={showEditProfileModal}
           onClose={() => setShowEditProfileModal(false)}
-          currentName={editingName}
+          editingProfile={editingProfile}
+          setEditingProfile={setEditingProfile}
           onSave={handleUpdateProfile}
-          onNameChange={setEditingName}
           loading={loading}
         />
       )}
@@ -240,53 +617,318 @@ export default function UserProfile() {
   );
 }
 
-function EditProfileModal({ isOpen, onClose, currentName, onSave, onNameChange, loading }) {
+function ComprehensiveEditProfileModal({
+  isOpen,
+  onClose,
+  editingProfile,
+  setEditingProfile,
+  onSave,
+  loading
+}) {
   if (!isOpen) return null;
+
+  const handleInputChange = (field, value) => {
+    setEditingProfile(prev => ({ ...prev, [field]: value }));
+  };
+
+
 
   return (
     <div style={modalOverlayStyle}>
-      <div style={modalContentStyle}>
-        <h2 style={{ color: COLORS.dark, marginBottom: '20px' }}>Edit Profile</h2>
+      <div style={{
+        ...modalContentStyle,
+        width: '800px',
+        maxWidth: '95vw',
+        maxHeight: '95vh',
+        overflowY: 'auto',
+        padding: DESIGN_SYSTEM.spacing['2xl']
+      }}>
+        <h2 style={{
+          color: DESIGN_SYSTEM.colors.text.primary,
+          marginBottom: DESIGN_SYSTEM.spacing.lg,
+          textAlign: 'center',
+          fontSize: DESIGN_SYSTEM.typography.fontSize['2xl'],
+          fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold
+        }}>
+          Edit Profile
+        </h2>
+
+        {/* Profile Avatar Display - No Upload */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginBottom: DESIGN_SYSTEM.spacing['2xl'],
+          padding: DESIGN_SYSTEM.spacing.xl,
+          background: DESIGN_SYSTEM.colors.background.secondary,
+          borderRadius: DESIGN_SYSTEM.borderRadius.xl,
+          border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: DESIGN_SYSTEM.spacing.base
+          }}>
+            <UserAvatar
+              user={editingProfile}
+              size={120}
+              showBorder={true}
+              borderColor={DESIGN_SYSTEM.colors.primary[500]}
+            />
+          </div>
+          <h3 style={{
+            margin: `${DESIGN_SYSTEM.spacing.base} 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
+            color: DESIGN_SYSTEM.colors.text.primary,
+            fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+            fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+            textAlign: 'center'
+          }}>
+            Profile Avatar
+          </h3>
+          <p style={{
+            margin: 0,
+            color: DESIGN_SYSTEM.colors.text.secondary,
+            fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+            textAlign: 'center'
+          }}>
+            Your avatar is automatically generated from your name initials
+          </p>
+        </div>
+
+        {/* Form Fields */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', color: DESIGN_SYSTEM.colors.text.primary, fontWeight: '500' }}>
+              Full Name *
+            </label>
+            <input
+              type="text"
+              value={editingProfile.name}
+              onChange={(e) => handleInputChange('name', e.target.value)}
+              style={{ fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+              backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
+              placeholder="Your full name"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', color: DESIGN_SYSTEM.colors.text.primary, fontWeight: '500' }}>
+              Job Title
+            </label>
+            <input
+              type="text"
+              value={editingProfile.jobTitle}
+              onChange={(e) => handleInputChange('jobTitle', e.target.value)}
+              style={{ fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+              backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
+              placeholder="Software Engineer, Manager, etc."
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', color: DESIGN_SYSTEM.colors.text.primary, fontWeight: '500' }}>
+              Phone Number
+            </label>
+            <input
+              type="tel"
+              value={editingProfile.phone}
+              onChange={(e) => handleInputChange('phone', e.target.value)}
+              style={{ fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+              backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
+              placeholder="+1 (555) 123-4567"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', color: DESIGN_SYSTEM.colors.text.primary, fontWeight: '500' }}>
+              Company
+            </label>
+            <input
+              type="text"
+              value={editingProfile.company}
+              onChange={(e) => handleInputChange('company', e.target.value)}
+              style={{ fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+              backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
+              placeholder="Your company name"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', color: DESIGN_SYSTEM.colors.text.primary, fontWeight: '500' }}>
+              Email
+            </label>
+            <input
+              type="email"
+              value={editingProfile.email}
+              onChange={(e) => handleInputChange('email', e.target.value)}
+              style={{ fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+              backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
+              placeholder="your.email@example.com"
+              disabled={loading}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginTop: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', color: DESIGN_SYSTEM.colors.text.primary, fontWeight: '500' }}>
+            Address
+          </label>
         <input
           type="text"
-          value={currentName}
-          onChange={(e) => onNameChange(e.target.value)}
-          style={{ ...INPUT_STYLES.base, width: '100%', marginBottom: '20px' }}
-          placeholder="Your Name"
+            value={editingProfile.address}
+            onChange={(e) => handleInputChange('address', e.target.value)}
+            style={{ fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+              backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
+            placeholder="Your full address"
+            disabled={loading}
+          />
+        </div>
+
+        <div style={{ marginTop: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', color: DESIGN_SYSTEM.colors.text.primary, fontWeight: '500' }}>
+            Bio
+          </label>
+          <textarea
+            value={editingProfile.bio}
+            onChange={(e) => handleInputChange('bio', e.target.value)}
+            style={{
+              fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+              backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              padding: DESIGN_SYSTEM.spacing.base,
+              resize: 'vertical',
+              width: '100%',
+              minHeight: '100px',
+              resize: 'vertical'
+            }}
+            placeholder="Tell us about yourself..."
+            disabled={loading}
+          />
+        </div>
+
+        {/* Social Links */}
+        <div style={{
+          marginTop: DESIGN_SYSTEM.spacing.xl,
+          padding: DESIGN_SYSTEM.spacing.xl,
+          background: DESIGN_SYSTEM.pageThemes.profile.cardGradient,
+          borderRadius: DESIGN_SYSTEM.borderRadius.xl,
+          border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`
+        }}>
+          <h3 style={{ margin: `0 0 ${DESIGN_SYSTEM.spacing.lg} 0`, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.lg }}>Social Links & Online Presence</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: DESIGN_SYSTEM.spacing.base }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: DESIGN_SYSTEM.spacing.xs, color: DESIGN_SYSTEM.colors.text.primary, fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium }}>
+                LinkedIn URL
+              </label>
+              <input
+                type="url"
+                value={editingProfile.linkedin}
+                onChange={(e) => handleInputChange('linkedin', e.target.value)}
+                style={{ fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+              backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
+                placeholder="https://linkedin.com/in/username"
+                disabled={loading}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: DESIGN_SYSTEM.spacing.xs, color: DESIGN_SYSTEM.colors.text.primary, fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium }}>
+                Twitter URL
+              </label>
+              <input
+                type="url"
+                value={editingProfile.twitter}
+                onChange={(e) => handleInputChange('twitter', e.target.value)}
+                style={{ fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+              backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
+                placeholder="https://twitter.com/username"
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginTop: DESIGN_SYSTEM.spacing.base }}>
+            <label style={{ display: 'block', marginBottom: DESIGN_SYSTEM.spacing.xs, color: DESIGN_SYSTEM.colors.text.primary, fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium }}>
+              Website URL
+            </label>
+            <input
+              type="url"
+              value={editingProfile.website}
+              onChange={(e) => handleInputChange('website', e.target.value)}
+              style={{ fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
+              backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
+              placeholder="https://yourwebsite.com"
           disabled={loading}
         />
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-          <button onClick={onClose} style={BUTTON_STYLES.secondary} disabled={loading}>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: DESIGN_SYSTEM.spacing.base,
+          marginTop: DESIGN_SYSTEM.spacing.xl,
+          paddingTop: DESIGN_SYSTEM.spacing.lg,
+          borderTop: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`
+        }}>
+          <button
+            onClick={onClose}
+            style={{
+              ...getButtonStyle('secondary', 'profile'),
+              padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+              fontSize: DESIGN_SYSTEM.typography.fontSize.base
+            }}
+            disabled={loading}
+          >
             Cancel
           </button>
-          <button onClick={onSave} style={BUTTON_STYLES.primary} disabled={!currentName.trim() || loading}>
-            Save
+          <button
+            onClick={onSave}
+            style={{
+              ...getButtonStyle('primary', 'profile'),
+              padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+              fontSize: DESIGN_SYSTEM.typography.fontSize.base
+            }}
+            disabled={!editingProfile.name.trim() || loading}
+          >
+            {loading ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </div>
     </div>
   );
 }
-
-const modalOverlayStyle = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: 'rgba(0, 0, 0, 0.7)',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  zIndex: 1000,
-};
-
-const modalContentStyle = {
-  backgroundColor: COLORS.white,
-  padding: '30px',
-  borderRadius: '8px',
-  width: '400px',
-  maxWidth: '90%',
-  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
-  textAlign: 'center',
-};

@@ -4,12 +4,13 @@ import TopBar from "../components/TopBar";
 import CreateProjectModal from "../components/project-component/CreateProjectModal";
 import JoinProjectModal from "../components/project-component/JoinProjectModal";
 import { useNavigate } from "react-router-dom";
-import { COLORS, BUTTON_STYLES, INPUT_STYLES } from "../components/profile-component/constants";
 import { db } from "../firebase";
-import { collection, getDocs, addDoc, updateDoc, doc, getDoc, deleteDoc } from "firebase/firestore"; // Import Firestore functions
-import { onSnapshot, query, orderBy, where } from "firebase/firestore"; // Import onSnapshot, query, orderBy
-import { useAuth } from '../contexts/AuthContext'; // Import useAuth
-import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
+import { collection, getDocs, addDoc, updateDoc, doc, getDoc, deleteDoc } from "firebase/firestore";
+import { onSnapshot, query, orderBy, where } from "firebase/firestore";
+import { useAuth } from '../contexts/AuthContext';
+import { FaTrash } from 'react-icons/fa';
+import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
+import DeleteConfirmationModal from '../components/common/DeleteConfirmationModal'; // Import the new modal
 
 // Get initials from project name
 const getInitials = (name) =>
@@ -81,6 +82,8 @@ export default function ProjectList() {
   const [joinProjectError, setJoinProjectError] = useState(null); // New state for join project error
   const [showEditProjectModal, setShowEditProjectModal] = useState(false); // State for edit modal
   const [projectToEdit, setProjectToEdit] = useState(null); // State to hold project being edited
+  const [showDeleteConfirmationModal, setShowDeleteConfirmationModal] = useState(false); // State for delete confirmation modal
+  const [projectToDelete, setProjectToDelete] = useState(null); // State to hold the project to be deleted
   const navigate = useNavigate();
 
   const getProgress = (project) => {
@@ -128,19 +131,30 @@ export default function ProjectList() {
 
   const handleDeleteProject = async (projectId) => {
     if (!currentUser) return; // Ensure user is logged in
-
-    if (window.confirm("Are you sure you want to delete this project? This action cannot be undone.")) {
-      try {
-        await deleteDoc(doc(db, "projects", projectId));
-        console.log("Project deleted with ID:", projectId);
-        // The onSnapshot listener will handle updating the projects state
-      } catch (error) {
-        console.error("Error deleting project:", error);
-        alert("Failed to delete project.");
-      }
+    
+    // Open the confirmation modal instead of using window.confirm
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      setProjectToDelete(project);
+      setShowDeleteConfirmationModal(true);
     }
   };
 
+  const confirmDeleteProject = async () => {
+    if (!projectToDelete || !currentUser) return; // Ensure project is selected and user is logged in
+
+    try {
+      await deleteDoc(doc(db, "projects", projectToDelete.id));
+      console.log("Project deleted with ID:", projectToDelete.id);
+      // The onSnapshot listener will handle updating the projects state
+      setShowDeleteConfirmationModal(false); // Close the modal
+      setProjectToDelete(null); // Clear the project to delete
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      alert("Failed to delete project.");
+    }
+  };
+  
   const handleJoinProject = async (projectId) => {
     if (!projectId || !currentUser) {
       setJoinProjectError('Please enter a valid Project ID and ensure you are logged in.');
@@ -225,7 +239,7 @@ export default function ProjectList() {
       case 'Proposal': return '#9B59B6'; // Purple
       case 'Negotiation': return '#3498DB'; // Blue
       case 'Complete': return '#27AE60'; // Green
-      default: return COLORS.lightText;
+      default: return DESIGN_SYSTEM.colors.text.secondary;
     }
   };
 
@@ -240,72 +254,81 @@ export default function ProjectList() {
   };
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", minHeight: "100vh", backgroundColor: COLORS.background }}>
+    <div style={getPageContainerStyle()}>
       <TopBar />
 
-      <div style={{ padding: "30px" }}>
-        <div style={{ 
-          display: "flex", 
-          justifyContent: "space-between", 
-          alignItems: "center", 
-          marginBottom: "30px" 
+      <div style={{
+        ...getContentContainerStyle(),
+        paddingTop: DESIGN_SYSTEM.spacing['2xl']
+      }}>
+        {/* Enhanced Projects Header */}
+        <div style={{
+          background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+          borderRadius: DESIGN_SYSTEM.borderRadius.xl,
+          padding: DESIGN_SYSTEM.spacing.xl,
+          marginBottom: DESIGN_SYSTEM.spacing.lg,
+          boxShadow: DESIGN_SYSTEM.shadows.lg,
+          color: DESIGN_SYSTEM.colors.text.inverse
         }}>
-          <h1 style={{ 
-            margin: 0, 
-            color: COLORS.dark, 
-            fontSize: "28px", 
-            fontWeight: "700" 
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
           }}>
-            Projects
-          </h1>
-          {currentUser && (
-            <div style={{ display: "flex", gap: "12px" }}>
-              <button
-                onClick={() => setShowJoinModal(true)}
-                style={{
-                  ...BUTTON_STYLES.secondary,
-                  padding: "12px 20px",
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  borderRadius: "8px",
-                  boxShadow: "0 4px 12px rgba(108, 117, 125, 0.3)",
-                  transition: "all 0.3s ease"
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.transform = "translateY(-2px)";
-                  e.target.style.boxShadow = "0 6px 16px rgba(108, 117, 125, 0.4)";
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.transform = "translateY(0)";
-                  e.target.style.boxShadow = "0 4px 12px rgba(108, 117, 125, 0.3)";
-                }}
-              >
-                Join Project
-              </button>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                style={{
-                  ...BUTTON_STYLES.primary,
-                  padding: "12px 24px",
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  borderRadius: "8px",
-                  boxShadow: "0 4px 12px rgba(52, 152, 219, 0.3)",
-                  transition: "all 0.3s ease"
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.transform = "translateY(-2px)";
-                  e.target.style.boxShadow = "0 6px 16px rgba(52, 152, 219, 0.4)";
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.transform = "translateY(0)";
-                  e.target.style.boxShadow = "0 4px 12px rgba(52, 152, 219, 0.3)";
-                }}
-              >
-                Create Project
-              </button>
+            <div>
+              <h1 style={{
+                margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
+                fontSize: DESIGN_SYSTEM.typography.fontSize['3xl'],
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold
+              }}>
+                Projects
+              </h1>
+              <p style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                opacity: 0.9
+              }}>
+                Create, manage, and collaborate on your projects • {filteredProjects.length} projects available
+              </p>
             </div>
-          )}
+            {currentUser && (
+              <div style={{ display: "flex", gap: DESIGN_SYSTEM.spacing.base }}>
+                <button
+                  onClick={() => setShowJoinModal(true)}
+                  style={{
+                    ...getButtonStyle('secondary', 'projects'),
+                    backgroundColor: "rgba(255, 255, 255, 0.15)",
+                    backdropFilter: "blur(10px)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                    borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                    color: DESIGN_SYSTEM.colors.text.inverse
+                  }}
+                >
+                  Join Project
+                </button>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  style={{
+                    ...getButtonStyle('primary', 'projects'),
+                    backgroundColor: "rgba(255, 255, 255, 0.2)",
+                    backdropFilter: "blur(10px)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                    borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                    color: DESIGN_SYSTEM.colors.text.inverse,
+                    boxShadow: "0 4px 15px rgba(255, 255, 255, 0.2)"
+                  }}
+                >
+                  Create Project
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
 
@@ -318,20 +341,22 @@ export default function ProjectList() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
-              ...INPUT_STYLES.base,
+              fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
               width: "100%",
               maxWidth: "400px",
-              padding: "12px 16px",
-              fontSize: "16px",
-              borderRadius: "8px",
-              border: `2px solid ${COLORS.border}`,
+              padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`,
+              fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              border: `2px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+              color: DESIGN_SYSTEM.colors.text.primary,
               transition: "border-color 0.3s ease"
             }}
             onFocus={(e) => {
-              e.target.style.borderColor = COLORS.primary;
+              e.target.style.borderColor = DESIGN_SYSTEM.colors.primary[500];
             }}
             onBlur={(e) => {
-              e.target.style.borderColor = COLORS.border;
+              e.target.style.borderColor = DESIGN_SYSTEM.colors.secondary[300];
             }}
           />
         </div>
@@ -341,7 +366,7 @@ export default function ProjectList() {
           <div style={{
             textAlign: "center",
             padding: "60px 20px",
-            color: COLORS.lightText,
+            color: DESIGN_SYSTEM.colors.text.secondary,
             fontSize: "18px"
           }}>
             {searchTerm ? `No projects found matching "${searchTerm}"` : "No projects yet. Create your first project or join one!"}
@@ -350,7 +375,7 @@ export default function ProjectList() {
           <div style={{
             textAlign: "center",
             padding: "60px 20px",
-            color: COLORS.danger,
+            color: DESIGN_SYSTEM.colors.error,
             fontSize: "18px"
           }}>
             Please log in to view and manage projects.
@@ -370,11 +395,11 @@ export default function ProjectList() {
                 <div
                   key={project.id}
                   style={{
-                    backgroundColor: COLORS.white,
+                    backgroundColor: DESIGN_SYSTEM.colors.background.primary,
                     borderRadius: "12px",
                     padding: "24px",
                     boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-                    border: `1px solid ${COLORS.border}`,
+                    border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
                     transition: "all 0.3s ease",
                     cursor: "pointer",
                     position: "relative"
@@ -399,23 +424,23 @@ export default function ProjectList() {
                       position: "absolute",
                       top: "16px",
                       right: "16px", // Keep Edit button on the right
-                      background: COLORS.light,
+                      background: DESIGN_SYSTEM.colors.background.secondary,
                       border: "none",
                       borderRadius: "6px",
                       padding: "6px 8px",
                       cursor: "pointer",
                       fontSize: "12px",
-                      color: COLORS.dark,
+                      color: DESIGN_SYSTEM.colors.text.primary,
                       transition: "all 0.2s ease",
                       zIndex: 1
                     }}
                     onMouseEnter={(e) => {
-                      e.target.style.backgroundColor = COLORS.primary;
-                      e.target.style.color = COLORS.white;
+                      e.target.style.backgroundColor = DESIGN_SYSTEM.colors.primary[500];
+                      e.target.style.color = DESIGN_SYSTEM.colors.text.inverse;
                     }}
                     onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = COLORS.light;
-                      e.target.style.color = COLORS.dark;
+                      e.target.style.backgroundColor = DESIGN_SYSTEM.colors.background.secondary;
+                      e.target.style.color = DESIGN_SYSTEM.colors.text.primary;
                     }}
                   >
                     Edit
@@ -432,13 +457,13 @@ export default function ProjectList() {
                         position: "absolute",
                         top: "16px",
                         right: "60px", // Position Delete button next to Edit
-                        background: COLORS.danger,
+                        background: DESIGN_SYSTEM.colors.error,
                         border: "none",
                         borderRadius: "6px",
                         padding: "6px 8px",
                         cursor: "pointer",
                         fontSize: "12px",
-                        color: COLORS.white,
+                        color: DESIGN_SYSTEM.colors.text.inverse,
                         transition: "all 0.2s ease",
                         zIndex: 1
                       }}
@@ -447,7 +472,7 @@ export default function ProjectList() {
                         e.target.style.transform = "scale(1.05)";
                       }}
                       onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = COLORS.danger;
+                        e.target.style.backgroundColor = DESIGN_SYSTEM.colors.error;
                         e.target.style.transform = "scale(1)";
                       }}
                     >
@@ -465,7 +490,7 @@ export default function ProjectList() {
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: "32px",
-                    color: COLORS.white,
+                    color: DESIGN_SYSTEM.colors.text.inverse,
                     fontWeight: "700",
                     marginBottom: "20px"
                   }}>
@@ -474,7 +499,7 @@ export default function ProjectList() {
 
                   <h3 style={{ 
                     margin: "0 0 8px 0", 
-                    color: COLORS.dark, 
+                    color: DESIGN_SYSTEM.colors.text.primary, 
                     fontSize: "20px", 
                     fontWeight: "700",
                     lineHeight: "1.3"
@@ -485,7 +510,7 @@ export default function ProjectList() {
                   {/* Project ID */}
                   <div style={{ 
                     fontSize: "12px", 
-                    color: COLORS.lightText,
+                    color: DESIGN_SYSTEM.colors.text.secondary,
                     marginBottom: "10px"
                   }}>
                     ID: {project.id}
@@ -511,7 +536,7 @@ export default function ProjectList() {
                     <div style={{ 
                       fontSize: "14px", 
                       fontWeight: "600", 
-                      color: COLORS.dark, 
+                      color: DESIGN_SYSTEM.colors.text.primary, 
                       marginBottom: "8px" 
                     }}>
                       Team ({project.team.length})
@@ -527,7 +552,7 @@ export default function ProjectList() {
                               height: "36px",
                               borderRadius: "50%",
                               backgroundColor: bgColor,
-                              color: COLORS.white,
+                              color: DESIGN_SYSTEM.colors.text.inverse,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -541,7 +566,7 @@ export default function ProjectList() {
                       ) : (
                         <div style={{ 
                           fontSize: "14px", 
-                          color: COLORS.lightText,
+                          color: DESIGN_SYSTEM.colors.text.secondary,
                           fontStyle: "italic"
                         }}>
                           No team members assigned
@@ -561,7 +586,7 @@ export default function ProjectList() {
                       <span style={{ 
                         fontSize: "14px", 
                         fontWeight: "600", 
-                        color: COLORS.dark 
+                        color: DESIGN_SYSTEM.colors.text.primary 
                       }}>
                         Stage Progress
                       </span>
@@ -576,7 +601,7 @@ export default function ProjectList() {
                     <div style={{
                       height: "8px",
                       width: "100%",
-                      backgroundColor: COLORS.light,
+                      backgroundColor: DESIGN_SYSTEM.colors.background.secondary,
                       borderRadius: "4px",
                       overflow: "hidden"
                     }}>
@@ -601,14 +626,14 @@ export default function ProjectList() {
                       <span style={{ 
                         fontSize: "14px", 
                         fontWeight: "600", 
-                        color: COLORS.dark 
+                        color: DESIGN_SYSTEM.colors.text.primary 
                       }}>
                         Tasks
                       </span>
                       <span style={{ 
                         fontSize: "14px", 
                         fontWeight: "600", 
-                        color: COLORS.primary 
+                        color: DESIGN_SYSTEM.colors.primary[500] 
                       }}>
                         {progress}%
                       </span>
@@ -616,21 +641,21 @@ export default function ProjectList() {
                     <div style={{
                       height: "6px",
                       width: "100%",
-                      backgroundColor: COLORS.light,
+                      backgroundColor: DESIGN_SYSTEM.colors.background.secondary,
                       borderRadius: "3px",
                       overflow: "hidden"
                     }}>
                       <div style={{
                         height: "100%",
                         width: `${progress}%`,
-                        backgroundColor: COLORS.primary,
+                        backgroundColor: DESIGN_SYSTEM.colors.primary[500],
                         borderRadius: "3px",
                         transition: "width 0.3s ease"
                       }} />
                     </div>
                     <div style={{
                       fontSize: "12px",
-                      color: COLORS.lightText,
+                      color: DESIGN_SYSTEM.colors.text.secondary,
                       marginTop: "6px"
                     }}>
                       {project.completedTasks} of {project.tasks?.length || 0} tasks completed
@@ -666,6 +691,18 @@ export default function ProjectList() {
         joinProjectError={joinProjectError}
       />
       {/* Removed EditProjectDetailsModal as CreateProjectModal is now used for both */}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={showDeleteConfirmationModal}
+        onClose={() => {
+          setShowDeleteConfirmationModal(false);
+          setProjectToDelete(null);
+        }}
+        onConfirm={confirmDeleteProject}
+        itemName={projectToDelete?.name || ''}
+        itemType="project"
+      />
     </div>
   );
 }

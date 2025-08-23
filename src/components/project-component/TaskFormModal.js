@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
 
-export default function TaskFormModal({ isOpen, onClose, onSaveTask, initialTaskData }) {
+export default function TaskFormModal({ isOpen, onClose, onSaveTask, initialTaskData, projectMembers = [] }) {
   const [taskForm, setTaskForm] = useState({
     name: "",
     assignedTo: "",
@@ -63,13 +63,18 @@ export default function TaskFormModal({ isOpen, onClose, onSaveTask, initialTask
           onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })}
           style={INPUT_STYLES.base}
         />
-        <input
-          type="text"
-          placeholder="Assigned To"
+        <select
           value={taskForm.assignedTo}
           onChange={(e) => setTaskForm({ ...taskForm, assignedTo: e.target.value })}
           style={INPUT_STYLES.base}
-        />
+        >
+          <option value="">Select Team Member</option>
+          {projectMembers.map((member, index) => (
+            <option key={member.uid || member.id || index} value={member.name || member.displayName || member.email}>
+              {member.name || member.displayName || member.email || 'Team Member'}
+            </option>
+          ))}
+        </select>
         <select
           value={taskForm.priority}
           onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}

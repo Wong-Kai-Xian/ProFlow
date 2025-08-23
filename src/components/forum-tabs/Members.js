@@ -1,5 +1,6 @@
 import React from "react";
 import { COLORS } from "../profile-component/constants";
+import UserAvatar from "../shared/UserAvatar";
 
 export default function Members({ forumData }) {
   const members = forumData?.members || [];
@@ -30,20 +31,13 @@ export default function Members({ forumData }) {
             border: '1px solid #ECF0F1',
             textAlign: 'center'
           }}>
-            <div style={{
-              width: '70px',
-              height: '70px',
-              borderRadius: '50%',
-              backgroundColor: COLORS.primary,
-              color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '28px',
-              margin: '0 auto 18px',
-              fontWeight: 'bold'
-            }}>
-              {member && member.name ? member.name.split(' ').map(n => n[0]).join('') : (member ? member.charAt(0) : 'U')}
+            <div style={{ margin: '0 auto 18px', display: 'flex', justifyContent: 'center' }}>
+              <UserAvatar 
+                user={member} 
+                size={70}
+                showBorder={true}
+                borderColor={COLORS.primary}
+              />
             </div>
             
             <strong style={{ color: COLORS.dark, fontSize: '18px', fontWeight: '600' }}>{member && member.name ? member.name : member || 'Unknown Member'}</strong>

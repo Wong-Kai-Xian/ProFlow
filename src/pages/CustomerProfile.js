@@ -8,11 +8,11 @@ import StatusPanel from "../components/profile-component/StatusPanel";
 import Reminders from "../components/profile-component/Reminders";
 import AttachedFiles from "../components/profile-component/AttachedFiles";
 import TaskManager from "../components/profile-component/TaskManager";
-import SendApprovalModal from "../components/project-component/SendApprovalModal"; // Import SendApprovalModal
-import CreateProjectModal from "../components/project-component/CreateProjectModal"; // Import CreateProjectModal
-import { COLORS, LAYOUT, BUTTON_STYLES } from "../components/profile-component/constants";
-import { db } from "../firebase"; // Import db
-import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc, query, where, getDocs } from "firebase/firestore"; // Import Firestore functions
+import SendApprovalModal from "../components/project-component/SendApprovalModal";
+import CreateProjectModal from "../components/project-component/CreateProjectModal";
+import { db } from "../firebase";
+import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc, query, where, getDocs } from "firebase/firestore";
+import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getPageHeaderStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 
 const STAGES = ["Working", "Qualified", "Converted"];
 
@@ -293,110 +293,253 @@ export default function CustomerProfile() {
   };
 
   if (loading) {
-    return <div style={{ textAlign: "center", padding: "50px", color: COLORS.lightText }}>Loading customer profile...</div>;
+    return (
+      <div style={getPageContainerStyle()}>
+        <TopBar />
+        <div style={{ textAlign: "center", padding: "50px", color: DESIGN_SYSTEM.colors.text.secondary }}>
+          Loading customer profile...
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={{ 
-      fontFamily: "Arial, sans-serif", 
-      background: COLORS.background, 
-      minHeight: "100vh" 
-    }}>
+    <div style={getPageContainerStyle()}>
       <TopBar />
-      <div style={{ 
-        display: "grid", 
-        gridTemplateColumns: "1fr 2fr 1fr", 
-        gap: LAYOUT.gap, 
-        padding: "20px",
-        maxWidth: "1200px",
-        margin: "0 auto"
+
+      <div style={{
+        ...getContentContainerStyle(),
+        paddingTop: DESIGN_SYSTEM.spacing['2xl']
       }}>
+        <div style={{ 
+          display: "grid", 
+          gridTemplateColumns: "350px 1fr 320px", 
+          gap: DESIGN_SYSTEM.spacing.xl
+        }}>
         
-        {/* Left Column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap }}>
-          <CustomerInfo data={customerProfile} setCustomerProfile={setCustomerProfile} />
-          <CompanyInfo data={companyProfile} setCompanyProfile={setCompanyProfile} />
-          <CompanyReputation data={reputation} />
-        </div>
-
-        {/* Middle Column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap }}>
-          <StatusPanel
-            stages={stages}
-            currentStage={currentStage}
-            setCurrentStage={setCurrentStage}
-            stageData={stageData}
-            setStageData={setStageData}
-            setStages={setStages}
-            onStagesUpdate={handleStagesUpdate} // Pass the new handler
-            onConvertToProject={handleConvertToProject} // Pass the new handler
-            renderStageContent={(stage, currentStageData, setCurrentStageData) => (
-              <TaskManager 
-                stage={stage}
-                stageData={currentStageData} // Use currentStageData
-                setStageData={setCurrentStageData} // Use setCurrentStageData
-              />
-            )}
-          />
-        </div>
-
-        {/* Right Column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.gap }}>
-          <Reminders 
-            reminders={reminders}
-            onAddReminder={handleAddReminder}
-            onReminderRemove={handleReminderRemove}
-          />
+        {/* Left Column - Customer Information */}
+        <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg }}>
+          <div style={getCardStyle('customers')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+              }}>
+                Customer Information
+              </h2>
+            </div>
+            <div style={{ padding: "0" }}>
+              <CustomerInfo data={customerProfile} setCustomerProfile={setCustomerProfile} />
+            </div>
+          </div>
           
-          <AttachedFiles files={files} onFileAdd={handleFileAdd} onFileRemove={handleFileRemove} onFileRename={handleFileRename} />
-              <div style={{ display: "flex", flexDirection: "column", gap: LAYOUT.smallGap, marginTop: LAYOUT.smallGap }}>
-          {areAllStagesCompleted() && (
-            <button
-              onClick={handleConvertToProject}
-              style={{
-                ...BUTTON_STYLES.primary,
-                background: COLORS.accent, // A distinct color for this action
-                padding: "10px 20px",
-                fontSize: "16px",
-                fontWeight: "600",
-                borderRadius: "8px",
-                alignSelf: "flex-end",
-              }}
-            >
-              Convert to Project
-            </button>
-          )}
-              <button
-            onClick={() => setShowSendApprovalModal(true)}
-            style={{
-              ...BUTTON_STYLES.secondary,
-              padding: "10px 20px",
-              fontSize: "16px",
-              marginTop: LAYOUT.smallGap, // Add margin
-              alignSelf: "flex-end", // Align button to the right within the flex column
-            }}
-          >
-            Send Approval
-              </button>
+          <div style={getCardStyle('customers')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+              }}>
+                Company Details
+              </h2>
+            </div>
+            <div style={{ padding: "0" }}>
+              <CompanyInfo data={companyProfile} setCompanyProfile={setCompanyProfile} />
+            </div>
+          </div>
+          
+          <div style={getCardStyle('customers')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+              }}>
+                Company Reputation
+              </h2>
+            </div>
+            <div style={{ padding: "0" }}>
+              <CompanyReputation data={reputation} />
+            </div>
           </div>
         </div>
 
+        {/* Middle Column - Main Workflow */}
+        <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg }}>
+          <div style={{
+            ...getCardStyle('customers'),
+            minHeight: "600px",
+            display: "flex",
+            flexDirection: "column"
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.lg,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: DESIGN_SYSTEM.typography.fontSize.xl, 
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+              }}>
+                Stage Management
+              </h2>
+              <p style={{ 
+                margin: "8px 0 0 0", 
+                fontSize: DESIGN_SYSTEM.typography.fontSize.sm, 
+                opacity: 0.9 
+              }}>
+                Track customer journey through customizable stages
+              </p>
+            </div>
+            <div style={{ flex: 1, padding: "0" }}>
+              <StatusPanel
+                stages={stages}
+                currentStage={currentStage}
+                setCurrentStage={setCurrentStage}
+                stageData={stageData}
+                setStageData={setStageData}
+                setStages={setStages}
+                onStagesUpdate={handleStagesUpdate}
+                onConvertToProject={handleConvertToProject}
+                renderStageContent={(stage, currentStageData, setCurrentStageData) => (
+                  <TaskManager 
+                    stage={stage}
+                    stageData={currentStageData}
+                    setStageData={setCurrentStageData}
+                  />
+                )}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column - Tools & Actions */}
+        <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg }}>
+          <div style={getCardStyle('customers')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+              }}>
+                Reminders & Alerts
+              </h2>
+            </div>
+            <div style={{ padding: "0" }}>
+              <Reminders 
+                reminders={reminders}
+                onAddReminder={handleAddReminder}
+                onReminderRemove={handleReminderRemove}
+              />
+            </div>
+          </div>
+          
+          <div style={getCardStyle('customers')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+              }}>
+                Document Management
+              </h2>
+            </div>
+            <div style={{ padding: "0" }}>
+              <AttachedFiles 
+                files={files} 
+                onFileAdd={handleFileAdd} 
+                onFileRemove={handleFileRemove} 
+                onFileRename={handleFileRename} 
+              />
+            </div>
+          </div>
+          
+          {/* Action Center */}
+          <div style={{
+            ...getCardStyle('customers'),
+            padding: DESIGN_SYSTEM.spacing.lg
+          }}>
+            <h3 style={{ 
+              margin: `0 0 ${DESIGN_SYSTEM.spacing.base} 0`, 
+              color: DESIGN_SYSTEM.colors.text.primary, 
+              fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+              fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+              textAlign: "center"
+            }}>
+              Quick Actions
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.base }}>
+              {areAllStagesCompleted() && (
+                <button
+                  onClick={handleConvertToProject}
+                  style={{
+                    ...getButtonStyle('primary', 'projects'),
+                    padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`,
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                  }}
+                >
+                  Convert to Project
+                </button>
+              )}
+              <button
+                onClick={() => setShowSendApprovalModal(true)}
+                style={{
+                  ...getButtonStyle('primary', 'customers'),
+                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                }}
+              >
+                Send Approval Request
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+      </div>
+      
       <SendApprovalModal
         isOpen={showSendApprovalModal}
         onClose={() => setShowSendApprovalModal(false)}
         onSendApproval={(data) => console.log("Customer Profile - Approval data sent:", data)}
-        // allProjects={projects} // Pass customer's projects (from state) - Not directly used by the modal for recipient selection
-        teamMembers={customerTeamMembersDetails} // Pass enriched team members details
+        teamMembers={customerTeamMembersDetails}
       />
 
-      {/* Create Project Modal */}
       <CreateProjectModal
         isOpen={showCreateProjectModal}
         onClose={() => setShowCreateProjectModal(false)}
-        customerProfile={customerProfile} // Pass customer data for pre-filling
-        companyProfile={companyProfile} // Pass company data for pre-filling
-        onSave={handleSaveProjectFromConversion} // Function to handle saving the new project
+        customerProfile={customerProfile}
+        companyProfile={companyProfile}
+        onSave={handleSaveProjectFromConversion}
       />
     </div>
   );

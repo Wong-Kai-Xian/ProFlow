@@ -2,16 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
 import { db } from "../../firebase"; // Import db
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc } from "firebase/firestore"; // Import Firestore functions
+import { useAuth } from '../../contexts/AuthContext'; // Import useAuth
 
 export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
+  const { currentUser } = useAuth();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     if (isOpen && taskId && projectId) {
-      const messagesRef = collection(db, "projects", projectId, "tasks", taskId, "messages");
-      const q = query(messagesRef, orderBy("timestamp"));
+      // Use a flat collection structure: taskMessages/{projectId}_{taskId}/messages
+      const messagesRef = collection(db, "taskMessages", `${projectId}_${taskId}`, "messages");
+      const q = query(messagesRef, orderBy("timestamp", "asc"));
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const messagesList = snapshot.docs.map(doc => ({
@@ -38,16 +41,22 @@ export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
   }, [messages]);
 
   const handleSendMessage = async () => {
-    if (newMessage.trim() && taskId && projectId) {
+    if (newMessage.trim() && taskId && projectId && currentUser) {
       try {
-        await addDoc(collection(db, "projects", projectId, "tasks", taskId, "messages"), {
+        // Use the same flat collection structure
+        const messagesRef = collection(db, "taskMessages", `${projectId}_${taskId}`, "messages");
+        await addDoc(messagesRef, {
           text: newMessage.trim(),
-          sender: "User", // Or actual user name/ID from authentication
+          sender: currentUser.name || currentUser.email || "User",
+          senderId: currentUser.uid,
           timestamp: serverTimestamp(),
+          projectId: projectId,
+          taskId: taskId
         });
         setNewMessage('');
       } catch (error) {
         console.error("Error sending message: ", error);
+        alert("Failed to send message. Please try again.");
       }
     }
   };
@@ -101,19 +110,36 @@ export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
           {messages.length === 0 ? (
             <p style={{ color: COLORS.lightText, textAlign: "center", fontStyle: "italic" }}>No messages yet.</p>
           ) : (
-            messages.map((msg, index) => (
-              <div key={index} style={{
-                alignSelf: msg.sender === "User" ? "flex-end" : "flex-start",
-                background: msg.sender === "User" ? COLORS.primary : COLORS.secondary,
-                color: "white",
-                padding: "8px 12px",
-                borderRadius: "18px",
-                maxWidth: "80%",
-              }}>
-                <div style={{ fontSize: "10px", opacity: 0.8, marginBottom: "4px" }}>{msg.sender} at {msg.timestamp}</div>
-                {msg.text}
-              </div>
-            ))
+            messages.map((msg, index) => {
+              const isCurrentUser = msg.senderId === currentUser?.uid;
+              return (
+                <div key={index} style={{
+                  alignSelf: isCurrentUser ? "flex-end" : "flex-start",
+                  background: isCurrentUser ? COLORS.primary : COLORS.secondary,
+                  color: "white",
+                  padding: "10px 14px",
+                  borderRadius: "18px",
+                  maxWidth: "80%",
+                  margin: "4px 0",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+                }}>
+                  <div style={{ 
+                    fontSize: "10px", 
+                    opacity: 0.9, 
+                    marginBottom: "4px",
+                    fontWeight: "500"
+                  }}>
+                    {msg.sender} {msg.timestamp && typeof msg.timestamp === 'object' && msg.timestamp.toDate 
+                      ? `• ${msg.timestamp.toDate().toLocaleTimeString()}` 
+                      : ''
+                    }
+                  </div>
+                  <div style={{ fontSize: "14px", lineHeight: "1.4" }}>
+                    {msg.text}
+                  </div>
+                </div>
+              );
+            })
           )}
           <div ref={messagesEndRef} />
         </div>
