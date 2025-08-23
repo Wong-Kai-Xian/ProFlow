@@ -507,15 +507,6 @@ export default function ProjectList() {
                     {project.name}
                   </h3>
 
-                  {/* Project ID */}
-                  <div style={{ 
-                    fontSize: "12px", 
-                    color: DESIGN_SYSTEM.colors.text.secondary,
-                    marginBottom: "10px"
-                  }}>
-                    ID: {project.id}
-                  </div>
-
                   {/* Stage Badge */}
                   <div style={{
                     display: "inline-block",
@@ -659,6 +650,66 @@ export default function ProjectList() {
                       marginTop: "6px"
                     }}>
                       {project.completedTasks} of {project.tasks?.length || 0} tasks completed
+                    </div>
+                  </div>
+
+                  {/* Project ID */}
+                  <div style={{ marginBottom: DESIGN_SYSTEM.spacing.sm, marginTop: DESIGN_SYSTEM.spacing.lg }}> {/* Increased margin top again */}
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(project.id).then(() => {
+                          const tooltip = document.createElement('div');
+                          tooltip.textContent = 'Project ID Copied!';
+                          tooltip.style.cssText = `
+                            position: fixed;
+                            background: ${DESIGN_SYSTEM.colors.success};
+                            color: white;
+                            padding: 8px 12px;
+                            border-radius: 6px;
+                            font-size: 12px;
+                            font-weight: 500;
+                            z-index: 9999;
+                            top: ${e.clientY - 50}px;
+                            left: ${e.clientX - 50}px;
+                            pointer-events: none;
+                            box-shadow: 0 4px 12px ${DESIGN_SYSTEM.colors.success}40;
+                          `;
+                          document.body.appendChild(tooltip);
+                          setTimeout(() => document.body.removeChild(tooltip), 2000);
+                        }).catch(() => {
+                          alert('Failed to copy Project ID');
+                        });
+                      }}
+                      style={{
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                        color: DESIGN_SYSTEM.colors.success,
+                        wordBreak: "break-all",
+                        cursor: "pointer",
+                        padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                        borderRadius: DESIGN_SYSTEM.borderRadius.sm,
+                        border: `1px solid ${DESIGN_SYSTEM.colors.success}30`,
+                        backgroundColor: `${DESIGN_SYSTEM.colors.success}10`,
+                        transition: "all 0.2s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = `${DESIGN_SYSTEM.colors.success}20`;
+                        e.target.style.borderColor = `${DESIGN_SYSTEM.colors.success}50`;
+                        e.target.style.transform = "translateY(-1px)";
+                        e.target.style.boxShadow = `0 4px 12px ${DESIGN_SYSTEM.colors.success}20`;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = `${DESIGN_SYSTEM.colors.success}10`;
+                        e.target.style.borderColor = `${DESIGN_SYSTEM.colors.success}30`;
+                        e.target.style.transform = "translateY(0)";
+                        e.target.style.boxShadow = "none";
+                      }}
+                    >
+                      <span style={{ fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>Click to copy Project ID</span>
                     </div>
                   </div>
                 </div>

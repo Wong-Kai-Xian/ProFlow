@@ -417,19 +417,19 @@ export default function CustomerProfileList() {
                       style={{
                         position: "absolute",
                         top: DESIGN_SYSTEM.spacing.base,
-                        right: DESIGN_SYSTEM.spacing.lg, // Adjust position to match project list if needed
+                        right: DESIGN_SYSTEM.spacing.lg,
                         background: DESIGN_SYSTEM.colors.error,
                         border: "none",
                         borderRadius: DESIGN_SYSTEM.borderRadius.sm,
                         padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
                         cursor: "pointer",
-                        fontSize: DESIGN_SYSTEM.typography.fontSize.base, // Match smaller font size for icon
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.base,
                         color: DESIGN_SYSTEM.colors.text.inverse,
                         transition: "all 0.2s ease",
-                        zIndex: 2, // Ensure it's above other elements
+                        zIndex: 2,
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = "#c0392b"; // Darker red on hover
+                        e.currentTarget.style.backgroundColor = DESIGN_SYSTEM.colors.error[700]; // Darker red on hover
                         e.currentTarget.style.transform = "scale(1.05)";
                       }}
                       onMouseLeave={(e) => {
