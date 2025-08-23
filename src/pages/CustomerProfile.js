@@ -26,6 +26,8 @@ export default function CustomerProfile() {
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false); // State for CreateProjectModal
   const [showAdvancedApprovalModal, setShowAdvancedApprovalModal] = useState(false); // State for AdvancedApprovalRequestModal
   const [approvalModalType, setApprovalModalType] = useState('stage'); // 'stage' or 'general'
+  const [showProjectConversionApprovalModal, setShowProjectConversionApprovalModal] = useState(false); // State for project conversion approval
+  const [hasApprovedConversion, setHasApprovedConversion] = useState(false); // Track if conversion was approved
   const [loading, setLoading] = useState(true); // Loading state
 
   // Initialize state variables with default values for new customer or null for existing to be loaded
@@ -73,7 +75,32 @@ export default function CustomerProfile() {
   };
 
   const handleConvertToProject = () => {
+    // First show approval request modal for project conversion
+    setShowProjectConversionApprovalModal(true);
+  };
+
+  const handleProjectConversionApprovalSuccess = (result) => {
+    setShowProjectConversionApprovalModal(false);
+    // Don't create project immediately - wait for approval
+    alert("Conversion approval request sent successfully! You'll be able to create the project once it's approved.");
+  };
+
+  const handleCreateProjectAfterApproval = () => {
     setShowCreateProjectModal(true);
+  };
+
+  // Helper function to get proper customer name
+  const getCustomerName = () => {
+    const firstName = customerProfile?.firstName || '';
+    const lastName = customerProfile?.lastName || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    
+    if (fullName) return fullName;
+    if (customerProfile?.name) return customerProfile.name;
+    if (companyProfile?.companyName) return companyProfile.companyName;
+    if (companyProfile?.company) return companyProfile.company;
+    
+    return 'Customer Profile';
   };
 
   const handleRequestApproval = (currentStage, nextStage) => {
@@ -182,6 +209,37 @@ export default function CustomerProfile() {
 
     fetchCustomerTeamMembersDetails();
   }, [projects]); // Re-run when projects array changes
+
+  // Check for approved conversion requests
+  useEffect(() => {
+    const checkApprovedConversion = async () => {
+      if (!currentUser || !id) return;
+
+      try {
+        const approvalRequestsQuery = query(
+          collection(db, 'approvalRequests'),
+          where('entityId', '==', id),
+          where('requestedBy', '==', currentUser.uid),
+          where('status', '==', 'approved'),
+          where('requestType', '==', 'Customer')
+        );
+        
+        const snapshot = await getDocs(approvalRequestsQuery);
+        
+        // Check if there's an approved conversion request
+        const hasApprovedConversionRequest = snapshot.docs.some(doc => {
+          const data = doc.data();
+          return data.requestTitle && data.requestTitle.toLowerCase().includes('convert');
+        });
+        
+        setHasApprovedConversion(hasApprovedConversionRequest);
+      } catch (error) {
+        console.error("Error checking approved conversion requests:", error);
+      }
+    };
+
+    checkApprovedConversion();
+  }, [currentUser, id]);
 
   const handleSaveCustomer = async (overrides = {}) => {
     setLoading(true);
@@ -310,10 +368,11 @@ export default function CustomerProfile() {
         contactPerson: customerProfile.name || projectData.contactPerson || '',
         contactEmail: customerProfile.email || projectData.contactEmail || '',
         contactPhone: customerProfile.phone || projectData.contactPhone || '',
-        status: "Waiting for Approval", // Set initial status
+        status: "Active", // Set as active since approval was already given
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         customerId: id, // Link to the current customer
+        convertedFromCustomer: true
       };
 
       const projectsCollectionRef = collection(db, "projects");
@@ -533,9 +592,11 @@ export default function CustomerProfile() {
                 setStages={setStages}
                 onStagesUpdate={handleStagesUpdate}
                 onConvertToProject={handleConvertToProject}
+                onCreateProjectAfterApproval={handleCreateProjectAfterApproval}
+                hasApprovedConversion={hasApprovedConversion}
                 onRequestApproval={handleRequestApproval}
                 customerId={id}
-                customerName={`${customerProfile.firstName || ''} ${customerProfile.lastName || ''}`.trim() || companyProfile.companyName || 'Unknown Customer'}
+                customerName={getCustomerName()}
                 renderStageContent={(stage, currentStageData, setCurrentStageData) => (
                   <TaskManager 
                     stage={stage}
@@ -614,7 +675,7 @@ export default function CustomerProfile() {
               Quick Actions
             </h3>
             <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.base }}>
-              {areAllStagesCompleted() && (
+              {areAllStagesCompleted() && !hasApprovedConversion && (
                 <button
                   onClick={handleConvertToProject}
                   style={{
@@ -624,7 +685,22 @@ export default function CustomerProfile() {
                     fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
                   }}
                 >
-                  Convert to Project
+                  Request Project Conversion
+                </button>
+              )}
+              {hasApprovedConversion && (
+                <button
+                  onClick={handleCreateProjectAfterApproval}
+                  style={{
+                    ...getButtonStyle('primary', 'success'),
+                    padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`,
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                    background: DESIGN_SYSTEM.colors.success,
+                    color: DESIGN_SYSTEM.colors.text.inverse
+                  }}
+                >
+                  ✅ Create Project (Approved)
                 </button>
               )}
               <button
@@ -669,6 +745,18 @@ export default function CustomerProfile() {
         currentStage={currentStage}
         nextStage={stages[stages.indexOf(currentStage) + 1] || ""}
         isStageAdvancement={approvalModalType === 'stage'}
+      />
+
+      <AdvancedApprovalRequestModal
+        isOpen={showProjectConversionApprovalModal}
+        onClose={() => setShowProjectConversionApprovalModal(false)}
+        onSuccess={handleProjectConversionApprovalSuccess}
+        customerId={id}
+        customerName={`${customerProfile.firstName || ''} ${customerProfile.lastName || ''}`.trim() || companyProfile.companyName || 'Unknown Customer'}
+        currentUser={currentUser}
+        currentStage=""
+        nextStage=""
+        isStageAdvancement={false}
       />
     </div>
   );

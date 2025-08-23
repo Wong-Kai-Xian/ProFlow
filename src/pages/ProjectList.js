@@ -40,10 +40,13 @@ export default function ProjectList() {
     // Get projects where user is either the creator OR a team member
     const projectsRef = collection(db, "projects");
     
-    // Query 1: Projects created by the user
+    // Query 1: Projects created by the user (legacy field)
     const createdProjectsQuery = query(projectsRef, where("userId", "==", currentUser.uid));
     
-    // Query 2: Projects where user is a team member
+    // Query 2: Projects created by the user (new field)
+    const createdByProjectsQuery = query(projectsRef, where("createdBy", "==", currentUser.uid));
+    
+    // Query 3: Projects where user is a team member
     const teamProjectsQuery = query(projectsRef, where("team", "array-contains", currentUser.uid));
     
     let allProjects = new Map(); // Use Map to avoid duplicates
@@ -89,6 +92,18 @@ export default function ProjectList() {
       updateProjectsList();
     });
     
+    const unsubscribeCreatedBy = onSnapshot(createdByProjectsQuery, (snapshot) => {
+      // Handle document changes properly
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          allProjects.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+        } else if (change.type === 'removed') {
+          allProjects.delete(change.doc.id);
+        }
+      });
+      updateProjectsList();
+    });
+    
     const unsubscribeTeam = onSnapshot(teamProjectsQuery, (snapshot) => {
       // Handle document changes properly
       snapshot.docChanges().forEach((change) => {
@@ -103,6 +118,7 @@ export default function ProjectList() {
 
     return () => {
       unsubscribeCreated();
+      unsubscribeCreatedBy();
       unsubscribeTeam();
     };
   }, [currentUser]); // Add currentUser to dependency array

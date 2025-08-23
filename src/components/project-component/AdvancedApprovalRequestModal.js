@@ -49,18 +49,71 @@ export default function AdvancedApprovalRequestModal({
           // For projects, get accepted team members
           recipients = await getAcceptedTeamMembersForProject(currentUser, projectId);
         } else if (customerId) {
-          // For customers, get all users in the system (excluding current user)
-          const usersQuery = query(collection(db, "users"));
-          const usersSnapshot = await getDocs(usersQuery);
-          
-          recipients = usersSnapshot.docs
-            .filter(doc => doc.id !== currentUser.uid) // Exclude current user
-            .map(doc => ({
-              id: doc.id,
-              name: doc.data().name || doc.data().displayName || doc.data().email,
-              email: doc.data().email,
-            }))
-            .filter(user => user.email); // Only include users with email addresses
+          // For customers, get team members using the same logic as TeamPage
+          const uniqueMemberEmails = new Set();
+
+          // Get current user's projects
+          const projectsQuery = query(
+            collection(db, "projects"),
+            where("userId", "==", currentUser.uid)
+          );
+          const projectsSnapshot = await getDocs(projectsQuery);
+
+          // For each project, find team members
+          for (const projectDoc of projectsSnapshot.docs) {
+            const projectData = projectDoc.data();
+            if (projectData.team && Array.isArray(projectData.team)) {
+              // Get user details for team members
+              const teamUids = projectData.team.filter(uid => uid !== currentUser.uid);
+              if (teamUids.length > 0) {
+                const chunkSize = 10;
+                for (let i = 0; i < teamUids.length; i += chunkSize) {
+                  const chunk = teamUids.slice(i, i + chunkSize);
+                  const usersQuery = query(collection(db, "users"), where("uid", "in", chunk));
+                  const usersSnapshot = await getDocs(usersQuery);
+                  usersSnapshot.forEach(userDoc => {
+                    const userData = userDoc.data();
+                    if (userData.email) {
+                      uniqueMemberEmails.add(userData.email);
+                    }
+                  });
+                }
+              }
+            }
+          }
+
+          // Get accepted invitations (team members through invitations)
+          const acceptedInvitationsQuery = query(
+            collection(db, "invitations"),
+            where("fromUserId", "==", currentUser.uid),
+            where("status", "==", "accepted")
+          );
+          const acceptedInvitationsSnapshot = await getDocs(acceptedInvitationsQuery);
+          acceptedInvitationsSnapshot.docs.forEach(invitationDoc => {
+            const invitationData = invitationDoc.data();
+            if (invitationData.toUserEmail) {
+              uniqueMemberEmails.add(invitationData.toUserEmail);
+            }
+          });
+
+          // Fetch user details for all unique member emails
+          const allMemberEmails = Array.from(uniqueMemberEmails);
+          if (allMemberEmails.length > 0) {
+            const chunkSize = 10;
+            for (let i = 0; i < allMemberEmails.length; i += chunkSize) {
+              const chunk = allMemberEmails.slice(i, i + chunkSize);
+              const usersQuery = query(collection(db, "users"), where("email", "in", chunk));
+              const usersSnapshot = await getDocs(usersQuery);
+              usersSnapshot.forEach(doc => {
+                const userData = doc.data();
+                recipients.push({
+                  id: doc.id,
+                  name: userData.name || userData.displayName || userData.email,
+                  email: userData.email,
+                });
+              });
+            }
+          }
         }
 
         setAllRecipients(recipients);
@@ -84,19 +137,19 @@ export default function AdvancedApprovalRequestModal({
       setShowRecipientDropdown(false);
       
       // Set default title based on type and purpose
-      if (isStageAdvancement) {
-        if (requestType === 'Project') {
-          setRequestTitle(`Advance ${entityName} from ${currentStage} to ${nextStage}`);
-        } else {
-          setRequestTitle(`Advance ${entityName} to Next Stage`);
-        }
-      } else {
-        if (requestType === 'Project') {
-          setRequestTitle(`Approval Request for ${entityName}`);
-        } else {
-          setRequestTitle(`Customer Approval Request for ${entityName}`);
-        }
-      }
+                    if (isStageAdvancement) {
+                if (requestType === 'Project') {
+                  setRequestTitle(`Advance ${entityName} from ${currentStage} to ${nextStage}`);
+                } else {
+                  setRequestTitle(`Advance ${entityName} to Next Stage`);
+                }
+              } else {
+                if (requestType === 'Project') {
+                  setRequestTitle(`Approval Request for ${entityName}`);
+                } else {
+                  setRequestTitle(`Convert Customer "${entityName}" to Project`);
+                }
+              }
     }
   }, [isOpen, requestType, entityName, currentStage, nextStage]);
 
@@ -488,7 +541,7 @@ export default function AdvancedApprovalRequestModal({
                   setShowRecipientDropdown(true);
                 }}
                 onFocus={() => setShowRecipientDropdown(true)}
-                placeholder={projectId ? "Search team members..." : "Search users by name or email..."}
+                placeholder="Search team members..."
                 style={{
                   width: "100%",
                   padding: DESIGN_SYSTEM.spacing.sm,
@@ -521,7 +574,7 @@ export default function AdvancedApprovalRequestModal({
                       color: DESIGN_SYSTEM.colors.text.tertiary,
                       textAlign: "center"
                     }}>
-                      {projectId ? "No team members found" : "No users found"}
+                      No team members found
                     </div>
                   ) : (
                     filteredRecipients.map(recipient => (

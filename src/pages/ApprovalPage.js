@@ -15,7 +15,8 @@ import {
   addDoc,
   deleteDoc,
   serverTimestamp,
-  getDoc
+  getDoc,
+  getDocs
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
@@ -326,6 +327,32 @@ export default function ApprovalPage() {
             stage: selectedRequest.nextStage,
             updatedAt: serverTimestamp()
           });
+        }
+      }
+
+      // If approving a customer-to-project conversion request, remove pending approval status
+      if (actionType === 'approve' && selectedRequest.requestType === 'Customer' && 
+          (selectedRequest.requestTitle?.includes('Convert') || selectedRequest.requestTitle?.toLowerCase().includes('convert'))) {
+        // Find the project associated with this customer
+        const projectsQuery = query(
+          collection(db, 'projects'),
+          where('customerId', '==', selectedRequest.entityId),
+          where('convertedFromCustomer', '==', true),
+          where('pendingApproval', '==', true)
+        );
+        
+        try {
+          const projectsSnapshot = await getDocs(projectsQuery);
+          if (!projectsSnapshot.empty) {
+            const projectDoc = projectsSnapshot.docs[0];
+            await updateDoc(doc(db, 'projects', projectDoc.id), {
+              pendingApproval: false,
+              approvalRequestSent: false,
+              status: "Active"
+            });
+          }
+        } catch (error) {
+          console.error("Error updating project approval status:", error);
         }
       }
 
@@ -686,8 +713,49 @@ export default function ApprovalPage() {
                     {formatDate(request.dueDate) || 'No due date'}
                   </div>
                   
-                  <div>
-                    {getStatusBadge(request.status)}
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    minWidth: '140px', // Fixed minimum width to ensure consistent layout
+                    gap: DESIGN_SYSTEM.spacing.xs 
+                  }}>
+                    <div style={{ flex: '1' }}>
+                      {getStatusBadge(request.status)}
+                    </div>
+                    {request.requestedBy === currentUser?.uid && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openDeleteModal(request, e);
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: DESIGN_SYSTEM.colors.error,
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          padding: '2px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '2px',
+                          transition: 'all 0.2s ease',
+                          flexShrink: 0, // Prevent button from shrinking
+                          width: '20px',
+                          height: '20px'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.backgroundColor = `${DESIGN_SYSTEM.colors.error}20`;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.backgroundColor = 'transparent';
+                        }}
+                        title="Delete Request"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -806,28 +874,6 @@ export default function ApprovalPage() {
                           Actions
                         </h4>
                         
-                        {/* Delete button for request owner */}
-                        {request.requestedBy === currentUser?.uid && (
-                          <div style={{ marginBottom: DESIGN_SYSTEM.spacing.sm }}>
-                            <button
-                              onClick={(e) => openDeleteModal(request, e)}
-                              style={{
-                                width: "100%",
-                                padding: DESIGN_SYSTEM.spacing.sm,
-                                backgroundColor: DESIGN_SYSTEM.colors.error,
-                                color: DESIGN_SYSTEM.colors.text.inverse,
-                                border: 'none',
-                                borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                                fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease'
-                              }}
-                            >
-                              🗑️ Delete Request
-                            </button>
-                          </div>
-                        )}
                         
                         {request.status === 'pending' && request.requestedTo === currentUser?.uid ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.sm }}>

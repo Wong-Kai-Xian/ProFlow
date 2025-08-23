@@ -440,9 +440,85 @@ export default function ProjectDetail() {
     <div style={getPageContainerStyle()}>
       <TopBar />
       
+      {/* Pending Approval Overlay */}
+      {projectData?.pendingApproval && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+            borderRadius: DESIGN_SYSTEM.borderRadius.xl,
+            padding: DESIGN_SYSTEM.spacing.xl,
+            textAlign: 'center',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: DESIGN_SYSTEM.shadows.xl
+          }}>
+            <div style={{
+              fontSize: '48px',
+              marginBottom: DESIGN_SYSTEM.spacing.base
+            }}>
+              ⏳
+            </div>
+            <h2 style={{
+              margin: `0 0 ${DESIGN_SYSTEM.spacing.base} 0`,
+              fontSize: DESIGN_SYSTEM.typography.fontSize['2xl'],
+              fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold,
+              color: DESIGN_SYSTEM.colors.text.primary
+            }}>
+              Waiting for Approval
+            </h2>
+            <p style={{
+              margin: `0 0 ${DESIGN_SYSTEM.spacing.lg} 0`,
+              fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+              color: DESIGN_SYSTEM.colors.text.secondary,
+              lineHeight: 1.6
+            }}>
+              This project was converted from a customer profile and is pending approval. 
+              Only the project details are available until the approval is complete.
+            </p>
+            <div style={{
+              padding: DESIGN_SYSTEM.spacing.base,
+              backgroundColor: DESIGN_SYSTEM.colors.background.secondary,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`
+            }}>
+              <p style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                color: DESIGN_SYSTEM.colors.text.tertiary
+              }}>
+                <strong>Project:</strong> {projectData?.name || 'Unnamed Project'}
+              </p>
+              {projectData?.customerProfile && (
+                <p style={{
+                  margin: `${DESIGN_SYSTEM.spacing.xs} 0 0 0`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                  color: DESIGN_SYSTEM.colors.text.tertiary
+                }}>
+                  <strong>Converted from:</strong> {projectData.customerProfile.firstName} {projectData.customerProfile.lastName}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div style={{
         ...getContentContainerStyle(),
-        paddingTop: DESIGN_SYSTEM.spacing['2xl']
+        paddingTop: DESIGN_SYSTEM.spacing['2xl'],
+        opacity: projectData?.pendingApproval ? 0.3 : 1,
+        pointerEvents: projectData?.pendingApproval ? 'none' : 'auto'
       }}>
         {/* Project Header - single line summary */}
         <div style={{

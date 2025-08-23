@@ -15,6 +15,8 @@ export default function StatusPanel({
   setStages, // Receive setStages prop
   onStagesUpdate, // New prop to update stages in parent and database
   onConvertToProject, // New prop to convert to project
+  onCreateProjectAfterApproval, // New prop to create project after approval
+  hasApprovedConversion, // New prop to check if conversion was approved
   onRequestApproval, // New prop to request approval for stage advancement
   customerId, // Customer ID for approval requests
   customerName // Customer name for approval requests
