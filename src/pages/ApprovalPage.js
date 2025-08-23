@@ -13,6 +13,7 @@ import {
   updateDoc, 
   doc, 
   addDoc,
+  deleteDoc,
   serverTimestamp,
   getDoc
 } from 'firebase/firestore';
@@ -40,6 +41,11 @@ export default function ApprovalPage() {
   const [actionComment, setActionComment] = useState('');
   const [actionFiles, setActionFiles] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
+  
+  // Delete request states
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [requestToDelete, setRequestToDelete] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const REQUESTS_PER_PAGE = 10;
 
@@ -202,6 +208,28 @@ export default function ApprovalPage() {
     setActionComment('');
     setActionFiles([]);
     setShowActionModal(true);
+  };
+
+  const openDeleteModal = (request, e) => {
+    e.stopPropagation();
+    setRequestToDelete(request);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteRequest = async () => {
+    if (!requestToDelete) return;
+
+    setDeleteLoading(true);
+    try {
+      await deleteDoc(doc(db, 'approvalRequests', requestToDelete.id));
+      setShowDeleteModal(false);
+      setRequestToDelete(null);
+    } catch (error) {
+      console.error("Error deleting approval request:", error);
+      alert("Failed to delete approval request. Please try again.");
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const handleFileSelect = (e) => {
@@ -778,6 +806,29 @@ export default function ApprovalPage() {
                           Actions
                         </h4>
                         
+                        {/* Delete button for request owner */}
+                        {request.requestedBy === currentUser?.uid && (
+                          <div style={{ marginBottom: DESIGN_SYSTEM.spacing.sm }}>
+                            <button
+                              onClick={(e) => openDeleteModal(request, e)}
+                              style={{
+                                width: "100%",
+                                padding: DESIGN_SYSTEM.spacing.sm,
+                                backgroundColor: DESIGN_SYSTEM.colors.error,
+                                color: DESIGN_SYSTEM.colors.text.inverse,
+                                border: 'none',
+                                borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                                fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              🗑️ Delete Request
+                            </button>
+                          </div>
+                        )}
+                        
                         {request.status === 'pending' && request.requestedTo === currentUser?.uid ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.sm }}>
                             <button
@@ -1087,6 +1138,138 @@ export default function ApprovalPage() {
                 }}
               >
                 {actionLoading ? 'Processing...' : (actionType === 'approve' ? 'Approve' : 'Reject')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && requestToDelete && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+            borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+            width: '90%',
+            maxWidth: '500px',
+            overflow: 'hidden',
+            boxShadow: DESIGN_SYSTEM.shadows.xl
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: DESIGN_SYSTEM.spacing.lg,
+              borderBottom: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+              backgroundColor: `${DESIGN_SYSTEM.colors.error}15`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                color: DESIGN_SYSTEM.colors.text.primary
+              }}>
+                Delete Approval Request
+              </h3>
+              <p style={{
+                margin: `${DESIGN_SYSTEM.spacing.xs} 0 0 0`,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                color: DESIGN_SYSTEM.colors.text.secondary
+              }}>
+                Are you sure you want to delete this request?
+              </p>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{
+              padding: DESIGN_SYSTEM.spacing.lg
+            }}>
+              <div style={{
+                padding: DESIGN_SYSTEM.spacing.sm,
+                backgroundColor: DESIGN_SYSTEM.colors.background.secondary,
+                borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                borderLeft: `3px solid ${DESIGN_SYSTEM.colors.error}`,
+                marginBottom: DESIGN_SYSTEM.spacing.base
+              }}>
+                <p style={{
+                  margin: 0,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                  color: DESIGN_SYSTEM.colors.text.primary,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium
+                }}>
+                  {requestToDelete.requestTitle}
+                </p>
+                <p style={{
+                  margin: `${DESIGN_SYSTEM.spacing.xs} 0 0 0`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                  color: DESIGN_SYSTEM.colors.text.secondary
+                }}>
+                  {requestToDelete.entityName} • {requestToDelete.requestType}
+                </p>
+              </div>
+              
+              <p style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                color: DESIGN_SYSTEM.colors.text.secondary,
+                lineHeight: 1.5
+              }}>
+                This action cannot be undone. The approval request will be permanently removed and any pending decisions will be lost.
+              </p>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: DESIGN_SYSTEM.spacing.lg,
+              borderTop: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+              backgroundColor: DESIGN_SYSTEM.colors.background.secondary,
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: DESIGN_SYSTEM.spacing.sm
+            }}>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleteLoading}
+                style={{
+                  padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
+                  border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                  backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+                  color: DESIGN_SYSTEM.colors.text.secondary,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                  cursor: deleteLoading ? 'not-allowed' : 'pointer',
+                  opacity: deleteLoading ? 0.6 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteRequest}
+                disabled={deleteLoading}
+                style={{
+                  padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
+                  border: 'none',
+                  borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                  backgroundColor: DESIGN_SYSTEM.colors.error,
+                  color: DESIGN_SYSTEM.colors.text.inverse,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
+                  cursor: deleteLoading ? 'not-allowed' : 'pointer',
+                  opacity: deleteLoading ? 0.6 : 1,
+                  minWidth: '100px'
+                }}
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

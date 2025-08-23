@@ -49,34 +49,18 @@ export default function AdvancedApprovalRequestModal({
           // For projects, get accepted team members
           recipients = await getAcceptedTeamMembersForProject(currentUser, projectId);
         } else if (customerId) {
-          // For customers, get team members from the user's teams
-          const teamsQuery = query(
-            collection(db, "teams"),
-            where("members", "array-contains", currentUser.uid)
-          );
-          const teamsSnapshot = await getDocs(teamsQuery);
-          const allMemberIds = new Set();
-          
-          teamsSnapshot.docs.forEach(doc => {
-            const teamData = doc.data();
-            teamData.acceptedMembers?.forEach(memberId => {
-              if (memberId !== currentUser.uid) {
-                allMemberIds.add(memberId);
-              }
-            });
-          });
-
-          // Get user details for each member
+          // For customers, get all users in the system (excluding current user)
           const usersQuery = query(collection(db, "users"));
           const usersSnapshot = await getDocs(usersQuery);
           
           recipients = usersSnapshot.docs
-            .filter(doc => allMemberIds.has(doc.id))
+            .filter(doc => doc.id !== currentUser.uid) // Exclude current user
             .map(doc => ({
               id: doc.id,
               name: doc.data().name || doc.data().displayName || doc.data().email,
               email: doc.data().email,
-            }));
+            }))
+            .filter(user => user.email); // Only include users with email addresses
         }
 
         setAllRecipients(recipients);
@@ -504,7 +488,7 @@ export default function AdvancedApprovalRequestModal({
                   setShowRecipientDropdown(true);
                 }}
                 onFocus={() => setShowRecipientDropdown(true)}
-                placeholder="Search team members..."
+                placeholder={projectId ? "Search team members..." : "Search users by name or email..."}
                 style={{
                   width: "100%",
                   padding: DESIGN_SYSTEM.spacing.sm,
@@ -537,7 +521,7 @@ export default function AdvancedApprovalRequestModal({
                       color: DESIGN_SYSTEM.colors.text.tertiary,
                       textAlign: "center"
                     }}>
-                      No team members found
+                      {projectId ? "No team members found" : "No users found"}
                     </div>
                   ) : (
                     filteredRecipients.map(recipient => (

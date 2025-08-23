@@ -656,7 +656,7 @@ export default function CustomerProfile() {
         onClose={() => setShowCreateProjectModal(false)}
         customerProfile={customerProfile}
         companyProfile={companyProfile}
-        onSave={handleSaveProjectFromConversion}
+        onConfirm={handleSaveProjectFromConversion}
       />
 
       <AdvancedApprovalRequestModal
