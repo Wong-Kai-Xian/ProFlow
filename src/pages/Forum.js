@@ -10,9 +10,41 @@ import FloatingCreateButton from "../components/forum-tabs/FloatingCreateButton"
 import CreatePostModal from "../components/forum-tabs/CreatePostModal";
 import InviteMemberModal from "../components/forum-component/InviteMemberModal";
 import { db } from "../firebase";
-import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc, arrayUnion, arrayRemove, addDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
+
+// Gemini helpers for AI analysis
+const callGeminiForSummary = async (promptText) => {
+  const key = localStorage.getItem('gemini_api_key');
+  if (!key) throw new Error('Missing GEMINI API key. Please set it in the Personal Assistant.');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
+  const body = {
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          { text: `You are a meeting assistant. Given the raw transcript, return JSON with keys: summary (string, concise) and action_items (array of objects with title (string), assignee (optional string), deadline (optional string YYYY-MM-DD)).\nTranscript:\n${promptText}` }
+        ]
+      }
+    ]
+  };
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || '';
+  return text;
+};
+
+const safeParseJson = (text) => {
+  try {
+    const match = text.match(/\{[\s\S]*\}/);
+    const raw = match ? match[0] : text;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
 
 export default function Forum() {
   const { id: forumId } = useParams(); // Rename `id` to `forumId` for clarity
@@ -29,6 +61,83 @@ export default function Forum() {
   const [meetingMinimized, setMeetingMinimized] = useState(false);
   const [meetingParticipants, setMeetingParticipants] = useState([]);
   const [suppressMeetingBar, setSuppressMeetingBar] = useState(false);
+
+  // Transcription/session state
+  const [meetingSessionId, setMeetingSessionId] = useState(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [sessionTranscripts, setSessionTranscripts] = useState([]);
+  const recognitionRef = React.useRef(null);
+
+  // Saved transcript files for this forum
+  const [meetingTranscriptsList, setMeetingTranscriptsList] = useState([]);
+
+  // AI modal state
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiModalLoading, setAiModalLoading] = useState(false);
+  const [aiModalError, setAiModalError] = useState("");
+  const [aiModalItems, setAiModalItems] = useState([]);
+  const [aiModalTarget, setAiModalTarget] = useState('tasks');
+  const [aiModalSelection, setAiModalSelection] = useState({});
+  const [aiModalTranscriptDoc, setAiModalTranscriptDoc] = useState(null);
+
+  // Simple local buffering for forum transcription
+  const lastInterimSaveRef = React.useRef(0);
+  const transcriptBufferRef = React.useRef("");
+
+  const startTranscription = async () => {
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { alert('Transcription not supported in this browser. Try Chrome.'); return; }
+      const rec = new SR();
+      recognitionRef.current = rec;
+      rec.lang = 'en-US';
+      rec.interimResults = true;
+      rec.continuous = true;
+      rec.maxAlternatives = 1;
+      rec.onresult = async (e) => {
+        let finalText = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) {
+            finalText += t + ' ';
+          } else {
+            setLiveTranscript(t);
+            const now = Date.now();
+            if (t && t.trim() && now - (lastInterimSaveRef.current || 0) > 2500) {
+              // push interim line for UI visibility
+              setSessionTranscripts(prev => [...prev, { id: String(now + Math.random()), text: t.trim(), createdAtMs: now }]);
+              lastInterimSaveRef.current = now;
+            }
+          }
+        }
+        if (finalText.trim()) {
+          transcriptBufferRef.current = `${transcriptBufferRef.current} ${finalText.trim()}`.trim();
+          const now = Date.now();
+          setSessionTranscripts(prev => [...prev, { id: String(now + Math.random()), text: finalText.trim(), createdAtMs: now }]);
+          setLiveTranscript('');
+        }
+      };
+      rec.onerror = (e) => {
+        console.warn('Forum SpeechRecognition error', e);
+        if (isTranscribing) {
+          try { rec.start(); } catch {}
+        }
+      };
+      rec.onend = () => { if (isTranscribing) rec.start(); };
+      rec.start();
+      setIsTranscribing(true);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to start transcription.');
+    }
+  };
+
+  const stopTranscription = async () => {
+    setIsTranscribing(false);
+    try { recognitionRef.current && recognitionRef.current.stop(); } catch {}
+    recognitionRef.current = null;
+  };
 
   useEffect(() => {
     if (!forumId) return; // Exit if no forumId
@@ -115,6 +224,17 @@ export default function Forum() {
     fetchMemberDetails();
   }, [forumMembers]);
 
+  // Effect to listen to forum meeting transcripts collection
+  useEffect(() => {
+    if (!forumId) return;
+    const colRef = collection(db, 'forums', forumId, 'meetingTranscripts');
+    const unsub = onSnapshot(colRef, snap => {
+      const files = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setMeetingTranscriptsList(files);
+    });
+    return () => unsub();
+  }, [forumId]);
+
   // Function to update lastActivity in Firestore whenever there's relevant activity
   const updateForumLastActivity = async () => {
     if (forumId) {
@@ -171,6 +291,9 @@ export default function Forum() {
     }
     if (userHasJoinedMeeting) {
       await handleLeaveMeeting();
+    }
+    if (isTranscribing) {
+      try { await stopTranscription(); } catch {}
     }
     setShowMeeting(false);
     setMeetingMinimized(false);
@@ -330,6 +453,7 @@ export default function Forum() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.forums.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
                   <div>Forum Meeting</div>
                   <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={isTranscribing ? stopTranscription : startTranscription} style={{ ...getButtonStyle('secondary', 'forums') }}>{isTranscribing ? 'Stop Transcribe' : 'Transcribe'}</button>
                     {userHasJoinedMeeting ? (
                       <button onClick={handleLeaveMeeting} style={{ ...getButtonStyle('secondary', 'forums') }}>Leave</button>
                     ) : (
@@ -351,6 +475,45 @@ export default function Forum() {
                       Click Join to connect to the meeting
                     </div>
                   )}
+                </div>
+                {/* Simple transcript capture bar to match project behavior */}
+                <div style={{ padding: DESIGN_SYSTEM.spacing.base, background: '#f8fafc', borderTop: `1px solid ${DESIGN_SYSTEM.colors.border}` }}>
+                  <div style={{ fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: DESIGN_SYSTEM.spacing.xs }}>Transcript</div>
+                  <div style={{ maxHeight: 160, overflowY: 'auto', fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary, background: '#fff', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: DESIGN_SYSTEM.borderRadius.lg, padding: DESIGN_SYSTEM.spacing.base }}>
+                    {(sessionTranscripts || []).map((line) => (
+                      <div key={line.id} style={{ marginBottom: 6 }}>
+                        <span style={{ color: DESIGN_SYSTEM.colors.text.secondary, marginRight: 6 }}>{new Date((line.createdAtMs || 0) * 1000).toLocaleTimeString()}</span>
+                        {line.text}
+                      </div>
+                    ))}
+                    {liveTranscript && (
+                      <div style={{ opacity: 0.7 }}>{liveTranscript}</div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: DESIGN_SYSTEM.spacing.xs }}>
+                    <button
+                      onClick={async () => {
+                        // Save combined transcript as file
+                        const text = [(sessionTranscripts || []).map(t => `${new Date((t.createdAt?.seconds||0)*1000).toLocaleTimeString()} ${t.text}`).join('\n'), liveTranscript].filter(Boolean).join('\n').trim();
+                        if (!text) { alert('No transcript available.'); return; }
+                        const fileName = `forum-transcript-${new Date().toISOString().replace(/[:.]/g,'-')}.txt`;
+                        await addDoc(collection(db, 'forums', forumId, 'meetingTranscripts'), {
+                          name: fileName,
+                          mimeType: 'text/plain',
+                          size: text.length,
+                          createdAt: serverTimestamp(),
+                          createdBy: currentUser?.uid || 'anon',
+                          content: text
+                        });
+                        // Clear the current transcript view after saving
+                        setSessionTranscripts([]);
+                        setLiveTranscript('');
+                      }}
+                      style={{ ...getButtonStyle('primary', 'forums'), padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}` }}
+                    >
+                      Generate Transcript
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -374,6 +537,56 @@ export default function Forum() {
           height: "calc(150vh - 320px)", // 50% longer
           overflowY: "hidden"
         }}>
+          {/* Meeting Transcripts Section */}
+          <div style={{
+            ...getCardStyle('forums'),
+            display: "flex",
+            flexDirection: "column"
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.forums.accent,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
+              flexShrink: 0
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Meeting Transcripts
+              </h3>
+            </div>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base, maxHeight: 260, overflowY: 'auto' }}>
+              {meetingTranscriptsList.length === 0 ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>No transcripts yet. Use Generate Transcript above.</div>
+              ) : (
+                meetingTranscriptsList.map(file => (
+                  <div key={file.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, marginBottom: 8, background: '#fff' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontWeight: 600 }}>{file.name}</span>
+                      <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((file.createdAt?.seconds||0)*1000).toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => {
+                        const blob = new Blob([file.content || ''], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.name || 'transcript.txt';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }} style={{ ...getButtonStyle('secondary', 'forums'), padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fff', color: '#111827', border: '1px solid #e5e7eb' }}>⬇️ Download</button>
+                      <button onClick={() => { setAiModalTranscriptDoc(file); setAiModalOpen(true); setAiModalItems([]); setAiModalSelection({}); setAiModalTarget('tasks'); setAiModalError(''); }} style={{ ...getButtonStyle('secondary', 'forums'), padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#111827', color: '#fff', border: '1px solid #111827' }}>🤖 AI Actions</button>
+                      <button onClick={async () => { try { await deleteDoc(doc(db, 'forums', forumId, 'meetingTranscripts', file.id)); setMeetingTranscriptsList(prev => prev.filter(f => f.id !== file.id)); } catch { alert('Failed to delete'); } }} style={{ ...getButtonStyle('secondary', 'forums'), padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fee2e2', border: '1px solid #fecaca', color: '#b91c1c' }}>🗑️ Delete</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
           {/* Project Details Section - 50% height */}
           <div style={{
             ...getCardStyle('forums'),
@@ -579,6 +792,127 @@ export default function Forum() {
         forumName={forumData?.name}
         currentUser={currentUser}
       />
+
+      {/* AI Actions Modal */}
+      {aiModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 16, width: 640, maxWidth: '95vw', boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ fontWeight: 700 }}>AI Actions</div>
+              <button onClick={() => setAiModalOpen(false)} style={{ ...getButtonStyle('secondary', 'forums') }}>Close</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <button onClick={async () => {
+                if (!aiModalTranscriptDoc) return;
+                try {
+                  setAiModalLoading(true); setAiModalError('');
+                  const text = aiModalTranscriptDoc.content || '';
+                  const MAX_INPUT = 60000;
+                  const aiText = await callGeminiForSummary(text.slice(0, MAX_INPUT));
+                  const json = safeParseJson(aiText) || { summary: aiText, action_items: [] };
+                  let items = Array.isArray(json.action_items) ? json.action_items : [];
+                  if (!items.length) {
+                    const src = (json.summary || aiText || '').split('\n')
+                      .map(s => s.trim())
+                      .filter(s => s && /(^- |^\d+\. |should|need to|please|action|task|todo)/i.test(s))
+                      .slice(0, 10);
+                    items = src.map(s => ({ title: s.replace(/^[-\d\.\s]+/, '').trim(), description: '' }));
+                  }
+                  const normalized = items.map((it, idx) => {
+                    const candidate = (it.title || it.name || it.task || it.action || '').toString().trim();
+                    const displayTitle = candidate || (it.description || '').toString().split(/\.|;|\n/)[0].slice(0, 140) || `Action Item ${idx + 1}`;
+                    return { id: String(idx), displayTitle, ...it };
+                  });
+                  setAiModalItems(normalized);
+                } catch (e) {
+                  setAiModalError(e.message || 'Failed to analyze transcript.');
+                } finally {
+                  setAiModalLoading(false);
+                }
+              }} style={{ ...getButtonStyle('secondary', 'forums') }}>Analyze</button>
+              <select value={aiModalTarget} onChange={(e) => setAiModalTarget(e.target.value)} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 8px' }}>
+                <option value="reminders">Add to Reminders</option>
+              </select>
+              <button disabled={aiModalLoading || aiModalItems.length === 0} onClick={async () => {
+                try {
+                  setAiModalLoading(true); setAiModalError('');
+                  const selected = aiModalItems.filter(it => aiModalSelection[it.id]);
+                  if (selected.length === 0) { setAiModalLoading(false); return; }
+                  // Add to forum reminders
+                  const parseDeadline = (dl) => {
+                    if (!dl) return { date: '', time: '' };
+                    const s = String(dl).trim().toLowerCase();
+                    const fmt = (d) => {
+                      const y = d.getFullYear();
+                      const m = String(d.getMonth() + 1).padStart(2, '0');
+                      const da = String(d.getDate()).padStart(2, '0');
+                      return `${y}-${m}-${da}`;
+                    };
+                    const today = new Date();
+                    if (/^today$/.test(s)) return { date: fmt(today), time: '' };
+                    if (/^(tmr|tomorrow|tommorow|tommorrow)$/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return { date: fmt(d), time: '' }; }
+                    if (/^next\s+week$/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return { date: fmt(d), time: '' }; }
+                    const inDays = s.match(/^in\s+(\d+)\s+days?$/);
+                    if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return { date: fmt(d), time: '' }; }
+                    const wd = s.match(/^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/);
+                    if (wd) {
+                      const map = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
+                      const target = map[wd[1]];
+                      const d = new Date(today);
+                      const cur = d.getDay();
+                      let add = (target + 7 - cur) % 7; if (add === 0) add = 7; d.setDate(d.getDate() + add);
+                      return { date: fmt(d), time: '' };
+                    }
+                    const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2}))?/);
+                    if (m) return { date: m[1], time: m[2] || '' };
+                    return { date: '', time: '' };
+                  };
+                  const newRems = selected.map((it, idx) => {
+                    const { date, time } = parseDeadline(it.deadline);
+                    const finalDate = date || new Date().toISOString().slice(0,10);
+                    return {
+                      title: (it.displayTitle || it.title || it.name || `Reminder ${idx + 1}`).toString(),
+                      note: it.description || '',
+                      date: finalDate,
+                      time,
+                      type: 'meeting',
+                      priority: 'medium'
+                    };
+                  });
+                  for (const rem of newRems) {
+                    await addDoc(collection(db, `forums/${forumId}/reminders`), { ...rem, timestamp: serverTimestamp() });
+                  }
+                  setAiModalOpen(false);
+                } catch (e) {
+                  setAiModalError(e.message || 'Failed to add reminders.');
+                } finally {
+                  setAiModalLoading(false);
+                }
+              }} style={{ ...getButtonStyle('primary', 'forums') }}>Add Selected</button>
+            </div>
+            {aiModalError && <div style={{ color: '#b91c1c', marginBottom: 8 }}>{aiModalError}</div>}
+            <div style={{ maxHeight: 320, overflowY: 'auto', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, padding: 8, background: '#fff' }}>
+              {aiModalLoading ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>Analyzing…</div>
+              ) : aiModalItems.length === 0 ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>Click Analyze to extract action items from the transcript.</div>
+              ) : (
+                aiModalItems.map(item => (
+                  <label key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 6 }}>
+                    <input type="checkbox" checked={!!aiModalSelection[item.id]} onChange={(e) => setAiModalSelection(s => ({ ...s, [item.id]: e.target.checked }))} />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{(item.displayTitle || item.title || item.name || item.task || item.action || 'Untitled').toString()}</div>
+                      {item.description && <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>{item.description}</div>}
+                      {item.assignee && <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Assignee: {item.assignee}</div>}
+                      {item.deadline && <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Deadline: {item.deadline}</div>}
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -29,8 +29,12 @@ export default function AddReminderModal({ isOpen, onClose, onSave, editingRemin
   }, [isOpen, editingReminder]);
 
   const handleSubmit = () => {
-    if (!title || !date || !time) {
-      alert('Please fill in all required fields: Title, Date, and Time.');
+    if (!title) {
+      alert('Please fill in the Title.');
+      return;
+    }
+    if (!date && !time) {
+      alert('Please provide at least a Date or a Time.');
       return;
     }
 
@@ -95,23 +99,21 @@ export default function AddReminderModal({ isOpen, onClose, onSave, editingRemin
 
         <div style={{ display: 'flex', gap: LAYOUT.smallGap, marginBottom: '15px' }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: COLORS.dark }}>Date:</label>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: COLORS.dark }}>Date (optional):</label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
               style={{ ...INPUT_STYLES.base, width: '100%', boxSizing: 'border-box' }} // Apply base style
-              required
             />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: COLORS.dark }}>Time:</label>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: COLORS.dark }}>Time (optional):</label>
             <input
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
               style={{ ...INPUT_STYLES.base, width: '100%', boxSizing: 'border-box' }} // Apply base style
-              required
             />
           </div>
         </div>
