@@ -100,7 +100,7 @@ export default function HomeGroupForum() {
               <strong style={{ color: COLORS.dark, fontSize: "14px", fontWeight: "600" }}>{forum.name}</strong>
               <br />
               <small style={{ color: COLORS.lightText, fontSize: "12px" }}>
-                {(forum.posts || 0)} posts
+                {typeof forum.actualPostCount === 'number' ? forum.actualPostCount : (forum.posts || 0)} posts
                 <br />
                 Last activity: {forum.lastActivity && typeof forum.lastActivity.toDate === 'function' ? forum.lastActivity.toDate().toLocaleString() : 'N/A'}
               </small>

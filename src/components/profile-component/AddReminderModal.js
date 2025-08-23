@@ -8,23 +8,54 @@ const AddReminderModal = ({ isOpen, onClose, onAddReminder }) => {
   const [description, setDescription] = useState('');
   const [link, setLink] = useState('');
 
+  const normalizeNaturalDate = (input) => {
+    if (!input) return '';
+    const s = String(input).trim().toLowerCase();
+    const fmt = (d) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${da}`;
+    };
+    const today = new Date();
+    if (/^today$/.test(s)) return fmt(today);
+    if (/^(tmr|tomorrow|tommorow|tommorrow)$/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return fmt(d); }
+    if (/^yesterday$/.test(s)) { const d = new Date(today); d.setDate(d.getDate() - 1); return fmt(d); }
+    if (/^next\s*week$/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return fmt(d); }
+    const inDays = s.match(/^in\s+(\d+)\s+days?$/);
+    if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return fmt(d); }
+    const wd = s.match(/^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/);
+    if (wd) {
+      const map = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
+      const target = map[wd[1]];
+      const d = new Date(today);
+      const cur = d.getDay();
+      let add = (target + 7 - cur) % 7; if (add === 0) add = 7; d.setDate(d.getDate() + add);
+      return fmt(d);
+    }
+    const iso = s.match(/^(\d{4}-\d{2}-\d{2})$/);
+    if (iso) return iso[1];
+    return '';
+  };
+
   const handleAdd = () => {
-    if (title.trim() && date && time) { // Updated condition
+    const normalizedDate = normalizeNaturalDate(date) || date;
+    if (title.trim() && normalizedDate) {
       onAddReminder({
-        title: title, // Changed from text
-        date: date, // Changed from deadline
-        time: time, // New time field
+        title: title,
+        date: normalizedDate,
+        time: time || '',
         description: description,
         link: link,
       });
       setTitle('');
       setDate('');
-      setTime(''); // Reset time
+      setTime('');
       setDescription('');
       setLink('');
       onClose();
     } else {
-      alert('Please fill in all required fields: Title, Date, and Time.');
+      alert('Please fill at least Title and a valid Date (supports "today", "tomorrow", "yesterday", "next week").');
     }
   };
 

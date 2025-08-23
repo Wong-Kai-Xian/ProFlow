@@ -12,45 +12,43 @@ export default function Reminders({ reminders, onAddReminder, onReminderRemove }
     return description.substring(0, maxLength) + "...";
   };
 
+  const toDate = (dateStr, timeStr) => {
+    if (!dateStr) return null;
+    const time = (timeStr && timeStr.trim()) ? timeStr : '09:00';
+    const d = new Date(`${dateStr}T${time}`);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
   const getDaysLeft = (dateStr, timeStr) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today to start of day
-    const reminderDateTime = new Date(`${dateStr}T${timeStr}`); // Create a full date-time object
-    reminderDateTime.setHours(reminderDateTime.getHours(), reminderDateTime.getMinutes(), 0, 0); // Normalize to minutes
-
+    today.setHours(0, 0, 0, 0);
+    const reminderDateTime = toDate(dateStr, timeStr);
+    if (!reminderDateTime) return "-";
+    reminderDateTime.setHours(reminderDateTime.getHours(), reminderDateTime.getMinutes(), 0, 0);
     const diffTime = reminderDateTime.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) {
-      return `${Math.abs(diffDays)} days overdue`;
-    } else if (diffDays === 0) {
-      return "Today";
-    } else if (diffDays === 1) {
-      return "1 day left";
-    } else {
-      return `${diffDays} days left`;
-    }
+    if (diffDays < 0) return `${Math.abs(diffDays)} days overdue`;
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "1 day left";
+    return `${diffDays} days left`;
   };
 
   const isOverdue = (dateStr, timeStr) => {
     const today = new Date();
-    const reminderDateTime = new Date(`${dateStr}T${timeStr}`);
-    return reminderDateTime.getTime() < today.getTime();
+    const d = toDate(dateStr, timeStr);
+    if (!d) return false;
+    return d.getTime() < today.getTime();
   };
 
   const getReminderColor = (dateStr, timeStr) => {
     const today = new Date();
-    const reminderDateTime = new Date(`${dateStr}T${timeStr}`);
-    const timeDiff = reminderDateTime.getTime() - today.getTime();
+    const d = toDate(dateStr, timeStr);
+    if (!d) return COLORS.secondary;
+    const timeDiff = d.getTime() - today.getTime();
     const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
-
-    if (daysDiff < 0) {
-      return COLORS.danger; // Red for overdue
-    } else if (daysDiff <= 7) {
-      return COLORS.warning; // Orange for due within 7 days
-    } else {
-      return COLORS.success; // Green for far in the future
-    }
+    if (daysDiff < 0) return COLORS.danger;
+    if (daysDiff <= 7) return COLORS.warning;
+    return COLORS.success;
   };
 
   const handleAddReminderClick = (newReminderData) => {
@@ -63,8 +61,8 @@ export default function Reminders({ reminders, onAddReminder, onReminderRemove }
   };
 
   const sortedReminders = [...reminders].sort((a, b) => {
-    const dateA = new Date(`${a.date}T${a.time}`);
-    const dateB = new Date(`${b.date}T${b.time}`);
+    const dateA = toDate(a.date, a.time) || new Date(8640000000000000);
+    const dateB = toDate(b.date, b.time) || new Date(8640000000000000);
     return dateA.getTime() - dateB.getTime();
   });
 

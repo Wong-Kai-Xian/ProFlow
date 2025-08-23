@@ -35,6 +35,12 @@ export default function UpcomingEvents() {
         const projectRemindersQuery = query(collection(db, "projects", projectId, "reminders"));
         unsubscribes.push(onSnapshot(projectRemindersQuery, (reminderSnapshot) => {
           console.log(`Project ${projectId} reminders snapshot received.`);
+          // Remove existing events for this project before re-adding
+          for (let i = fetchedReminders.length - 1; i >= 0; i--) {
+            if (fetchedReminders[i].origin === 'project' && fetchedReminders[i].sourceId === projectId) {
+              fetchedReminders.splice(i, 1);
+            }
+          }
           if (reminderSnapshot.empty) {
             console.log(`Project ${projectId} has no reminders in its subcollection.`);
           }
@@ -42,17 +48,16 @@ export default function UpcomingEvents() {
             const reminderData = reminderDoc.data();
             console.log(`Found project reminder:`, reminderData);
             console.log(`Project reminder date: ${reminderData.date}, time: ${reminderData.time}`);
-            if (reminderData.date && reminderData.time) {
-              if (!fetchedReminders.some(e => e.id === `${projectId}-${reminderData.title}-${reminderData.date}-${reminderData.time}`)) {
-                fetchedReminders.push({
-                  id: `${projectId}-${reminderData.title}-${reminderData.date}-${reminderData.time}`,
-                  name: reminderData.title,
-                  date: new Date(`${reminderData.date}T${reminderData.time}`),
-                  origin: "project",
-                  sourceId: projectId,
-                  sourceName: projectName,
-                });
-              }
+            if (reminderData.date) {
+              const timeVal = reminderData.time && reminderData.time.trim() ? reminderData.time : '09:00';
+              fetchedReminders.push({
+                id: `${projectId}-${reminderDoc.id}`,
+                name: reminderData.title,
+                date: new Date(`${reminderData.date}T${timeVal}`),
+                origin: "project",
+                sourceId: projectId,
+                sourceName: projectName,
+              });
             } else {
               console.warn(`Project reminder missing date or time for project ${projectId}:`, reminderData);
             }
@@ -72,20 +77,25 @@ export default function UpcomingEvents() {
         console.log(`Processing customer profile ${customerId}:`, customerData);
         if (customerData.reminders && Array.isArray(customerData.reminders)) {
           console.log(`Customer ${customerId} has reminders:`, customerData.reminders);
-          customerData.reminders.forEach(reminder => {
+          // Remove existing items for this customer before re-adding
+          for (let i = fetchedReminders.length - 1; i >= 0; i--) {
+            if (fetchedReminders[i].origin === 'customer' && fetchedReminders[i].sourceId === customerId) {
+              fetchedReminders.splice(i, 1);
+            }
+          }
+          customerData.reminders.forEach((reminder, idx) => {
             console.log(`Found customer reminder:`, reminder);
             console.log(`Customer reminder date: ${reminder.date}, time: ${reminder.time}`);
-            if (reminder.date && reminder.time) {
-              if (!fetchedReminders.some(e => e.id === `${customerId}-${reminder.title}-${reminder.date}-${reminder.time}`)) {
-                fetchedReminders.push({
-                  id: `${customerId}-${reminder.title}-${reminder.date}-${reminder.time}`,
-                  name: reminder.title,
-                  date: new Date(`${reminder.date}T${reminder.time}`),
-                  origin: "customer",
-                  sourceId: customerId,
-                  sourceName: customerData.customerProfile?.name, // To display which customer it's from
-                });
-              }
+            if (reminder.date) {
+              const timeVal = reminder.time && reminder.time.trim() ? reminder.time : '09:00';
+              fetchedReminders.push({
+                id: `${customerId}-idx-${idx}-${reminder.date}-${timeVal}`,
+                name: reminder.title,
+                date: new Date(`${reminder.date}T${timeVal}`),
+                origin: "customer",
+                sourceId: customerId,
+                sourceName: customerData.customerProfile?.name,
+              });
             } else {
               console.warn(`Customer reminder missing date or time for customer ${customerId}:`, reminder);
             }
@@ -108,6 +118,12 @@ export default function UpcomingEvents() {
         // Using a nested onSnapshot for subcollection reminders
         unsubscribes.push(onSnapshot(forumRemindersQuery, (reminderSnapshot) => {
           console.log(`Forum ${forumId} reminders snapshot received.`);
+          // Remove existing items for this forum before re-adding
+          for (let i = fetchedReminders.length - 1; i >= 0; i--) {
+            if (fetchedReminders[i].origin === 'forum' && fetchedReminders[i].sourceId === forumId) {
+              fetchedReminders.splice(i, 1);
+            }
+          }
           if (reminderSnapshot.empty) {
             console.log(`Forum ${forumId} has no reminders in its subcollection.`);
           }
@@ -115,17 +131,16 @@ export default function UpcomingEvents() {
             const reminderData = reminderDoc.data();
             console.log(`Found forum reminder:`, reminderData);
             console.log(`Forum reminder date: ${reminderData.date}, time: ${reminderData.time}`);
-            if (reminderData.date && reminderData.time) {
-              if (!fetchedReminders.some(e => e.id === `${forumId}-${reminderData.title}-${reminderData.date}-${reminderData.time}`)) {
-                fetchedReminders.push({
-                  id: `${forumId}-${reminderData.title}-${reminderData.date}-${reminderData.time}`,
-                  name: reminderData.title,
-                  date: new Date(`${reminderData.date}T${reminderData.time}`),
-                  origin: "forum",
-                  sourceId: forumId,
-                  sourceName: forumName,
-                });
-              }
+            if (reminderData.date) {
+              const timeVal = reminderData.time && reminderData.time.trim() ? reminderData.time : '09:00';
+              fetchedReminders.push({
+                id: `${forumId}-${reminderDoc.id}`,
+                name: reminderData.title,
+                date: new Date(`${reminderData.date}T${timeVal}`),
+                origin: "forum",
+                sourceId: forumId,
+                sourceName: forumName,
+              });
             } else {
               console.warn(`Forum reminder missing date or time for forum ${forumId}:`, reminderData);
             }

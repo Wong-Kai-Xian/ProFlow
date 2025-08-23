@@ -18,21 +18,22 @@ import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainer
 const callGeminiForSummary = async (promptText) => {
   const key = localStorage.getItem('gemini_api_key');
   if (!key) throw new Error('Missing GEMINI API key. Please set it in the Personal Assistant.');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${encodeURIComponent(key)}`;
   const body = {
     contents: [
       {
         role: 'user',
         parts: [
-          { text: `You are a meeting assistant. Given the raw transcript, return JSON with keys: summary (string, concise) and action_items (array of objects with title (string), assignee (optional string), deadline (optional string YYYY-MM-DD)).\nTranscript:\n${promptText}` }
+          { text: `You are a meeting assistant. Given the raw transcript, return JSON with keys: summary (string) and action_items (array of objects with title (string), assignee (optional), deadline (optional YYYY-MM-DD or natural language)).\nTranscript:\n${promptText}` }
         ]
       }
-    ]
+    ],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 1500 }
   };
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || '';
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   return text;
 };
 
@@ -71,6 +72,7 @@ export default function Forum() {
 
   // Saved transcript files for this forum
   const [meetingTranscriptsList, setMeetingTranscriptsList] = useState([]);
+  const meetingIframeRef = React.useRef(null);
 
   // AI modal state
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -136,6 +138,7 @@ export default function Forum() {
   const stopTranscription = async () => {
     setIsTranscribing(false);
     try { recognitionRef.current && recognitionRef.current.stop(); } catch {}
+    try { recognitionRef.current && recognitionRef.current.abort && recognitionRef.current.abort(); } catch {}
     recognitionRef.current = null;
   };
 
@@ -182,6 +185,17 @@ export default function Forum() {
 
     return () => unsubscribeProject();
   }, [forumData?.projectId]);
+
+  // Effect to compute actual post count for Home forums list consumers
+  useEffect(() => {
+    if (!forumId) return;
+    const postsRef = collection(db, 'forums', forumId, 'posts');
+    const unsub = onSnapshot(postsRef, (snap) => {
+      const count = snap.size;
+      setForumData(prev => prev ? { ...prev, actualPostCount: count } : prev);
+    });
+    return () => unsub();
+  }, [forumId]);
 
   // Effect to fetch details for forum members
   useEffect(() => {
@@ -292,9 +306,10 @@ export default function Forum() {
     if (userHasJoinedMeeting) {
       await handleLeaveMeeting();
     }
-    if (isTranscribing) {
-      try { await stopTranscription(); } catch {}
-    }
+    // Always hard-stop mic recognition regardless of local state
+    try { await stopTranscription(); } catch {}
+    // Force release media from iframe
+    try { if (meetingIframeRef.current) { meetingIframeRef.current.src = 'about:blank'; } } catch {}
     setShowMeeting(false);
     setMeetingMinimized(false);
     setSuppressMeetingBar(true);
@@ -453,9 +468,11 @@ export default function Forum() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.forums.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
                   <div>Forum Meeting</div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={isTranscribing ? stopTranscription : startTranscription} style={{ ...getButtonStyle('secondary', 'forums') }}>{isTranscribing ? 'Stop Transcribe' : 'Transcribe'}</button>
                     {userHasJoinedMeeting ? (
-                      <button onClick={handleLeaveMeeting} style={{ ...getButtonStyle('secondary', 'forums') }}>Leave</button>
+                      <>
+                        <button onClick={isTranscribing ? stopTranscription : startTranscription} style={{ ...getButtonStyle('secondary', 'forums') }}>{isTranscribing ? 'Stop Transcribe' : 'Transcribe'}</button>
+                        <button onClick={handleLeaveMeeting} style={{ ...getButtonStyle('secondary', 'forums') }}>Leave</button>
+                      </>
                     ) : (
                       <button onClick={handleJoinMeeting} style={{ ...getButtonStyle('secondary', 'forums') }}>Join</button>
                     )}
@@ -467,6 +484,7 @@ export default function Forum() {
                     <iframe
                       title="Forum Meeting"
                       src={`https://meet.jit.si/forum-${forumId}-meeting`}
+                      ref={meetingIframeRef}
                       style={{ width: '100%', height: '100%', border: '0', borderRadius: `0 0 ${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg}` }}
                       allow="camera; microphone; fullscreen; display-capture"
                     />
@@ -818,10 +836,40 @@ export default function Forum() {
                       .slice(0, 10);
                     items = src.map(s => ({ title: s.replace(/^[-\d\.\s]+/, '').trim(), description: '' }));
                   }
+                  const normalizeDate = (dl) => {
+                    if (!dl) return '';
+                    const s = String(dl).trim().toLowerCase();
+                    const fmt = (d) => {
+                      const y = d.getFullYear();
+                      const m = String(d.getMonth() + 1).padStart(2, '0');
+                      const da = String(d.getDate()).padStart(2, '0');
+                      return `${y}-${m}-${da}`;
+                    };
+                    const today = new Date();
+                    if (/\btoday\b/.test(s)) return fmt(today);
+                    if (/\b(tmr|tmrw|tmmrw|tmmr|tomor+ow?)\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return fmt(d); }
+                    if (/\byesterday\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() - 1); return fmt(d); }
+                    if (/^next\s*week$/.test(s) || /\bnextweek\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return fmt(d); }
+                    const inDays = s.match(/\bin\s+(\d+)\s+days?\b/);
+                    if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return fmt(d); }
+                    const wd = s.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+                    if (wd) {
+                      const map = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
+                      const target = map[wd[1]];
+                      const d = new Date(today);
+                      const cur = d.getDay();
+                      let add = (target + 7 - cur) % 7; if (add === 0) add = 7; d.setDate(d.getDate() + add);
+                      return fmt(d);
+                    }
+                    const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[t\s](\d{2}:\d{2}))?/);
+                    if (m) return m[1];
+                    return '';
+                  };
                   const normalized = items.map((it, idx) => {
                     const candidate = (it.title || it.name || it.task || it.action || '').toString().trim();
                     const displayTitle = candidate || (it.description || '').toString().split(/\.|;|\n/)[0].slice(0, 140) || `Action Item ${idx + 1}`;
-                    return { id: String(idx), displayTitle, ...it };
+                    const normDeadline = normalizeDate(it.deadline);
+                    return { id: String(idx), displayTitle, ...it, deadline: normDeadline || it.deadline || '' };
                   });
                   setAiModalItems(normalized);
                 } catch (e) {
@@ -846,22 +894,23 @@ export default function Forum() {
                       const y = d.getFullYear();
                       const m = String(d.getMonth() + 1).padStart(2, '0');
                       const da = String(d.getDate()).padStart(2, '0');
-                      return `${y}-${m}-${da}`;
+                      return { date: `${y}-${m}-${da}`, time: '' };
                     };
                     const today = new Date();
-                    if (/^today$/.test(s)) return { date: fmt(today), time: '' };
-                    if (/^(tmr|tomorrow|tommorow|tommorrow)$/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return { date: fmt(d), time: '' }; }
-                    if (/^next\s+week$/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return { date: fmt(d), time: '' }; }
-                    const inDays = s.match(/^in\s+(\d+)\s+days?$/);
-                    if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return { date: fmt(d), time: '' }; }
-                    const wd = s.match(/^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/);
+                    if (/\btoday\b/.test(s)) return fmt(today);
+                    if (/\b(tmr|tmrw|tmmrw|tmmr|tomor+ow?)\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return fmt(d); }
+                    if (/\byesterday\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() - 1); return fmt(d); }
+                    if (/^next\s*week$/.test(s) || /\bnextweek\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return fmt(d); }
+                    const inDays = s.match(/\bin\s+(\d+)\s+days?\b/);
+                    if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return fmt(d); }
+                    const wd = s.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
                     if (wd) {
                       const map = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
                       const target = map[wd[1]];
                       const d = new Date(today);
                       const cur = d.getDay();
                       let add = (target + 7 - cur) % 7; if (add === 0) add = 7; d.setDate(d.getDate() + add);
-                      return { date: fmt(d), time: '' };
+                      return fmt(d);
                     }
                     const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2}))?/);
                     if (m) return { date: m[1], time: m[2] || '' };

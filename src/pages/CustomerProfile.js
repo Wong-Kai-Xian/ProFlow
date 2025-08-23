@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import CustomerInfo from "../components/profile-component/CustomerInfo";
@@ -12,7 +12,7 @@ import SendApprovalModal from "../components/project-component/SendApprovalModal
 import CreateProjectModal from "../components/project-component/CreateProjectModal";
 import AdvancedApprovalRequestModal from "../components/project-component/AdvancedApprovalRequestModal";
 import { db } from "../firebase";
-import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc, query, where, getDocs, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc, query, where, getDocs, deleteDoc, onSnapshot, arrayUnion, arrayRemove } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getPageHeaderStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 
@@ -44,6 +44,37 @@ export default function CustomerProfile() {
   const [projects, setProjects] = useState([]); // To store associated projects
   const [lastContact, setLastContact] = useState("N/A"); // Default last contact
   const [customerTeamMembersDetails, setCustomerTeamMembersDetails] = useState([]); // State for enriched team member details
+
+  // Meeting state (mirrors ProjectDetail)
+  const [showMeeting, setShowMeeting] = useState(false);
+  const [meetingMinimized, setMeetingMinimized] = useState(false);
+  const [meetingParticipants, setMeetingParticipants] = useState([]);
+  const [suppressMeetingBar, setSuppressMeetingBar] = useState(false);
+  const userHasJoinedMeeting = meetingParticipants.includes(currentUser?.uid || "");
+
+  // Meeting session + transcription
+  const [meetingSessionId, setMeetingSessionId] = useState(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [sessionTranscripts, setSessionTranscripts] = useState([]);
+  const lastInterimSaveRef = useRef(0);
+  const meetingSessionIdRef = useRef(null);
+  const transcriptBufferRef = useRef("");
+  const pendingInterimRef = useRef("");
+  const recognitionRef = useRef(null);
+
+  // Saved transcripts under customer profile
+  const [meetingTranscriptsList, setMeetingTranscriptsList] = useState([]);
+  const meetingIframeRef = useRef(null);
+
+  // AI Actions modal state
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiModalLoading, setAiModalLoading] = useState(false);
+  const [aiModalError, setAiModalError] = useState("");
+  const [aiModalItems, setAiModalItems] = useState([]);
+  const [aiModalSelection, setAiModalSelection] = useState({});
+  const [aiModalTranscriptDoc, setAiModalTranscriptDoc] = useState(null);
+  const [aiModalTarget, setAiModalTarget] = useState('reminders'); // 'reminders' | 'notes'
 
   // Helper to check if a stage is completed
   const isStageCompleted = (stageName) => stageData[stageName]?.completed;
@@ -168,6 +199,241 @@ export default function CustomerProfile() {
 
     fetchCustomer();
   }, [id, navigate, setStages, setStageData]); // Depend on 'id', 'navigate', 'setStages', and 'setStageData'
+
+  // Keep session id in ref
+  useEffect(() => { meetingSessionIdRef.current = meetingSessionId; }, [meetingSessionId]);
+
+  // Watch live meeting participants on the customer profile
+  useEffect(() => {
+    if (!id) return;
+    const customerRef = doc(db, 'customerProfiles', id);
+    const unsub = onSnapshot(customerRef, snap => {
+      const data = snap.data();
+      setMeetingParticipants(data?.meetingParticipants || []);
+      if ((data?.meetingParticipants || []).length > 0 && !showMeeting && !suppressMeetingBar) {
+        setMeetingMinimized(true);
+      }
+    });
+    return () => unsub();
+  }, [id, showMeeting, suppressMeetingBar]);
+
+  // Watch saved transcripts list under customer
+  useEffect(() => {
+    if (!id) { setMeetingTranscriptsList([]); return; }
+    const colRef = collection(db, 'customerProfiles', id, 'meetingTranscripts');
+    const unsub = onSnapshot(colRef, snap => {
+      const files = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setMeetingTranscriptsList(files);
+    });
+    return () => unsub();
+  }, [id]);
+
+  // Watch session transcripts
+  useEffect(() => {
+    if (meetingSessionId) {
+      const sub = onSnapshot(collection(db, 'meetingSessions', meetingSessionId, 'transcripts'), (snap) => {
+        const lines = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a,b)=> (a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
+        setSessionTranscripts(lines);
+      });
+      return () => sub();
+    } else {
+      setSessionTranscripts([]);
+    }
+  }, [meetingSessionId]);
+
+  const startTranscription = async () => {
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { alert('Transcription not supported in this browser. Try Chrome.'); return; }
+      if (!meetingSessionIdRef.current) {
+        const ref = await addDoc(collection(db, 'meetingSessions'), { customerId: id, startedAt: serverTimestamp(), participants: meetingParticipants });
+        meetingSessionIdRef.current = ref.id;
+        setMeetingSessionId(ref.id);
+      }
+      const rec = new SR();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = 'en-US';
+      rec.onresult = async (e) => {
+        let interim = "";
+        let finalText = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const res = e.results[i];
+          if (res.isFinal) finalText += res[0].transcript;
+          else interim += res[0].transcript;
+        }
+        if (interim) {
+          setLiveTranscript(interim);
+          const t = interim.trim();
+          pendingInterimRef.current = t;
+          const now = Date.now();
+          const sessionId = meetingSessionIdRef.current;
+          if (sessionId && t && t.length > 0 && now - (lastInterimSaveRef.current || 0) > 2500) {
+            try {
+              await addDoc(collection(db, 'meetingSessions', sessionId, 'transcripts'), {
+                text: t,
+                userId: currentUser?.uid || 'anon',
+                createdAt: serverTimestamp(),
+              });
+              lastInterimSaveRef.current = now;
+            } catch {}
+          }
+        }
+        if (finalText) {
+          setLiveTranscript("");
+          transcriptBufferRef.current = `${transcriptBufferRef.current} ${finalText.trim()}`.trim();
+          const sessionId = meetingSessionIdRef.current;
+          if (sessionId) {
+            await addDoc(collection(db, 'meetingSessions', sessionId, 'transcripts'), {
+              text: finalText.trim(),
+              userId: currentUser?.uid || 'anon',
+              createdAt: serverTimestamp(),
+            });
+          }
+        }
+      };
+      rec.onend = () => {
+        if (isTranscribing) {
+          try { rec.start(); } catch {}
+        }
+      };
+      rec.onerror = () => {
+        if (!isTranscribing) return;
+        setTimeout(() => { try { rec.start(); } catch {} }, 1000);
+      };
+      recognitionRef.current = rec;
+      setIsTranscribing(true);
+      rec.start();
+    } catch (e) {
+      console.warn('Failed to start transcription', e);
+    }
+  };
+
+  const stopTranscription = async () => {
+    setIsTranscribing(false);
+    try { recognitionRef.current && recognitionRef.current.stop(); } catch {}
+    try { recognitionRef.current && recognitionRef.current.abort && recognitionRef.current.abort(); } catch {}
+    recognitionRef.current = null;
+    if (meetingSessionId) {
+      await updateDoc(doc(db, 'meetingSessions', meetingSessionId), { endedAt: serverTimestamp() });
+    }
+  };
+
+  const callGeminiForSummary = async (promptText) => {
+    const key = localStorage.getItem('gemini_api_key');
+    if (!key) throw new Error('Missing API key. Set it in the Personal Assistant.');
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + encodeURIComponent(key);
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: `You are a meeting assistant. Given the raw transcript, return JSON with keys: summary (string) and action_items (array of objects with title (string), assignee (optional), deadline (optional YYYY-MM-DD or natural language)).\nTranscript:\n${promptText}` }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 1500 }
+      })
+    });
+    const data = await resp.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return text;
+  };
+
+  const safeParseJson = (str) => {
+    try {
+      return JSON.parse(str);
+    } catch {
+      const m = str.match(/\{[\s\S]*\}/);
+      if (m) {
+        try { return JSON.parse(m[0]); } catch {}
+      }
+      return null;
+    }
+  };
+
+  const handleJoinMeeting = async () => {
+    if (!id || !currentUser) return;
+    const ref = doc(db, 'customerProfiles', id);
+    await updateDoc(ref, { meetingParticipants: arrayUnion(currentUser.uid) });
+    setShowMeeting(true);
+    setSuppressMeetingBar(false);
+    if (!meetingSessionId) {
+      const sref = await addDoc(collection(db, 'meetingSessions'), { customerId: id, startedAt: serverTimestamp(), participants: [currentUser.uid] });
+      setMeetingSessionId(sref.id);
+    }
+  };
+
+  const handleLeaveMeeting = async () => {
+    if (!id || !currentUser) return;
+    const ref = doc(db, 'customerProfiles', id);
+    await updateDoc(ref, { meetingParticipants: arrayRemove(currentUser.uid) });
+    if (isTranscribing) await stopTranscription();
+    if (meetingSessionId) await updateDoc(doc(db, 'meetingSessions', meetingSessionId), { endedAt: serverTimestamp() });
+  };
+
+  const handleToggleMeeting = async () => {
+    if (!showMeeting && !meetingMinimized) {
+      setShowMeeting(true);
+      setMeetingMinimized(false);
+      setSuppressMeetingBar(false);
+      return;
+    }
+    if (userHasJoinedMeeting) {
+      await handleLeaveMeeting();
+    }
+    if (isTranscribing) {
+      try { await stopTranscription(); } catch {}
+    }
+    // Force release media from iframe
+    try { if (meetingIframeRef.current) { meetingIframeRef.current.src = 'about:blank'; } } catch {}
+    setShowMeeting(false);
+    setMeetingMinimized(false);
+    setSuppressMeetingBar(true);
+    // Also close any forum meetings linked via this customer's projects
+    try {
+      if (projects && projects.length > 0 && currentUser?.uid) {
+        // Fetch forums that reference these projects
+        for (const pid of projects) {
+          const forumsSnap = await getDocs(query(collection(db, 'forums'), where('projectId', '==', pid)));
+          for (const fdoc of forumsSnap.docs) {
+            await updateDoc(doc(db, 'forums', fdoc.id), { meetingParticipants: arrayRemove(currentUser.uid) });
+          }
+        }
+      }
+    } catch {}
+  };
+
+  const handleGenerateTranscript = async () => {
+    try {
+      // Flush remaining interim/live text to session
+      if (meetingSessionId && liveTranscript && liveTranscript.trim().length > 0) {
+        await addDoc(collection(db, 'meetingSessions', meetingSessionId, 'transcripts'), {
+          text: liveTranscript.trim(),
+          userId: currentUser?.uid || 'anon',
+          createdAt: serverTimestamp(),
+        });
+        setLiveTranscript("");
+      }
+      const combined = `${sessionTranscripts.map(l => l.text).join('\n')}`.trim();
+      const fileName = `meeting-transcript-${new Date().toISOString().replace(/[:.]/g,'-')}.txt`;
+      await addDoc(collection(db, 'customerProfiles', id, 'meetingTranscripts'), {
+        name: fileName,
+        mimeType: 'text/plain',
+        content: combined,
+        size: combined.length,
+        createdAt: serverTimestamp(),
+        createdBy: currentUser?.uid || 'anon',
+      });
+      if (meetingSessionId) {
+        try {
+          await Promise.all(sessionTranscripts.map(line => deleteDoc(doc(db, 'meetingSessions', meetingSessionId, 'transcripts', line.id))));
+          setSessionTranscripts([]);
+        } catch {}
+      }
+    } catch (e) {
+      console.error('Failed to save transcript', e);
+      alert('Failed to save transcript');
+    }
+  };
 
   // Effect to fetch team member details from associated projects
   useEffect(() => {
@@ -341,16 +607,16 @@ export default function CustomerProfile() {
               }
             } else {
               // Same organization: just update client details in place
-              const updatedClients = [...clients];
-              updatedClients[clientIndex] = {
-                id: id,
+            const updatedClients = [...clients];
+            updatedClients[clientIndex] = {
+              id: id,
                 name: mergedCustomerProfile.name,
                 email: mergedCustomerProfile.email,
                 phone: mergedCustomerProfile.phone,
                 company: mergedCompanyProfile.company
               };
               await updateDoc(doc(db, "organizations", orgDoc.id), { clients: updatedClients });
-              console.log("Updated client details in organization:", orgDoc.id);
+            console.log("Updated client details in organization:", orgDoc.id);
             }
             break; // Found and handled
           }
@@ -495,6 +761,100 @@ export default function CustomerProfile() {
         ...getContentContainerStyle(),
         paddingTop: DESIGN_SYSTEM.spacing['2xl']
       }}>
+        {/* Page-level actions */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: DESIGN_SYSTEM.spacing.base }}>
+          <button
+            onClick={handleToggleMeeting}
+            style={{ ...getButtonStyle('primary', 'customers') }}
+          >
+            {(showMeeting || meetingMinimized) ? 'Close Meeting' : 'Conduct Meeting'}
+          </button>
+        </div>
+
+        {/* Meeting Section */}
+        {(showMeeting || meetingMinimized) && (
+          <div style={{
+            ...getCardStyle('customers'),
+            marginBottom: DESIGN_SYSTEM.spacing.lg,
+            padding: 0
+          }}>
+            {/* Minimized bar */}
+            {meetingMinimized && !showMeeting && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: '#111827', color: '#fff', borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
+                <div>
+                  Ongoing Meeting – {meetingParticipants.length} participant{meetingParticipants.length === 1 ? '' : 's'}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => { setMeetingMinimized(false); setShowMeeting(true); }} style={{ ...getButtonStyle('secondary', 'customers') }}>Expand</button>
+                  <button onClick={() => { setMeetingMinimized(false); setShowMeeting(false); }} style={{ ...getButtonStyle('secondary', 'customers') }}>Close</button>
+                </div>
+              </div>
+            )}
+            {/* Expanded meeting */}
+            {(
+              (showMeeting || meetingMinimized) && (
+              <div>
+                {showMeeting && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.customers.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
+                    <div>Customer Meeting</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {userHasJoinedMeeting ? (
+                        <>
+                          <button onClick={isTranscribing ? stopTranscription : startTranscription} style={{ ...getButtonStyle('secondary', 'customers') }}>{isTranscribing ? 'Stop Transcribe' : 'Transcribe'}</button>
+                          <button onClick={handleLeaveMeeting} style={{ ...getButtonStyle('secondary', 'customers') }}>Leave</button>
+                        </>
+                      ) : (
+                        <button onClick={handleJoinMeeting} style={{ ...getButtonStyle('secondary', 'customers') }}>Join</button>
+                      )}
+                      <button onClick={() => { setMeetingMinimized(true); setShowMeeting(false); }} style={{ ...getButtonStyle('secondary', 'customers') }}>Minimize</button>
+                    </div>
+                  </div>
+                )}
+                {/* Iframe stays mounted */}
+                <div style={{ width: '100%', height: showMeeting ? '600px' : '1px', background: '#000' }}>
+                  {userHasJoinedMeeting ? (
+                    <iframe
+                      title="Customer Meeting"
+                      src={`https://meet.jit.si/customer-${id}-meeting`}
+                      ref={meetingIframeRef}
+                      style={{ width: '100%', height: '100%', border: '0', borderRadius: showMeeting ? `0 0 ${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg}` : 0, visibility: showMeeting ? 'visible' : 'hidden' }}
+                      allow="camera; microphone; fullscreen; display-capture"
+                    />
+                  ) : (
+                    showMeeting && (
+                      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
+                        Click Join to connect to the meeting
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            ))}
+            {/* Transcript viewer */}
+            {showMeeting && (
+              <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontWeight: 600 }}>Live Transcript</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={handleGenerateTranscript} style={{ ...getButtonStyle('secondary', 'customers') }}>Generate Transcript</button>
+                    <button onClick={() => { setMeetingMinimized(true); setShowMeeting(false); }} style={{ ...getButtonStyle('secondary', 'customers') }}>Minimize</button>
+                  </div>
+                </div>
+                <div style={{ border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, padding: 8, background: '#fff', minHeight: 120, maxHeight: 200, overflowY: 'auto' }}>
+                  {sessionTranscripts.map(line => (
+                    <div key={line.id} style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary, marginBottom: 4 }}>
+                      <span style={{ color: DESIGN_SYSTEM.colors.text.secondary, marginRight: 6 }}>{new Date((line.createdAt?.seconds || 0) * 1000).toLocaleTimeString()}</span>
+                      {line.text}
+                    </div>
+                  ))}
+                  {liveTranscript && (
+                    <div style={{ fontStyle: 'italic', color: DESIGN_SYSTEM.colors.text.secondary }}>{liveTranscript}</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <div style={{ 
           display: "grid", 
           gridTemplateColumns: "350px 1fr 320px", 
@@ -632,6 +992,44 @@ export default function CustomerProfile() {
 
         {/* Right Column - Tools & Actions */}
         <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg }}>
+          {/* Meeting Transcripts */}
+          <div style={getCardStyle('customers')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+              }}>
+                Meeting Transcripts
+              </h2>
+            </div>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
+              {meetingTranscriptsList.length === 0 ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No transcripts yet.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {meetingTranscriptsList.map(file => (
+                    <div key={file.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, padding: 8, background: '#fff' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ fontWeight: 600 }}>{file.name}</div>
+                        <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((file.createdAt?.seconds||0)*1000).toLocaleString()}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => { setAiModalTranscriptDoc(file); setAiModalOpen(true); setAiModalSelection({}); setAiModalItems([]); }} style={{ ...getButtonStyle('secondary', 'customers') }}>AI Actions</button>
+                        <button onClick={async () => { await deleteDoc(doc(db, 'customerProfiles', id, 'meetingTranscripts', file.id)); }} style={{ ...getButtonStyle('secondary', 'customers') }}>Delete</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div style={getCardStyle('customers')}>
             <div style={{
               background: DESIGN_SYSTEM.pageThemes.customers.gradient,
@@ -710,7 +1108,7 @@ export default function CustomerProfile() {
                 </button>
               )}
               {areAllStagesCompleted() && hasPendingConversionRequest && !hasApprovedConversion && (
-                <button
+              <button
                   disabled
                   style={{
                     ...getButtonStyle('secondary', 'customers'),
@@ -757,6 +1155,169 @@ export default function CustomerProfile() {
         </div>
       </div>
       </div>
+      
+      {/* AI Actions Modal */}
+      {aiModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 16, width: 640, maxWidth: '95vw', boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ fontWeight: 700 }}>AI Actions</div>
+              <button onClick={() => setAiModalOpen(false)} style={{ ...getButtonStyle('secondary', 'customers') }}>Close</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <button onClick={async () => {
+                if (!aiModalTranscriptDoc) return;
+                try {
+                  setAiModalLoading(true); setAiModalError('');
+                  const text = aiModalTranscriptDoc.content || '';
+                  const MAX_INPUT = 60000;
+                  const aiText = await callGeminiForSummary(text.slice(0, MAX_INPUT));
+                  const json = safeParseJson(aiText) || { summary: aiText, action_items: [] };
+                  let items = Array.isArray(json.action_items) ? json.action_items : [];
+                  if (!items.length) {
+                    const src = (json.summary || aiText || '').split('\n')
+                      .map(s => s.trim())
+                      .filter(s => s && /(^- |^\d+\. |should|need to|please|action|task|todo)/i.test(s))
+                      .slice(0, 10);
+                    items = src.map(s => ({ title: s.replace(/^[^-\d\.\s]+/, '').trim(), description: '' }));
+                  }
+                  const normalizeDate = (dl) => {
+                    if (!dl) return '';
+                    const s = String(dl).trim().toLowerCase();
+                    const fmt = (d) => {
+                      const y = d.getFullYear();
+                      const m = String(d.getMonth() + 1).padStart(2, '0');
+                      const da = String(d.getDate()).padStart(2, '0');
+                      return `${y}-${m}-${da}`;
+                    };
+                    const today = new Date();
+                    if (/\btoday\b/.test(s)) return fmt(today);
+                    if (/\b(tmr|tmrw|tmmrw|tmmr|tomor+ow?)\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return fmt(d); }
+                    if (/\byesterday\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() - 1); return fmt(d); }
+                    if (/^next\s*week$/.test(s) || /\bnextweek\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return fmt(d); }
+                    const inDays = s.match(/\bin\s+(\d+)\s+days?\b/);
+                    if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return fmt(d); }
+                    const wd = s.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+                    if (wd) {
+                      const map = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
+                      const target = map[wd[1]];
+                      const d = new Date(today);
+                      const cur = d.getDay();
+                      let add = (target + 7 - cur) % 7; if (add === 0) add = 7; d.setDate(d.getDate() + add);
+                      return fmt(d);
+                    }
+                    const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[t\s](\d{2}:\d{2}))?/);
+                    if (m) return m[1];
+                    return '';
+                  };
+                  const normalized = items.map((it, idx) => {
+                    const candidate = (it.title || it.name || it.task || it.action || '').toString().trim();
+                    const displayTitle = candidate || (it.description || '').toString().split(/\.|;|\n/)[0].slice(0, 140) || `Action Item ${idx + 1}`;
+                    const normDeadline = normalizeDate(it.deadline);
+                    return { id: String(idx), displayTitle, ...it, deadline: normDeadline || it.deadline || '' };
+                  });
+                  setAiModalItems(normalized);
+                } catch (e) {
+                  setAiModalError(e.message || 'Failed to analyze transcript.');
+                } finally {
+                  setAiModalLoading(false);
+                }
+              }} style={{ ...getButtonStyle('secondary', 'customers') }}>Analyze</button>
+              <select value={aiModalTarget} onChange={(e) => setAiModalTarget(e.target.value)} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 8px' }}>
+                <option value="reminders">Add to Reminders</option>
+                <option value="notes">Add to Notes</option>
+              </select>
+              <button disabled={aiModalLoading || aiModalItems.length === 0} onClick={async () => {
+                try {
+                  setAiModalLoading(true); setAiModalError('');
+                  const selected = aiModalItems.filter(it => aiModalSelection[it.id]);
+                  if (selected.length === 0) { setAiModalLoading(false); return; }
+                  if (aiModalTarget === 'reminders') {
+                    // Map to reminders array on customer profile
+                    const parseDeadline = (dl) => {
+                      if (!dl) return { date: '', time: '' };
+                      const s = String(dl).trim().toLowerCase();
+                      const fmt = (d) => {
+                        const y = d.getFullYear();
+                        const m = String(d.getMonth() + 1).padStart(2, '0');
+                        const da = String(d.getDate()).padStart(2, '0');
+                        return { date: `${y}-${m}-${da}`, time: '' };
+                      };
+                      const today = new Date();
+                      if (/\btoday\b/.test(s)) return fmt(today);
+                      if (/\b(tmr|tmrw|tmmrw|tmmr|tomor+ow?)\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return fmt(d); }
+                      if (/\byesterday\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() - 1); return fmt(d); }
+                      if (/^next\s*week$/.test(s) || /\bnextweek\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return fmt(d); }
+                      const inDays = s.match(/\bin\s+(\d+)\s+days?\b/);
+                      if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return fmt(d); }
+                      const wd = s.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+                      if (wd) {
+                        const map = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
+                        const target = map[wd[1]];
+                        const d = new Date(today);
+                        const cur = d.getDay();
+                        let add = (target + 7 - cur) % 7; if (add === 0) add = 7; d.setDate(d.getDate() + add);
+                        return fmt(d);
+                      }
+                      const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[t\s](\d{2}:\d{2}))?/);
+                      if (m) return { date: m[1], time: m[2] || '' };
+                      return { date: '', time: '' };
+                    };
+                    const base = Array.isArray(reminders) ? [...reminders] : [];
+                    const newRems = selected.map((it, idx) => {
+                      const { date, time } = parseDeadline(it.deadline);
+                      const finalDate = date || new Date().toISOString().slice(0,10);
+                      return {
+                        title: (it.displayTitle || it.title || it.name || `Reminder ${idx + 1}`).toString(),
+                        description: it.description || '',
+                        date: finalDate,
+                        time: time || ''
+                      };
+                    });
+                    const next = [...base, ...newRems];
+                    setReminders(next);
+                    if (id) await updateDoc(doc(db, 'customerProfiles', id), { reminders: next });
+                    setAiModalOpen(false);
+                  } else {
+                    // Add to current stage notes
+                    const baseStage = stageData[currentStage] || { notes: [], tasks: [], completed: false };
+                    const newNotes = selected.map((it) => ({ type: 'Meeting', text: ((it.displayTitle || it.title || it.name || 'Note').toString() + (it.description ? ` – ${it.description}` : '')), createdAt: Date.now() }));
+                    const updatedStage = { ...stageData, [currentStage]: { ...baseStage, notes: [...(baseStage.notes || []), ...newNotes] } };
+                    setStageData(updatedStage);
+                    // Persist via updateDoc directly
+                    if (id) await updateDoc(doc(db, 'customerProfiles', id), { stageData: updatedStage });
+                    setAiModalOpen(false);
+                  }
+                } catch (e) {
+                  setAiModalError(e.message || 'Failed to add items.');
+                } finally {
+                  setAiModalLoading(false);
+                }
+              }} style={{ ...getButtonStyle('primary', 'customers') }}>Add Selected</button>
+            </div>
+            {aiModalError && <div style={{ color: '#b91c1c', marginBottom: 8 }}>{aiModalError}</div>}
+            <div style={{ maxHeight: 320, overflowY: 'auto', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, padding: 8, background: '#fff' }}>
+              {aiModalLoading ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>Analyzing…</div>
+              ) : aiModalItems.length === 0 ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>Click Analyze to extract action items from the transcript.</div>
+              ) : (
+                aiModalItems.map(item => (
+                  <label key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 6 }}>
+                    <input type="checkbox" checked={!!aiModalSelection[item.id]} onChange={(e) => setAiModalSelection(s => ({ ...s, [item.id]: e.target.checked }))} />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{(item.displayTitle || item.title || item.name || item.task || item.action || 'Untitled').toString()}</div>
+                      {item.description && <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>{item.description}</div>}
+                      {item.assignee && <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Assignee: {item.assignee}</div>}
+                      {item.deadline && <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Deadline: {item.deadline}</div>}
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       
       <SendApprovalModal
         isOpen={showSendApprovalModal}

@@ -90,6 +90,7 @@ export default function ProjectDetail() {
   };
 
   const [meetingTranscriptsList, setMeetingTranscriptsList] = useState([]);
+  const meetingIframeRef = useRef(null);
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiModalLoading, setAiModalLoading] = useState(false);
   const [aiModalError, setAiModalError] = useState("");
@@ -215,7 +216,10 @@ export default function ProjectDetail() {
   const stopTranscription = async () => {
     setIsTranscribing(false);
     try { recognitionRef.current && recognitionRef.current.stop(); } catch {}
+    try { recognitionRef.current && recognitionRef.current.abort && recognitionRef.current.abort(); } catch {}
     recognitionRef.current = null;
+    // Clear any pending auto-restart timers
+    clearRestartTimer();
     if (meetingSessionId) {
       await updateDoc(doc(db, 'meetingSessions', meetingSessionId), { endedAt: serverTimestamp() });
     }
@@ -227,22 +231,17 @@ export default function ProjectDetail() {
   const callGeminiForSummary = async (promptText) => {
     const key = localStorage.getItem('gemini_api_key');
     if (!key) throw new Error('Missing GEMINI API key. Please set it in the Personal Assistant.');
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
-    const body = {
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: `You are a meeting assistant. Given the raw transcript, return JSON with keys: summary (string, concise) and action_items (array of objects with title (string), assignee (optional string), deadline (optional string YYYY-MM-DD)).
-Transcript:\n${promptText}` }
-          ]
-        }
-      ]
-    };
-    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error(await res.text());
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + encodeURIComponent(key);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: `You are a meeting assistant. Given the raw transcript, return JSON with keys: summary (string) and action_items (array of objects with title (string), assignee (optional), deadline (optional YYYY-MM-DD or natural language)).\nTranscript:\n${promptText}` }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 1500 }
+      })
+    });
     const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || '';
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     return text;
   };
 
@@ -695,12 +694,22 @@ Transcript:\n${promptText}` }
       await handleLeaveMeeting();
     }
     // ensure mic/transcription is stopped when closing the panel
-    if (isTranscribing) {
-      try { await stopTranscription(); } catch {}
-    }
+    try { await stopTranscription(); } catch {}
+    // Force release media from iframe
+    try { if (meetingIframeRef.current) { meetingIframeRef.current.src = 'about:blank'; } } catch {}
     setShowMeeting(false);
     setMeetingMinimized(false);
     setSuppressMeetingBar(true);
+    // Also close any forum meeting if linked and user is joined there
+    try {
+      if (projectForums && projectForums.length > 0 && currentUser?.uid) {
+        for (const forum of projectForums) {
+          if (forum?.id) {
+            await updateDoc(doc(db, 'forums', forum.id), { meetingParticipants: arrayRemove(currentUser.uid) });
+          }
+        }
+      }
+    } catch {}
   };
 
   if (!projectData) {
@@ -896,6 +905,7 @@ Transcript:\n${promptText}` }
                     <iframe
                       title="Project Meeting"
                       src={`https://meet.jit.si/project-${projectId}-meeting`}
+                      ref={meetingIframeRef}
                         style={{ width: '100%', height: '100%', border: '0', borderRadius: showMeeting ? `0 0 ${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg}` : 0, visibility: showMeeting ? 'visible' : 'hidden' }}
                       allow="camera; microphone; fullscreen; display-capture"
                     />
@@ -1330,10 +1340,40 @@ Transcript:\n${promptText}` }
                       .slice(0, 10);
                     items = src.map(s => ({ title: s.replace(/^[-\d\.\s]+/, '').trim(), description: '' }));
                   }
+                  const normalizeDate = (dl) => {
+                    if (!dl) return '';
+                    const s = String(dl).trim().toLowerCase();
+                    const fmt = (d) => {
+                      const y = d.getFullYear();
+                      const m = String(d.getMonth() + 1).padStart(2, '0');
+                      const da = String(d.getDate()).padStart(2, '0');
+                      return `${y}-${m}-${da}`;
+                    };
+                    const today = new Date();
+                    if (/\btoday\b/.test(s)) return fmt(today);
+                    if (/\b(tmr|tmrw|tmmrw|tmmr|tomor+ow?)\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return fmt(d); }
+                    if (/\byesterday\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() - 1); return fmt(d); }
+                    if (/^next\s*week$/.test(s) || /\bnextweek\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return fmt(d); }
+                    const inDays = s.match(/\bin\s+(\d+)\s+days?\b/);
+                    if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return fmt(d); }
+                    const wd = s.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+                    if (wd) {
+                      const map = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
+                      const target = map[wd[1]];
+                      const d = new Date(today);
+                      const cur = d.getDay();
+                      let add = (target + 7 - cur) % 7; if (add === 0) add = 7; d.setDate(d.getDate() + add);
+                      return fmt(d);
+                    }
+                    const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[t\s](\d{2}:\d{2}))?/);
+                    if (m) return m[1];
+                    return '';
+                  };
                   const normalized = items.map((it, idx) => {
                     const candidate = (it.title || it.name || it.task || it.action || '').toString().trim();
                     const displayTitle = candidate || (it.description || '').toString().split(/\.|;|\n/)[0].slice(0, 140) || `Action Item ${idx + 1}`;
-                    return { id: String(idx), displayTitle, ...it };
+                    const normDeadline = normalizeDate(it.deadline);
+                    return { id: String(idx), displayTitle, ...it, deadline: normDeadline || it.deadline || '' };
                   });
                   setAiModalItems(normalized);
                 } catch (e) {
@@ -1374,17 +1414,16 @@ Transcript:\n${promptText}` }
                           return `${y}-${m}-${da}`;
                         };
                         const today = new Date();
-                        // today / tomorrow keywords
-                        if (/^today$/.test(s)) return fmt(today);
-                        if (/^(tmr|tomorrow|tommorow|tommorrow)$/.test(s)) {
-                          const d = new Date(today); d.setDate(d.getDate() + 1); return fmt(d);
-                        }
-                        if (/^next\s+week$/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return fmt(d); }
+                        // today / tomorrow keywords (robust matching anywhere in string)
+                        if (/\btoday\b/.test(s)) return fmt(today);
+                        if (/\b(tmr|tmrw|tmmrw|tmmr|tomor+ow?)\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return fmt(d); }
+                        if (/^yesterday\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() - 1); return fmt(d); }
+                        if (/^next\s*week$/.test(s) || /\bnextweek\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return fmt(d); }
                         // in X days
-                        const inDays = s.match(/^in\s+(\d+)\s+days?$/);
+                        const inDays = s.match(/\bin\s+(\d+)\s+days?\b/);
                         if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return fmt(d); }
                         // next weekday
-                        const wd = s.match(/^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/);
+                        const wd = s.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
                         if (wd) {
                           const map = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
                           const target = map[wd[1]];
@@ -1419,12 +1458,13 @@ Transcript:\n${promptText}` }
                         return `${y}-${m}-${da}`;
                       };
                       const today = new Date();
-                      if (/^today$/.test(s)) return { date: fmt(today), time: '' };
-                      if (/^(tmr|tomorrow|tommorow|tommorrow)$/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return { date: fmt(d), time: '' }; }
-                      if (/^next\s+week$/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return { date: fmt(d), time: '' }; }
-                      const inDays = s.match(/^in\s+(\d+)\s+days?$/);
+                      if (/\btoday\b/.test(s)) return { date: fmt(today), time: '' };
+                      if (/\b(tmr|tmrw|tmmrw|tmmr|tomor+ow?)\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return { date: fmt(d), time: '' }; }
+                      if (/\byesterday\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() - 1); return { date: fmt(d), time: '' }; }
+                      if (/^next\s*week$/.test(s) || /\bnextweek\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return { date: fmt(d), time: '' }; }
+                      const inDays = s.match(/\bin\s+(\d+)\s+days?\b/);
                       if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return { date: fmt(d), time: '' }; }
-                      const wd = s.match(/^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/);
+                      const wd = s.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
                       if (wd) {
                         const map = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
                         const target = map[wd[1]];
