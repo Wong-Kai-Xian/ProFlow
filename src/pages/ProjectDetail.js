@@ -12,7 +12,7 @@ import SendApprovalModal from '../components/project-component/SendApprovalModal
 import AddTeamMemberModal from '../components/project-component/AddTeamMemberModal';
 import TeamMembersPanel from '../components/project-component/TeamMembersPanel';
 import { db } from "../firebase";
-import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs, arrayUnion, arrayRemove } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 
@@ -36,6 +36,10 @@ export default function ProjectDetail() {
   const [workingStages, setWorkingStages] = useState([]);
   const [showStageSelectModal, setShowStageSelectModal] = useState(false);
   const [stageSelectOptions, setStageSelectOptions] = useState([]);
+  const [showMeeting, setShowMeeting] = useState(false);
+  const [meetingMinimized, setMeetingMinimized] = useState(false);
+  const [meetingParticipants, setMeetingParticipants] = useState([]);
+  const [suppressMeetingBar, setSuppressMeetingBar] = useState(false);
   const [showDeleteStageConfirm, setShowDeleteStageConfirm] = useState(false);
   const [deleteStageIndex, setDeleteStageIndex] = useState(null);
   const [deleteStageName, setDeleteStageName] = useState("");
@@ -369,6 +373,59 @@ export default function ProjectDetail() {
     }
   };
 
+  // Live meeting participants
+  useEffect(() => {
+    if (!projectId) return;
+    const projectRef = doc(db, 'projects', projectId);
+    const unsub = onSnapshot(projectRef, snap => {
+      const data = snap.data();
+      setMeetingParticipants(data?.meetingParticipants || []);
+      // show minimized bar if meeting has participants
+      if ((data?.meetingParticipants || []).length > 0 && !showMeeting && !suppressMeetingBar) {
+        setMeetingMinimized(true);
+      }
+    });
+    return () => unsub();
+  }, [projectId, showMeeting, suppressMeetingBar]);
+
+  const handleJoinMeeting = async () => {
+    if (!currentUser || !projectId) return;
+    const projectRef = doc(db, 'projects', projectId);
+    await updateDoc(projectRef, {
+      meetingParticipants: arrayUnion(currentUser.uid)
+    });
+    setShowMeeting(true);
+    setMeetingMinimized(false);
+    setSuppressMeetingBar(false);
+  };
+
+  const handleLeaveMeeting = async () => {
+    if (!currentUser || !projectId) return;
+    const projectRef = doc(db, 'projects', projectId);
+    await updateDoc(projectRef, {
+      meetingParticipants: arrayRemove(currentUser.uid)
+    });
+  };
+
+  const userHasJoinedMeeting = meetingParticipants.includes(currentUser?.uid || "");
+
+  const handleToggleMeeting = async () => {
+    if (!showMeeting && !meetingMinimized) {
+      // open panel
+      setShowMeeting(true);
+      setMeetingMinimized(false);
+      setSuppressMeetingBar(false);
+      return;
+    }
+    // close panel
+    if (userHasJoinedMeeting) {
+      await handleLeaveMeeting();
+    }
+    setShowMeeting(false);
+    setMeetingMinimized(false);
+    setSuppressMeetingBar(true);
+  };
+
   if (!projectData) {
     return (
       <div style={getPageContainerStyle()}>
@@ -421,6 +478,23 @@ export default function ProjectDetail() {
               <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Deadline: {projectData?.deadline || 'No deadline'}</span>
             </div>
             <div style={{ display: "flex", gap: DESIGN_SYSTEM.spacing.base, flexShrink: 0 }}>
+              <button
+                onClick={handleToggleMeeting}
+                style={{
+                  ...getButtonStyle('primary', 'projects'),
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                  color: DESIGN_SYSTEM.colors.text.inverse,
+                  boxShadow: "0 4px 15px rgba(255, 255, 255, 0.2)"
+                }}
+              >
+                {(showMeeting || meetingMinimized) ? 'Close Meeting' : 'Conduct Meeting'}
+              </button>
               {currentUser && currentUser.uid === projectData?.userId && (
                 <button
                   onClick={() => setShowAddTeamMemberModal(true)}
@@ -443,6 +517,57 @@ export default function ProjectDetail() {
             </div>
           </div>
         </div>
+
+        {/* Meeting Section */}
+        {(showMeeting || meetingMinimized) && (
+          <div style={{
+            ...getCardStyle('projects'),
+            padding: 0,
+            marginBottom: DESIGN_SYSTEM.spacing.lg,
+          }}>
+            {/* Minimized bar */}
+            {meetingMinimized && !showMeeting && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: '#111827', color: '#fff', borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
+                <div>
+                  Ongoing Meeting – {meetingParticipants.length} participant{meetingParticipants.length === 1 ? '' : 's'}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setShowMeeting(true)} style={{ ...getButtonStyle('secondary', 'projects') }}>Expand</button>
+                </div>
+              </div>
+            )}
+            {/* Expanded meeting */}
+            {showMeeting && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.projects.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
+                  <div>Project Meeting</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {userHasJoinedMeeting ? (
+                      <button onClick={handleLeaveMeeting} style={{ ...getButtonStyle('secondary', 'projects') }}>Leave</button>
+                    ) : (
+                      <button onClick={handleJoinMeeting} style={{ ...getButtonStyle('secondary', 'projects') }}>Join</button>
+                    )}
+                    <button onClick={() => { setMeetingMinimized(true); setShowMeeting(false); }} style={{ ...getButtonStyle('secondary', 'projects') }}>Minimize</button>
+                  </div>
+                </div>
+                <div style={{ width: '100%', height: '600px', background: '#000' }}>
+                  {userHasJoinedMeeting ? (
+                    <iframe
+                      title="Project Meeting"
+                      src={`https://meet.jit.si/project-${projectId}-meeting`}
+                      style={{ width: '100%', height: '100%', border: '0', borderRadius: `0 0 ${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg}` }}
+                      allow="camera; microphone; fullscreen; display-capture"
+                    />
+                  ) : (
+                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
+                      Click Join to connect to the meeting
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
       <div style={{
         display: "grid",

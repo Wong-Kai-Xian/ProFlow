@@ -10,7 +10,7 @@ import FloatingCreateButton from "../components/forum-tabs/FloatingCreateButton"
 import CreatePostModal from "../components/forum-tabs/CreatePostModal";
 import InviteMemberModal from "../components/forum-component/InviteMemberModal";
 import { db } from "../firebase";
-import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 
@@ -25,6 +25,10 @@ export default function Forum() {
   const [showInviteModal, setShowInviteModal] = useState(false); // State for the new Invite Member modal
   const [forumMembers, setForumMembers] = useState([]); // Will be populated from forumData (UIDs)
   const [enrichedForumMembersDetails, setEnrichedForumMembersDetails] = useState([]); // Enriched member data
+  const [showMeeting, setShowMeeting] = useState(false);
+  const [meetingMinimized, setMeetingMinimized] = useState(false);
+  const [meetingParticipants, setMeetingParticipants] = useState([]);
+  const [suppressMeetingBar, setSuppressMeetingBar] = useState(false);
 
   useEffect(() => {
     if (!forumId) return; // Exit if no forumId
@@ -35,15 +39,20 @@ export default function Forum() {
         const data = { id: docSnap.id, ...docSnap.data() };
         setForumData(data);
         setForumMembers(data.members || []); // Update forumMembers with UIDs
+        setMeetingParticipants(data.meetingParticipants || []);
+        if ((data.meetingParticipants || []).length > 0 && !showMeeting && !suppressMeetingBar) {
+          setMeetingMinimized(true);
+        }
       } else {
         console.log("No such forum document!");
         setForumData(null);
         setForumMembers([]);
+        setMeetingParticipants([]);
       }
     });
 
     return () => unsubscribeForum();
-  }, [forumId]);
+  }, [forumId, showMeeting, suppressMeetingBar]);
 
   // Effect to fetch linked project data in real-time
   useEffect(() => {
@@ -136,6 +145,38 @@ export default function Forum() {
     }
   };
 
+  const handleJoinMeeting = async () => {
+    if (!forumId || !currentUser) return;
+    const forumRef = doc(db, 'forums', forumId);
+    await updateDoc(forumRef, { meetingParticipants: arrayUnion(currentUser.uid) });
+    setShowMeeting(true);
+    setMeetingMinimized(false);
+    setSuppressMeetingBar(false);
+  };
+
+  const handleLeaveMeeting = async () => {
+    if (!forumId || !currentUser) return;
+    const forumRef = doc(db, 'forums', forumId);
+    await updateDoc(forumRef, { meetingParticipants: arrayRemove(currentUser.uid) });
+  };
+
+  const userHasJoinedMeeting = meetingParticipants.includes(currentUser?.uid || "");
+
+  const handleToggleMeeting = async () => {
+    if (!showMeeting && !meetingMinimized) {
+      setShowMeeting(true);
+      setMeetingMinimized(false);
+      setSuppressMeetingBar(false);
+      return;
+    }
+    if (userHasJoinedMeeting) {
+      await handleLeaveMeeting();
+    }
+    setShowMeeting(false);
+    setMeetingMinimized(false);
+    setSuppressMeetingBar(true);
+  };
+
   // Mock data functions (handlePostSubmit, handleAddMember, handleRemoveMember) will be modified later
   // to interact with Firebase based on individual tab/modal integrations.
   const handleTrendingPostClick = (post) => {
@@ -226,25 +267,95 @@ export default function Forum() {
                 {forumData?.description || 'Team collaboration space'} • {forumData?.members?.length || 0} members
               </p>
             </div>
-            <button
-              onClick={() => setShowInviteModal(true)}
-              style={{
-                ...getButtonStyle('primary', 'forums'),
-                backgroundColor: "rgba(255, 255, 255, 0.2)",
-                backdropFilter: "blur(10px)",
-                border: "1px solid rgba(255, 255, 255, 0.3)",
-                padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.base,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-                borderRadius: DESIGN_SYSTEM.borderRadius.lg,
-                color: DESIGN_SYSTEM.colors.text.inverse,
-                boxShadow: "0 4px 15px rgba(255, 255, 255, 0.2)"
-              }}
-            >
-              Invite Members
-            </button>
+            <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.base }}>
+              <button
+                onClick={handleToggleMeeting}
+                style={{
+                  ...getButtonStyle('primary', 'forums'),
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                  color: DESIGN_SYSTEM.colors.text.inverse,
+                  boxShadow: "0 4px 15px rgba(255, 255, 255, 0.2)"
+                }}
+              >
+                {(showMeeting || meetingMinimized) ? 'Close Meeting' : 'Conduct Meeting'}
+              </button>
+              <button
+                onClick={() => setShowInviteModal(true)}
+                style={{
+                  ...getButtonStyle('primary', 'forums'),
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                  color: DESIGN_SYSTEM.colors.text.inverse,
+                  boxShadow: "0 4px 15px rgba(255, 255, 255, 0.2)"
+                }}
+              >
+                Invite Members
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Meeting Section */}
+        {(showMeeting || meetingMinimized) && (
+          <div style={{
+            ...getCardStyle('forums'),
+            padding: 0,
+            marginBottom: DESIGN_SYSTEM.spacing.lg,
+          }}>
+            {/* Minimized bar */}
+            {meetingMinimized && !showMeeting && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: '#111827', color: '#fff', borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
+                <div>
+                  Ongoing Meeting – {meetingParticipants.length} participant{meetingParticipants.length === 1 ? '' : 's'}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setShowMeeting(true)} style={{ ...getButtonStyle('secondary', 'forums') }}>Expand</button>
+                </div>
+              </div>
+            )}
+            {/* Expanded meeting */}
+            {showMeeting && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.forums.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
+                  <div>Forum Meeting</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {userHasJoinedMeeting ? (
+                      <button onClick={handleLeaveMeeting} style={{ ...getButtonStyle('secondary', 'forums') }}>Leave</button>
+                    ) : (
+                      <button onClick={handleJoinMeeting} style={{ ...getButtonStyle('secondary', 'forums') }}>Join</button>
+                    )}
+                    <button onClick={() => { setMeetingMinimized(true); setShowMeeting(false); }} style={{ ...getButtonStyle('secondary', 'forums') }}>Minimize</button>
+                  </div>
+                </div>
+                <div style={{ width: '100%', height: '600px', background: '#000' }}>
+                  {userHasJoinedMeeting ? (
+                    <iframe
+                      title="Forum Meeting"
+                      src={`https://meet.jit.si/forum-${forumId}-meeting`}
+                      style={{ width: '100%', height: '100%', border: '0', borderRadius: `0 0 ${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg}` }}
+                      allow="camera; microphone; fullscreen; display-capture"
+                    />
+                  ) : (
+                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
+                      Click Join to connect to the meeting
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{
           display: "grid",
