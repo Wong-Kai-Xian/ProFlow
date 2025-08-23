@@ -398,7 +398,10 @@ export default function CustomerProfile() {
         <div style={{ 
           display: "grid", 
           gridTemplateColumns: "350px 1fr 320px", 
-          gap: DESIGN_SYSTEM.spacing.xl
+          gap: DESIGN_SYSTEM.spacing.xl,
+          width: "100%",
+          maxWidth: "100%",
+          overflowX: "hidden"
         }}>
         
         {/* Left Column - Customer Information */}
@@ -472,10 +475,10 @@ export default function CustomerProfile() {
         </div>
 
         {/* Middle Column - Main Workflow */}
-        <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg, minWidth: 0, overflowX: "hidden" }}>
           <div style={{
             ...getCardStyle('customers'),
-            minHeight: "600px",
+            minHeight: "800px",
             display: "flex",
             flexDirection: "column"
           }}>
@@ -500,7 +503,7 @@ export default function CustomerProfile() {
                 Track customer journey through customizable stages
               </p>
             </div>
-            <div style={{ flex: 1, padding: "0" }}>
+            <div style={{ flex: 1, padding: "0", minWidth: 0, overflowX: "hidden" }}>
               <StatusPanel
                 stages={stages}
                 currentStage={currentStage}

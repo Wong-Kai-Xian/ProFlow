@@ -23,6 +23,10 @@ export default function StatusPanel({
   const [editingStageIndex, setEditingStageIndex] = useState(null); // State for editing stage name
   const [newStageName, setNewStageName] = useState(""); // State for new stage name
   const [showIncompleteStageModal, setShowIncompleteStageModal] = useState(false); // State for modal visibility
+  const [isEditingStages, setIsEditingStages] = useState(false);
+  const [workingStages, setWorkingStages] = useState([]);
+  const [originalStagesSnapshot, setOriginalStagesSnapshot] = useState([]);
+  const [showStageSelectModal, setShowStageSelectModal] = useState(false);
 
   // Helper to check if all stages are completed
   // const areAllStagesCompleted = () => {
@@ -129,10 +133,11 @@ export default function StatusPanel({
   };
 
   const handleMarkComplete = () => {
+    const baseCurrentStage = stageData[currentStage] || { notes: [], tasks: [], completed: false };
     const updatedStageData = {
       ...stageData,
       [currentStage]: {
-        ...stageData[currentStage],
+        ...baseCurrentStage,
         completed: true,
       },
     };
@@ -151,10 +156,11 @@ export default function StatusPanel({
   };
 
   const handleUncomplete = () => {
+    const baseCurrentStage = stageData[currentStage] || { notes: [], tasks: [], completed: false };
     const updatedStageData = {
       ...stageData,
       [currentStage]: {
-        ...stageData[currentStage],
+        ...baseCurrentStage,
         completed: false,
       },
     };
@@ -169,6 +175,7 @@ export default function StatusPanel({
   };
 
   const handleStageNameDoubleClick = (index, stage) => {
+    if (!isEditingStages) return;
     setEditingStageIndex(index);
     setNewStageName(stage);
   };
@@ -217,57 +224,74 @@ export default function StatusPanel({
     }
   };
 
-  const handleAddStage = () => {
-    const newStage = `Stage ${stages.length + 1}`;
-    setStages([...stages, newStage]);
-    setCurrentStage(newStage);
-    setStageData({
-      ...stageData,
-      [newStage]: {
-        notes: [],
-        tasks: [],
-        completed: false
-      },
-    });
-    onStagesUpdate([...stages, newStage], { // Pass updated stages and stageData to parent
-      ...stageData,
-      [newStage]: {
-        notes: [],
-        tasks: [],
-        completed: false
-      },
-    });
+  const enterEditStages = () => {
+    setOriginalStagesSnapshot(stages);
+    setWorkingStages(stages);
+    setIsEditingStages(true);
   };
 
-  const handleDeleteStage = () => {
-    if (stages.length === 1) {
-      // Prevent deleting the last stage
-      // alert("Cannot delete the last stage.");
-      return;
-    }
-    const currentIndex = stages.indexOf(currentStage);
-    const updatedStages = stages.filter(stage => stage !== currentStage);
-    const updatedStageData = { ...stageData };
-    delete updatedStageData[currentStage];
-    
-    setStages(updatedStages);
-    
-    // Better logic for setting the new current stage
-    let newCurrentStage;
-    if (currentIndex === 0) {
-      // If we deleted the first stage, move to the new first stage
-      newCurrentStage = updatedStages[0];
-    } else if (currentIndex >= updatedStages.length) {
-      // If we deleted the last stage, move to the new last stage
-      newCurrentStage = updatedStages[updatedStages.length - 1];
-    } else {
-      // Otherwise, stay at the same index position
-      newCurrentStage = updatedStages[currentIndex - 1];
-    }
-    
-    setCurrentStage(newCurrentStage);
-    setStageData(updatedStageData);
-    onStagesUpdate(updatedStages, updatedStageData); // Pass updated stages and stageData to parent
+  const cancelEditStages = () => {
+    setIsEditingStages(false);
+    setWorkingStages(stages);
+    setEditingStageIndex(null);
+    setNewStageName("");
+  };
+
+  const handleAddStageEditing = () => {
+    const newStage = `Stage ${workingStages.length + 1}`;
+    setWorkingStages([...workingStages, newStage]);
+  };
+
+  const handleDeleteStageAtEditing = (index) => {
+    if (workingStages.length <= 1) return;
+    const confirmDelete = window.confirm('Delete this stage? All tasks inside will also be removed.');
+    if (!confirmDelete) return;
+    setWorkingStages(workingStages.filter((_, i) => i !== index));
+  };
+
+  const handleRenameStageAtEditing = (index, newName) => {
+    if (!newName || !newName.trim()) return;
+    const trimmed = newName.trim();
+    const duplicate = workingStages.some((s, i) => i !== index && s === trimmed);
+    if (duplicate) return;
+    setWorkingStages(workingStages.map((s, i) => i === index ? trimmed : s));
+  };
+
+  const handleMoveStageLeftEditing = (index) => {
+    if (index <= 0) return;
+    const next = [...workingStages];
+    [next[index - 1], next[index]] = [next[index], next[index - 1]];
+    setWorkingStages(next);
+  };
+
+  const handleMoveStageRightEditing = (index) => {
+    if (index >= workingStages.length - 1) return;
+    const next = [...workingStages];
+    [next[index + 1], next[index]] = [next[index], next[index + 1]];
+    setWorkingStages(next);
+  };
+
+  const handleSaveStages = () => {
+    const newStages = [...workingStages];
+    // Build new stageData based on original indices to carry notes/tasks when renamed
+    const newStageData = {};
+    newStages.forEach((stageName, idx) => {
+      const originalName = originalStagesSnapshot[idx];
+      if (originalName && stageData[originalName]) {
+        newStageData[stageName] = stageData[originalName];
+      } else if (stageData[stageName]) {
+        newStageData[stageName] = stageData[stageName];
+      } else {
+        newStageData[stageName] = { notes: [], tasks: [], completed: false };
+      }
+    });
+    // Apply locally; parent persists via onStagesUpdate
+    setStages(newStages);
+    setStageData(newStageData);
+    const defaultStage = newStages[0];
+    setCurrentStage(defaultStage);
+    setIsEditingStages(false);
+    setShowStageSelectModal(true);
   };
 
   const handleStageClick = (stage, clickedIndex) => {
@@ -315,97 +339,118 @@ export default function StatusPanel({
 
   return (
     <Card>
+      <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
         <h3 style={{ margin: "0", color: COLORS.text }}>Stage</h3>
         <div>
-          <button
-            onClick={handleAddStage}
-            style={{
-              ...BUTTON_STYLES.primary,
-              marginRight: "10px"
-            }}
-          >
-            Add Stage
-          </button>
-          <button
-            onClick={handleDeleteStage}
-            style={{
-              ...BUTTON_STYLES.primary,
-              background: COLORS.danger,
-            }}
-          >
-            Del Stage
-          </button>
+          {!isEditingStages ? (
+            <button
+              onClick={enterEditStages}
+              style={{
+                ...BUTTON_STYLES.primary
+              }}
+            >
+              Edit
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={cancelEditStages}
+                style={{
+                  ...BUTTON_STYLES.secondary,
+                  marginRight: "10px"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveStages}
+                style={{
+                  ...BUTTON_STYLES.primary
+                }}
+              >
+                Save
+              </button>
+            </>
+          )}
         </div>
       </div>
       
             {/* Stage Navigation */}
-      <div style={{ 
-        display: "flex", 
-        justifyContent: "space-around", 
-        marginBottom: "20px" 
-      }}>
-        {stages.map((stage, index) => (
-          <div
-            key={stage}
-            onClick={() => handleStageClick(stage, index)}
-            style={{ 
-              cursor: "pointer", 
-              textAlign: "center", 
-              flex: 1,
-              transition: "all 0.2s ease",
-              opacity: isStageClickable(index) ? 1 : 0.5
-            }}
-          >
+      <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" }}>
+      {!isEditingStages ? (
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "space-around", 
+          marginBottom: "20px",
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
+          overflowX: "hidden"
+        }}>
+          {stages.map((stage, index) => (
             <div
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "50%",
-                margin: "0 auto 8px",
-                background: stageData[stage]?.completed ? COLORS.success : (currentStage === stage ? COLORS.primary : COLORS.light),
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                color: stageData[stage]?.completed ? "white" : (currentStage === stage ? "white" : COLORS.lightText),
-                fontWeight: "bold",
-                fontSize: "16px",
-                boxShadow: currentStage === stage ? "0 2px 4px rgba(52, 152, 219, 0.3)" : "none"
-              }}
-            >
-              {index + 1}
-            </div>
-            <span
-              onDoubleClick={() => handleStageNameDoubleClick(index, stage)}
+              key={stage}
+              onClick={() => handleStageClick(stage, index)}
               style={{ 
-                fontSize: "12px", 
-                color: currentStage === stage ? COLORS.primary : COLORS.lightText,
-                fontWeight: currentStage === stage ? "600" : "normal"
+                cursor: "pointer", 
+                textAlign: "center", 
+                flex: 1,
+                transition: "all 0.2s ease",
+                opacity: isStageClickable(index) ? 1 : 0.5
               }}
             >
-              {editingStageIndex === index ? (
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  margin: "0 auto 8px",
+                  background: stageData[stage]?.completed ? COLORS.success : (currentStage === stage ? COLORS.primary : COLORS.light),
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  color: stageData[stage]?.completed ? "white" : (currentStage === stage ? "white" : COLORS.lightText),
+                  fontWeight: "bold",
+                  fontSize: "16px",
+                  boxShadow: currentStage === stage ? "0 2px 4px rgba(52, 152, 219, 0.3)" : "none"
+                }}
+              >
+                {index + 1}
+              </div>
+              <span
+                style={{ 
+                  fontSize: "12px", 
+                  color: currentStage === stage ? COLORS.primary : COLORS.lightText,
+                  fontWeight: currentStage === stage ? "600" : "normal"
+                }}
+              >
+                {stage}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px", width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" }}>
+          <div style={{ display: "block", overflowX: "auto", whiteSpace: "nowrap", width: "100%", minWidth: 0, paddingBottom: "4px", overscrollBehaviorX: "contain" }}>
+            {workingStages.map((stage, index) => (
+              <div key={index} style={{ display: "inline-flex", alignItems: "center", gap: "6px", verticalAlign: "top" }}>
+                <button onClick={() => handleMoveStageLeftEditing(index)} disabled={index === 0} style={{ ...BUTTON_STYLES.secondary, padding: "2px 6px", fontSize: "12px" }}>{"◀"}</button>
                 <input
-                  type="text"
-                  value={newStageName}
-                  onChange={handleStageNameChange}
-                  onBlur={() => handleStageNameSave(index, stage)}
-                  onKeyPress={(e) => handleStageNameKeyPress(e, index, stage)}
-                  style={{
-                    width: "100%",
-                    padding: "2px 4px",
-                    borderRadius: "4px",
-                    border: "1px solid #ccc",
-                    fontSize: "12px",
-                    textAlign: "center"
-                  }}
-                  autoFocus
+                  value={stage}
+                  onChange={(e) => handleRenameStageAtEditing(index, e.target.value)}
+                  style={{ border: "1px solid #e5e7eb", background: "#fff", textAlign: "center", width: 120, outline: "none", borderRadius: 4, padding: "2px 4px", fontSize: 12 }}
                 />
-              ) : (
-                stage
-              )}
-            </span>
+                <button onClick={() => handleMoveStageRightEditing(index)} disabled={index === workingStages.length - 1} style={{ ...BUTTON_STYLES.secondary, padding: "2px 6px", fontSize: "12px" }}>{"▶"}</button>
+                <button onClick={() => handleDeleteStageAtEditing(index)} style={{ ...BUTTON_STYLES.secondary, padding: "2px 6px", fontSize: "12px", color: "#b91c1c", background: "#fee2e2" }}>{"✕"}</button>
+              </div>
+            ))}
           </div>
-        ))}
+          <div>
+            <button onClick={handleAddStageEditing} style={{ ...BUTTON_STYLES.secondary }}>Add Stage</button>
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Active Stage Content */}
@@ -441,7 +486,6 @@ export default function StatusPanel({
           ) : (
             <button
               onClick={handleMarkComplete}
-              disabled={isPreviousStageIncomplete()} // Disable if previous stages are incomplete
               style={{
                 ...BUTTON_STYLES.primary, // Apply primary button styles
                 background: COLORS.success, // Green color for complete
@@ -493,7 +537,7 @@ export default function StatusPanel({
             </div>
 
             <div style={{ 
-              maxHeight: "200px", 
+              maxHeight: "400px", 
               overflowY: "auto" 
             }}>
               {stageData[currentStage]?.notes?.length === 0 ? (
@@ -698,6 +742,30 @@ export default function StatusPanel({
         isOpen={showIncompleteStageModal} 
         onClose={() => setShowIncompleteStageModal(false)} 
       />
+      {showStageSelectModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 20, minWidth: 300, boxShadow: "0 10px 25px rgba(0,0,0,0.15)" }}>
+            <div style={{ fontWeight: 600, marginBottom: 10 }}>Select current stage</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto" }}>
+              {workingStages.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    setCurrentStage(s);
+                    onStagesUpdate(workingStages, stageData, s);
+                    setShowStageSelectModal(false);
+                  }}
+                  style={{ textAlign: "left", padding: "8px 10px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#f9fafb", cursor: "pointer" }}
+                >{s}</button>
+              ))}
+            </div>
+            <div style={{ marginTop: 12, textAlign: 'right' }}>
+              <button onClick={() => setShowStageSelectModal(false)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
     </Card>
   );
 }

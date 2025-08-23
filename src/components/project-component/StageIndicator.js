@@ -1,7 +1,7 @@
 import React from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES } from '../profile-component/constants';
 
-export default function StageIndicator({ currentStage, allStages, onAdvanceStage, onGoBackStage, isCurrentStageTasksComplete, onStageSelect, canAdvance }) {
+export default function StageIndicator({ currentStage, allStages, onAdvanceStage, onGoBackStage, isCurrentStageTasksComplete, onStageSelect, canAdvance, editing = false, onAddStage, onDeleteStageAt, onRenameStage, onMoveStageLeft, onMoveStageRight }) {
   const currentStageIndex = allStages.indexOf(currentStage);
   const isLastStage = currentStageIndex === allStages.length - 1;
 
@@ -14,13 +14,23 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
       padding: LAYOUT.gap,
       borderRadius: LAYOUT.borderRadius,
       boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-      marginBottom: LAYOUT.gap,
+      marginBottom: 0,
+      width: '100%',
+      maxWidth: '100%',
+      minWidth: 0,
+      overflowX: 'hidden',
+      boxSizing: 'border-box',
+      paddingBottom: 8
     }}>
       <div style={{
         display: "flex",
-        justifyContent: "space-around",
+        justifyContent: "flex-start",
         alignItems: "center",
         width: "100%",
+        overflowX: 'auto',
+        flexWrap: 'nowrap',
+        minWidth: 0,
+        gap: 12,
         marginBottom: LAYOUT.smallGap, // Space between indicators and button
       }}>
         {allStages.map((stage, index) => {
@@ -42,7 +52,7 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
             transition: "all 0.3s ease-in-out",
             position: "relative",
             zIndex: 1,
-            cursor: "pointer", // Always clickable for navigation
+            cursor: 'default',
           };
 
           const labelStyle = {
@@ -54,33 +64,51 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
           };
 
           const lineStyle = {
-            flex: 1,
-            height: "2px",
+            width: 32,
+            height: 2,
             background: isCompleted ? COLORS.success : COLORS.border,
-            margin: "0 -10px",
             zIndex: 0,
           };
 
           return (
-            <React.Fragment key={stage}>
+            <React.Fragment key={index}>
               {index > 0 && <div style={lineStyle}></div>}
               <div 
-                style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
-                onClick={() => onStageSelect(stage)} // Only select stage, don't trigger advance logic here
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", maxWidth: 200 }}
               >
                 <div style={circleStyle}>
                   {index + 1}
                 </div>
-                <div style={labelStyle}>
-                  {stage}
-                </div>
+                {editing ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                    <button onClick={() => onMoveStageLeft && onMoveStageLeft(index)} disabled={index === 0} style={{ ...BUTTON_STYLES.secondary, padding: '2px 6px', fontSize: 12 }}>{'◀'}</button>
+                    <input
+                      value={stage}
+                      onChange={(e) => onRenameStage && onRenameStage(index, e.target.value)}
+                      style={{ 
+                        ...labelStyle, 
+                        border: '1px solid #e5e7eb', background: '#fff', textAlign: 'center', width: 120, outline: 'none', borderRadius: 4, padding: '2px 4px'
+                      }}
+                    />
+                    <button onClick={() => onMoveStageRight && onMoveStageRight(index)} disabled={index === allStages.length - 1} style={{ ...BUTTON_STYLES.secondary, padding: '2px 6px', fontSize: 12 }}>{'▶'}</button>
+                    <button onClick={() => onDeleteStageAt && onDeleteStageAt(index)} style={{ ...BUTTON_STYLES.secondary, padding: '2px 6px', fontSize: 12, color: '#b91c1c', background: '#fee2e2' }}>{'✕'}</button>
+                  </div>
+                ) : (
+                  <div style={labelStyle}>
+                    {stage}
+                  </div>
+                )}
               </div>
             </React.Fragment>
           );
         })}
       </div>
-      
-      {currentStageIndex < allStages.length - 1 && (
+      {editing && (
+        <div style={{ display: 'flex', gap: LAYOUT.smallGap, width: '100%', marginBottom: LAYOUT.smallGap }}>
+          {onAddStage && <button onClick={onAddStage} style={{ ...BUTTON_STYLES.secondary, flex: 1 }}>Add Stage</button>}
+        </div>
+      )}
+      {!editing && currentStageIndex < allStages.length - 1 && (
         <button 
           onClick={onAdvanceStage}
           style={{

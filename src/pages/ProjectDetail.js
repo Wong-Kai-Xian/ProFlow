@@ -16,12 +16,13 @@ import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs }
 import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 
-const STAGES = ["Planning", "Development", "Testing", "Completed"];
+const DEFAULT_STAGES = ["Planning", "Development", "Testing", "Completed"];
 
 export default function ProjectDetail() {
   const { projectId } = useParams(); // Changed from projectName to projectId
   const [projectData, setProjectData] = useState(null);
-  const [currentStage, setCurrentStage] = useState(STAGES[0]);
+  const [projectStages, setProjectStages] = useState(DEFAULT_STAGES);
+  const [currentStage, setCurrentStage] = useState(DEFAULT_STAGES[0]);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showAdvanceChoiceModal, setShowAdvanceChoiceModal] = useState(false);
   const [showSendApprovalModal, setShowSendApprovalModal] = useState(false);
@@ -31,6 +32,10 @@ export default function ProjectDetail() {
   const [showAddTeamMemberModal, setShowAddTeamMemberModal] = useState(false); // New state for add team member modal
   const [allProjectNames, setAllProjectNames] = useState([]); // New state to store all project names
   const [projectTeamMembersDetails, setProjectTeamMembersDetails] = useState([]); // State for enriched team member details
+  const [isEditingStages, setIsEditingStages] = useState(false);
+  const [workingStages, setWorkingStages] = useState([]);
+  const [showStageSelectModal, setShowStageSelectModal] = useState(false);
+  const [stageSelectOptions, setStageSelectOptions] = useState([]);
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -42,7 +47,8 @@ export default function ProjectDetail() {
         if (docSnap.exists()) {
           const data = { id: docSnap.id, ...docSnap.data() };
           setProjectData(data);
-          setCurrentStage(data.stage || STAGES[0]);
+          setProjectStages(data.stages && Array.isArray(data.stages) && data.stages.length > 0 ? data.stages : DEFAULT_STAGES);
+          setCurrentStage(data.stage || (data.stages && data.stages[0]) || DEFAULT_STAGES[0]);
         } else {
           console.log("No such project document!");
           setProjectData(null);
@@ -150,6 +156,9 @@ export default function ProjectDetail() {
     setProjectTasks(filteredTasks);
       setProjectReminders(projectData.reminders || []);
       setProjectDetails(projectData); // This will be the main projectData from Firestore
+      if (!isEditingStages) {
+        setWorkingStages(projectStages);
+      }
     }
   }, [projectData, currentStage]);
 
@@ -159,8 +168,8 @@ export default function ProjectDetail() {
   const [projectDetails, setProjectDetails] = useState(null);
 
   const handleAdvanceStage = async () => {
-    const currentStageIndex = STAGES.indexOf(currentStage);
-    if (currentStageIndex < STAGES.length - 1) {
+    const currentStageIndex = projectStages.indexOf(currentStage);
+    if (currentStageIndex < projectStages.length - 1) {
       const allTasksCompleteInCurrentStage = projectTasks.every(section => 
         section.tasks.every(task => task.status === 'complete')
       );
@@ -168,7 +177,7 @@ export default function ProjectDetail() {
       if (allTasksCompleteInCurrentStage) {
         // Check if approval is required for the next stage (e.g., if current stage is 'Review')
         // For simplicity, let's assume approval is always required to advance to the next stage after 'Development'
-        const nextStage = STAGES[currentStageIndex + 1];
+        const nextStage = projectStages[currentStageIndex + 1];
         const isApprovalRequired = nextStage === "Review" || nextStage === "Completion"; // Example: require approval for Review and Completion stages
 
         if (isApprovalRequired) {
@@ -191,8 +200,8 @@ export default function ProjectDetail() {
   };
 
   const handleConfirmAdvanceStage = async () => {
-    const currentStageIndex = STAGES.indexOf(currentStage);
-    const nextStage = STAGES[currentStageIndex + 1];
+    const currentStageIndex = projectStages.indexOf(currentStage);
+    const nextStage = projectStages[currentStageIndex + 1];
     if (projectData && projectData.id) {
       const projectRef = doc(db, "projects", projectData.id);
       await updateDoc(projectRef, { stage: nextStage });
@@ -219,10 +228,73 @@ export default function ProjectDetail() {
     }
   };
 
+  // Stage editing handlers (edit mode working copy)
+  const enterEditStages = () => {
+    setWorkingStages(projectStages);
+    setIsEditingStages(true);
+  };
+
+  const cancelEditStages = () => {
+    setIsEditingStages(false);
+    setWorkingStages(projectStages);
+  };
+
+  const handleAddStage = () => {
+    const newStageName = `Stage ${workingStages.length + 1}`;
+    setWorkingStages([...workingStages, newStageName]);
+  };
+
+  const handleDeleteStageAt = (index) => {
+    if (workingStages.length <= 1) return;
+    const confirmed = window.confirm('Delete this stage? All tasks within this stage will also be removed.');
+    if (!confirmed) return;
+    const next = workingStages.filter((_, i) => i !== index);
+    setWorkingStages(next);
+  };
+
+  const handleRenameStageAt = (index, newName) => {
+    if (!newName || !newName.trim()) return;
+    const trimmed = newName.trim();
+    const duplicate = workingStages.some((s, i) => i !== index && s === trimmed);
+    if (duplicate) return;
+    const next = workingStages.map((s, i) => (i === index ? trimmed : s));
+    setWorkingStages(next);
+  };
+
+  const handleMoveStageLeft = (index) => {
+    if (index <= 0) return;
+    const next = [...workingStages];
+    [next[index - 1], next[index]] = [next[index], next[index - 1]];
+    setWorkingStages(next);
+  };
+
+  const handleMoveStageRight = (index) => {
+    if (index >= workingStages.length - 1) return;
+    const next = [...workingStages];
+    [next[index + 1], next[index]] = [next[index], next[index + 1]];
+    setWorkingStages(next);
+  };
+
+  const handleSaveStages = async () => {
+    const newStages = [...workingStages];
+    const newCurrent = newStages[0];
+    // Remove tasks that belong to deleted stages
+    const filteredTaskSections = (projectData?.tasks || []).filter(section => newStages.includes(section.stage));
+    if (projectData?.id) {
+      await updateDoc(doc(db, 'projects', projectData.id), { stages: newStages, stage: newCurrent, tasks: filteredTaskSections });
+    }
+    setProjectStages(newStages);
+    setCurrentStage(newCurrent);
+    setProjectData(prev => prev ? { ...prev, stages: newStages, stage: newCurrent, tasks: filteredTaskSections } : prev);
+    setIsEditingStages(false);
+    setStageSelectOptions(newStages);
+    setShowStageSelectModal(true);
+  };
+
   const handleGoBackStage = async () => {
-    const currentStageIndex = STAGES.indexOf(currentStage);
+    const currentStageIndex = projectStages.indexOf(currentStage);
     if (currentStageIndex > 0) {
-      const prevStage = STAGES[currentStageIndex - 1];
+      const prevStage = projectStages[currentStageIndex - 1];
       if (projectData && projectData.id) {
         const projectRef = doc(db, "projects", projectData.id);
         await updateDoc(projectRef, { stage: prevStage });
@@ -238,7 +310,7 @@ export default function ProjectDetail() {
   // Determine if the 'Advance Stage' button should be enabled
   const canAdvanceStage = 
     isCurrentStageTasksComplete && 
-    STAGES.indexOf(currentStage) < STAGES.length - 1 &&
+    projectStages.indexOf(currentStage) < projectStages.length - 1 &&
     (!currentApproval || currentApproval.status === 'approved'); // Only if there is no pending approval or it's approved
 
   const handleSaveEditedProjectDetails = async (updatedDetails) => {
@@ -507,12 +579,15 @@ export default function ProjectDetail() {
           flexDirection: "column", 
           gap: DESIGN_SYSTEM.spacing.lg, 
           gridColumn: 2, 
-          gridRow: 1 
+          gridRow: 1,
+          minWidth: "0"
         }}>
           {/* Project Stages Section */}
           <div style={{
             ...getCardStyle('projects'),
-            padding: 0
+            padding: 0,
+            minWidth: "0",
+            overflowX: "hidden"
           }}>
             <div style={{
               background: DESIGN_SYSTEM.pageThemes.projects.gradient,
@@ -530,32 +605,81 @@ export default function ProjectDetail() {
               }}>
                 Project Stages
               </h3>
-            <button
-              onClick={() => !currentApproval && setShowSendApprovalModal(true)}
-              disabled={!!currentApproval}
-              style={{
-                  ...getButtonStyle('secondary', 'projects'),
-                  background: currentApproval ? 'rgba(107,114,128,0.3)' : 'rgba(255,255,255,0.2)',
-                  color: currentApproval ? '#9CA3AF' : DESIGN_SYSTEM.colors.text.inverse,
-                  border: currentApproval ? `1px solid rgba(156,163,175,0.5)` : `1px solid rgba(255,255,255,0.3)`,
-                  padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                  cursor: currentApproval ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {currentApproval ? 'Pending Approval' : 'Send Approval'}
-            </button>
+            <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.base }}>
+              {!isEditingStages ? (
+                <button
+                  onClick={enterEditStages}
+                  style={{
+                    ...getButtonStyle('secondary', 'projects'),
+                    background: 'rgba(255,255,255,0.2)',
+                    color: DESIGN_SYSTEM.colors.text.inverse,
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                  }}
+                >
+                  Edit Stages
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={cancelEditStages}
+                    style={{
+                      ...getButtonStyle('secondary', 'projects'),
+                      background: 'rgba(255,255,255,0.15)',
+                      color: DESIGN_SYSTEM.colors.text.inverse,
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveStages}
+                    style={{
+                      ...getButtonStyle('primary', 'projects'),
+                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                    }}
+                  >
+                    Save
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => !currentApproval && setShowSendApprovalModal(true)}
+                disabled={!!currentApproval}
+                style={{
+                    ...getButtonStyle('secondary', 'projects'),
+                    background: currentApproval ? 'rgba(107,114,128,0.3)' : 'rgba(255,255,255,0.2)',
+                    color: currentApproval ? '#9CA3AF' : DESIGN_SYSTEM.colors.text.inverse,
+                    border: currentApproval ? `1px solid rgba(156,163,175,0.5)` : `1px solid rgba(255,255,255,0.3)`,
+                    padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                    cursor: currentApproval ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {currentApproval ? 'Pending Approval' : 'Send Approval'}
+              </button>
+            </div>
           </div>
-            <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base, overflowX: 'hidden' }}>
           <StageIndicator 
             currentStage={currentStage} 
-            allStages={STAGES} 
+            allStages={isEditingStages ? workingStages : projectStages} 
             onAdvanceStage={handleAdvanceStage} 
             onGoBackStage={handleGoBackStage} 
             isCurrentStageTasksComplete={isCurrentStageTasksComplete}
-                onStageSelect={handleStageSelect}
-                canAdvance={canAdvanceStage}
-              />
+            onStageSelect={handleStageSelect}
+            canAdvance={canAdvanceStage}
+            editing={isEditingStages}
+            onAddStage={handleAddStage}
+            onDeleteStageAt={handleDeleteStageAt}
+            onRenameStage={handleRenameStageAt}
+            onMoveStageLeft={handleMoveStageLeft}
+            onMoveStageRight={handleMoveStageRight}
+          />
             </div>
           </div>
 
@@ -624,6 +748,32 @@ export default function ProjectDetail() {
         projectId={projectId}
         onTeamMemberAdded={handleTeamMemberAdded}
       />
+      {showStageSelectModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 20, minWidth: 300, boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
+            <div style={{ fontWeight: 600, marginBottom: 10 }}>Select current stage</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
+              {stageSelectOptions.map((s) => (
+                <button
+                  key={s}
+                  onClick={async () => {
+                    if (projectData?.id) {
+                      await updateDoc(doc(db, 'projects', projectData.id), { stage: s });
+                    }
+                    setCurrentStage(s);
+                    setProjectData(prev => prev ? { ...prev, stage: s } : prev);
+                    setShowStageSelectModal(false);
+                  }}
+                  style={{ textAlign: 'left', padding: '8px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer' }}
+                >{s}</button>
+              ))}
+            </div>
+            <div style={{ marginTop: 12, textAlign: 'right' }}>
+              <button onClick={() => setShowStageSelectModal(false)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

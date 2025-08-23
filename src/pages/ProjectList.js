@@ -574,17 +574,17 @@ export default function ProjectList() {
 
                   {/* Stage + Deadline Badges */}
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-                    <div style={{
-                      display: "inline-block",
-                      padding: "6px 14px",
-                      borderRadius: "20px",
-                      backgroundColor: `${getStageColor(project.stage)}20`,
-                      color: getStageColor(project.stage),
-                      fontSize: "13px",
-                      fontWeight: "600",
-                      border: `1px solid ${getStageColor(project.stage)}40`
-                    }}>
-                      {project.stage}
+                  <div style={{
+                    display: "inline-block",
+                    padding: "6px 14px",
+                    borderRadius: "20px",
+                    backgroundColor: `${getStageColor(project.stage)}20`,
+                    color: getStageColor(project.stage),
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    border: `1px solid ${getStageColor(project.stage)}40`
+                  }}>
+                    {project.stage}
                     </div>
                     <div style={{
                       display: "inline-block",
@@ -614,20 +614,20 @@ export default function ProjectList() {
                       {project.teamDetails && project.teamDetails.length > 0 ? (
                         project.teamDetails.map((member) => (
                           <div key={member.uid} title={member.name} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <div
-                              style={{
-                                width: "36px",
-                                height: "36px",
-                                borderRadius: "50%",
+                          <div
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "50%",
                                 backgroundColor: stringToColor(member.name || member.email || 'U'),
-                                color: DESIGN_SYSTEM.colors.text.inverse,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: "14px",
-                                fontWeight: "600"
-                              }}
-                            >
+                              color: DESIGN_SYSTEM.colors.text.inverse,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "14px",
+                              fontWeight: "600"
+                            }}
+                          >
                               {(member.name || member.email || 'U')[0].toUpperCase()}
                             </div>
                           </div>
