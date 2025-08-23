@@ -38,15 +38,15 @@ export default function Home() {
         ...getContentContainerStyle(),
         paddingTop: DESIGN_SYSTEM.spacing['2xl']
       }}>
-        <div
-          style={{
-            display: "grid",
+      <div
+        style={{
+          display: "grid",
             gridTemplateColumns: `${leftWidth}px 1fr ${rightWidth}px`,
-            gridTemplateRows: "1fr",
+          gridTemplateRows: "1fr",
             gap: DESIGN_SYSTEM.spacing.lg,
-            transition: "grid-template-columns 0.3s ease",
+          transition: "grid-template-columns 0.3s ease",
             minHeight: "calc(100vh - 250px)"
-          }}>
+        }}>
         {/* Left Panel */}
         <div
           style={{
@@ -63,7 +63,7 @@ export default function Home() {
           {!leftCollapsed && currentUser && (
             <>
               {/* Projects Section */}
-              <div style={{
+              <div style={{ 
                 ...getCardStyle('home'),
                 height: "350px",
                 marginBottom: DESIGN_SYSTEM.spacing.base,
@@ -91,12 +91,12 @@ export default function Home() {
                   </p>
                 </div>
                 <div style={{ flex: 1, overflow: "hidden" }}>
-                  <ProjectsTab />
-                </div>
+                <ProjectsTab />
+              </div>
               </div>
 
               {/* Contacts Section */}
-              <div style={{
+              <div style={{ 
                 ...getCardStyle('home'),
                 height: "340px",
                 display: "flex",
@@ -123,7 +123,7 @@ export default function Home() {
                   </p>
                 </div>
                 <div style={{ flex: 1, overflow: "hidden" }}>
-                  <Contacts onSelectCustomer={goToCustomerProfile} />
+                <Contacts onSelectCustomer={goToCustomerProfile} />
                 </div>
               </div>
             </>
@@ -192,7 +192,7 @@ export default function Home() {
             </p>
           </div>
           <div style={{ flex: 1, overflow: "hidden" }}>
-            <Dashboard />
+          <Dashboard />
           </div>
         </div>
 
@@ -213,7 +213,7 @@ export default function Home() {
           {!rightCollapsed && currentUser && (
             <>
               {/* Upcoming Events Section */}
-              <div style={{
+              <div style={{ 
                 ...getCardStyle('home'),
                 height: "320px",
                 marginBottom: DESIGN_SYSTEM.spacing.base,
@@ -241,12 +241,12 @@ export default function Home() {
                   </p>
                 </div>
                 <div style={{ flex: 1, overflow: "hidden" }}>
-                  <UpcomingEvents />
+                <UpcomingEvents />
                 </div>
               </div>
 
               {/* General Forum Section */}
-              <div style={{
+              <div style={{ 
                 ...getCardStyle('home'),
                 height: "340px",
                 display: "flex",
@@ -273,7 +273,7 @@ export default function Home() {
                   </p>
                 </div>
                 <div style={{ flex: 1, overflow: "hidden" }}>
-                  <HomeGroupForum />
+                <HomeGroupForum />
                 </div>
               </div>
             </>

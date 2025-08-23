@@ -9,6 +9,7 @@ import StageIndicator from '../components/project-component/StageIndicator';
 import ApprovalModal from '../components/project-component/ApprovalModal';
 import AdvanceStageChoiceModal from '../components/project-component/AdvanceStageChoiceModal';
 import SendApprovalModal from '../components/project-component/SendApprovalModal';
+import AdvancedApprovalRequestModal from '../components/project-component/AdvancedApprovalRequestModal';
 import AddTeamMemberModal from '../components/project-component/AddTeamMemberModal';
 import TeamMembersPanel from '../components/project-component/TeamMembersPanel';
 import { db } from "../firebase";
@@ -26,6 +27,8 @@ export default function ProjectDetail() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showAdvanceChoiceModal, setShowAdvanceChoiceModal] = useState(false);
   const [showSendApprovalModal, setShowSendApprovalModal] = useState(false);
+  const [showAdvancedApprovalModal, setShowAdvancedApprovalModal] = useState(false);
+  const [approvalModalType, setApprovalModalType] = useState('stage'); // 'stage' or 'general'
   const [projectForums, setProjectForums] = useState([]); // State to hold project-specific forums
   const { currentUser } = useAuth(); // Get current user from AuthContext
   const [currentApproval, setCurrentApproval] = useState(null); // State to hold the current approval request
@@ -182,28 +185,19 @@ export default function ProjectDetail() {
       );
 
       if (allTasksCompleteInCurrentStage) {
-        // Check if approval is required for the next stage (e.g., if current stage is 'Review')
-        // For simplicity, let's assume approval is always required to advance to the next stage after 'Development'
-        const nextStage = projectStages[currentStageIndex + 1];
-        const isApprovalRequired = nextStage === "Review" || nextStage === "Completion"; // Example: require approval for Review and Completion stages
-
-        if (isApprovalRequired) {
-          if (currentApproval && currentApproval.status === 'pending') {
-            alert("Cannot advance stage. Awaiting admin approval.");
-            return;
-          } else if (currentApproval && currentApproval.status === 'rejected') {
-            alert("Cannot advance stage. Previous approval request was rejected. Please resubmit.");
-            return;
-          } else if (!currentApproval) {
-            alert("Approval required to advance to the next stage. Please send an approval request.");
-            return;
-          }
-        }
-        setShowAdvanceChoiceModal(true);
+        // Open the new advanced approval request modal for stage advancement
+        setApprovalModalType('stage');
+        setShowAdvancedApprovalModal(true);
       } else {
         alert("All tasks in the current stage must be marked as 'Complete' before advancing.");
       }
     }
+  };
+
+  const handleSendApprovalRequest = () => {
+    // Open the new advanced approval request modal for general approval
+    setApprovalModalType('general');
+    setShowAdvancedApprovalModal(true);
   };
 
   const handleConfirmAdvanceStage = async () => {
@@ -225,6 +219,11 @@ export default function ProjectDetail() {
     } else {
       handleConfirmAdvanceStage();
     }
+  };
+
+  const handleApprovalRequestSuccess = (result) => {
+    setShowAdvancedApprovalModal(false);
+    alert(`Approval request sent successfully to ${result.recipientCount} team member(s)!\n\nTitle: ${result.title}\nType: ${result.type}\nEntity: ${result.entityName}`);
   };
 
   const handleStageSelect = async (stage) => {
@@ -782,7 +781,7 @@ export default function ProjectDetail() {
                 </>
               )}
               <button
-                onClick={() => !currentApproval && setShowSendApprovalModal(true)}
+                onClick={() => !currentApproval && handleSendApprovalRequest()}
                 disabled={!!currentApproval}
                 style={{
                     ...getButtonStyle('secondary', 'projects'),
@@ -881,6 +880,17 @@ export default function ProjectDetail() {
         onClose={() => setShowAddTeamMemberModal(false)}
         projectId={projectId}
         onTeamMemberAdded={handleTeamMemberAdded}
+      />
+      <AdvancedApprovalRequestModal
+        isOpen={showAdvancedApprovalModal}
+        onClose={() => setShowAdvancedApprovalModal(false)}
+        onSuccess={handleApprovalRequestSuccess}
+        projectId={projectId}
+        projectName={projectData?.name || ""}
+        currentUser={currentUser}
+        currentStage={currentStage}
+        nextStage={projectStages[projectStages.indexOf(currentStage) + 1] || ""}
+        isStageAdvancement={approvalModalType === 'stage'}
       />
       {showDeleteStageConfirm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
