@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { COLORS, BUTTON_STYLES, INPUT_STYLES, LAYOUT } from "./constants";
 
-export default function AddProfileModal({ isOpen, onClose, onAddContact }) {
+export default function AddProfileModal({ isOpen, onClose, onAddContact, isLoading = false }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -95,11 +95,27 @@ export default function AddProfileModal({ isOpen, onClose, onAddContact }) {
           }}
         />
         <div style={{ display: "flex", justifyContent: "flex-end", gap: LAYOUT.smallGap }}>
-          <button onClick={onClose} style={{ ...BUTTON_STYLES.secondary }}>
+          <button 
+            onClick={onClose} 
+            style={{ 
+              ...BUTTON_STYLES.secondary,
+              opacity: isLoading ? 0.6 : 1,
+              cursor: isLoading ? 'not-allowed' : 'pointer'
+            }}
+            disabled={isLoading}
+          >
             Cancel
           </button>
-          <button onClick={handleSubmit} style={{ ...BUTTON_STYLES.primary }}>
-            Add Contact
+          <button 
+            onClick={handleSubmit} 
+            style={{ 
+              ...BUTTON_STYLES.primary,
+              opacity: isLoading ? 0.6 : 1,
+              cursor: isLoading ? 'not-allowed' : 'pointer'
+            }}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Creating...' : 'Add Contact'}
           </button>
         </div>
       </div>

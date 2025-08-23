@@ -61,6 +61,7 @@ export default function CustomerProfileList() {
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false); // New state for modal
   const [showDeleteCustomerModal, setShowDeleteCustomerModal] = useState(false); // State for delete confirmation modal
   const [customerToDelete, setCustomerToDelete] = useState(null); // State to hold the customer to be deleted
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false); // Loading state for customer creation
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
 
   useEffect(() => {
@@ -116,6 +117,7 @@ export default function CustomerProfileList() {
   };
 
   const handleCreateNewCustomerFromModal = async (clientData) => {
+    setIsCreatingCustomer(true);
     try {
       const companyName = clientData.company || "Uncategorized Company"; // Default company name
       const initialCustomerData = {
@@ -182,9 +184,86 @@ export default function CustomerProfileList() {
       }
 
       setShowAddCustomerModal(false); // Close the modal
-      navigate(`/customer/${newCustomerDocRef.id}`); // Navigate to the new customer's full profile
+      
+      // Show success notice
+      const successNotice = document.createElement('div');
+      successNotice.innerHTML = `
+        <div style="
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: white;
+          padding: 32px;
+          border-radius: 12px;
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+          text-align: center;
+          z-index: 10000;
+          max-width: 400px;
+          width: 90%;
+        ">
+          <div style="
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #10b981;
+            margin: 0 auto 16px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+          ">✓</div>
+          <h3 style="
+            margin: 0 0 8px 0;
+            color: #1f2937;
+            font-size: 20px;
+            font-weight: 700;
+          ">Customer Profile Created!</h3>
+          <p style="
+            margin: 0 0 16px 0;
+            color: #6b7280;
+            font-size: 16px;
+          ">Redirecting to the customer profile...</p>
+          <div style="
+            width: 32px;
+            height: 32px;
+            border: 3px solid #e5e7eb;
+            border-top: 3px solid #10b981;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+          "></div>
+        </div>
+        <div style="
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          z-index: 9999;
+        "></div>
+        <style>
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        </style>
+      `;
+      document.body.appendChild(successNotice);
+      
+      // Navigate after showing notice for 2 seconds
+      setTimeout(() => {
+        document.body.removeChild(successNotice);
+        navigate(`/customer/${newCustomerDocRef.id}`);
+      }, 2000);
+      
     } catch (error) {
       console.error("Error creating new customer from modal: ", error);
+      alert("Failed to create customer profile. Please try again.");
+    } finally {
+      setIsCreatingCustomer(false);
     }
   };
 
@@ -562,6 +641,7 @@ export default function CustomerProfileList() {
         isOpen={showAddCustomerModal}
         onClose={() => setShowAddCustomerModal(false)}
         onAddContact={handleCreateNewCustomerFromModal}
+        isLoading={isCreatingCustomer}
       />
       {/* Delete Confirmation Modal */}
       <DeleteProfileModal

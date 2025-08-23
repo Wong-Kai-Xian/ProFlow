@@ -404,68 +404,137 @@ export default function StatusPanel({
           )}
         </div>
         
-        <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
-          <input
-            type="text"
-            placeholder="Add a new note..."
-            value={newNote}
-            onChange={(e) => setNewNote(e.target.value)}
-            onKeyPress={handleKeyPress}
-            style={{ 
-              ...INPUT_STYLES.base, // Apply base input styles
-              flex: 1,
-            }}
-          />
-          <button
-            onClick={handleAddNote}
-            style={{
-              ...BUTTON_STYLES.primary, // Apply primary button styles
-            }}
-          >
-            Add Note
-          </button>
-        </div>
-
-        <ul style={{
-          listStyle: "none",
-          padding: 0,
-          margin: 0
+        {/* Create a grid layout for two sections */}
+        <div style={{ 
+          display: "grid", 
+          gridTemplateColumns: "1fr 1fr", 
+          gap: "20px", 
+          marginTop: "16px" 
         }}>
-          {stageData[currentStage]?.notes?.map((note, index) => (
-            <li key={index} style={{
-              padding: "8px",
-              background: "#e9ecef",
-              borderRadius: "6px",
-              marginBottom: "6px",
-              fontSize: "14px",
-              color: COLORS.text,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between", // Ensures content and button are spaced
-              gap: "8px" // Consistent gap
+          {/* Working Notes Section */}
+          <div style={{
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            padding: "16px",
+            backgroundColor: "#f8f9fa"
+          }}>
+            <h4 style={{ 
+              margin: "0 0 12px 0", 
+              color: COLORS.dark, 
+              fontSize: "16px", 
+              fontWeight: "600",
+              borderBottom: "2px solid #3498db",
+              paddingBottom: "8px"
             }}>
-              {note}
-              <button 
-                onClick={() => handleDeleteNote(index)}
+              📝 Working Notes
+            </h4>
+            
+            <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+              <input
+                type="text"
+                placeholder="Add a new note..."
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                onKeyPress={handleKeyPress}
+                style={{ 
+                  ...INPUT_STYLES.base,
+                  flex: 1,
+                  fontSize: "14px"
+                }}
+              />
+              <button
+                onClick={handleAddNote}
                 style={{
-                  background: "none", // No background
-                  border: "none", // No border
-                  color: COLORS.danger, // Red color
-                  padding: "2px", // Consistent padding
-                  fontSize: "10px", // Consistent font size
-                  borderRadius: "3px", // Consistent border radius
-                  cursor: "pointer",
-                  flexShrink: 0 // Prevent button from shrinking
+                  ...BUTTON_STYLES.primary,
+                  padding: "6px 12px",
+                  fontSize: "12px"
                 }}
               >
-                X
+                Add
               </button>
-            </li>
-          ))}
-        </ul>
+            </div>
 
-        {/* Custom Stage Content */}
-        {renderStageContent && renderStageContent(currentStage, stageData, setStageData)}
+            <div style={{ 
+              maxHeight: "200px", 
+              overflowY: "auto" 
+            }}>
+              {stageData[currentStage]?.notes?.length === 0 ? (
+                <p style={{ 
+                  color: COLORS.lightText, 
+                  fontSize: "14px", 
+                  fontStyle: "italic",
+                  textAlign: "center",
+                  margin: "20px 0"
+                }}>
+                  No notes yet. Add one to get started!
+                </p>
+              ) : (
+                <ul style={{
+                  listStyle: "none",
+                  padding: 0,
+                  margin: 0
+                }}>
+                  {stageData[currentStage]?.notes?.map((note, index) => (
+                    <li key={index} style={{
+                      padding: "8px",
+                      background: "#ffffff",
+                      borderRadius: "6px",
+                      marginBottom: "6px",
+                      fontSize: "14px",
+                      color: COLORS.text,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "8px",
+                      border: "1px solid #e2e8f0"
+                    }}>
+                      {note}
+                      <button 
+                        onClick={() => handleDeleteNote(index)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: COLORS.danger,
+                          padding: "2px",
+                          fontSize: "12px",
+                          borderRadius: "3px",
+                          cursor: "pointer",
+                          flexShrink: 0
+                        }}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* Tasks Section */}
+          <div style={{
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            padding: "16px",
+            backgroundColor: "#f8f9fa"
+          }}>
+            <h4 style={{ 
+              margin: "0 0 12px 0", 
+              color: COLORS.dark, 
+              fontSize: "16px", 
+              fontWeight: "600",
+              borderBottom: "2px solid #2ecc71",
+              paddingBottom: "8px"
+            }}>
+              ✅ Tasks
+            </h4>
+            
+            {/* Custom Stage Content - Tasks */}
+            <div style={{ marginTop: "0" }}>
+              {renderStageContent && renderStageContent(currentStage, stageData, setStageData)}
+            </div>
+          </div>
+        </div>
       </div>
       <IncompleteStageModal 
         isOpen={showIncompleteStageModal} 

@@ -42,19 +42,17 @@ export default function TaskManager({ stage, stageData, setStageData }) {
   };
 
   return (
-    <div style={{ marginTop: LAYOUT.gap }}>
+    <div>
       <div style={{ 
         display: "flex", 
-        justifyContent: "space-between", 
-        alignItems: "center",
+        justifyContent: "flex-end",
         marginBottom: LAYOUT.smallGap
       }}>
-        <h5 style={{ margin: 0, color: COLORS.text }}>Tasks</h5>
         <button
           onClick={addTask}
           style={{
             ...BUTTON_STYLES.primary,
-            padding: "4px 8px",
+            padding: "6px 12px",
             fontSize: "12px"
           }}
         >

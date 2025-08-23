@@ -184,10 +184,52 @@ export default function CustomerProfile() {
       await updateDoc(docRef, customerDataToSave);
       console.log("Customer updated!");
         
-      // TODO: For existing customers, you might also need to update their entry in the Contacts (organizations) if name/company changes.
-      // This is more complex as it requires finding the client entry in the correct organization and updating it.
-      // For now, we'll focus on new customer creation.
-      navigate('/customerlist'); // Navigate back to the list after saving
+      // Update corresponding entry in Contacts (organizations) if customer/company details changed
+      try {
+        const organizationsRef = collection(db, "organizations");
+        const orgQuery = query(organizationsRef, where("clients", "array-contains", {
+          id: id,
+          name: customerProfile.name,
+          email: customerProfile.email,
+          phone: customerProfile.phone,
+          company: companyProfile.company
+        }));
+        
+        // Since we can't query by array element properties directly, we'll query all organizations and filter manually
+        const allOrgsQuery = query(organizationsRef);
+        const allOrgsSnapshot = await getDocs(allOrgsQuery);
+        
+        for (const orgDoc of allOrgsSnapshot.docs) {
+          const orgData = orgDoc.data();
+          const clients = orgData.clients || [];
+          
+          // Find the client with matching ID
+          const clientIndex = clients.findIndex(client => client.id === id);
+          if (clientIndex !== -1) {
+            // Update the client entry with new details
+            const updatedClients = [...clients];
+            updatedClients[clientIndex] = {
+              id: id,
+              name: customerProfile.name,
+              email: customerProfile.email,
+              phone: customerProfile.phone,
+              company: companyProfile.company
+            };
+            
+            // Update the organization document
+            await updateDoc(doc(db, "organizations", orgDoc.id), {
+              clients: updatedClients
+            });
+            console.log("Updated client details in organization:", orgDoc.id);
+            break; // Found and updated, exit loop
+          }
+        }
+      } catch (orgError) {
+        console.error("Error updating organization data:", orgError);
+        // Don't fail the whole operation if organization update fails
+      }
+      
+      navigate('/customer-profiles'); // Navigate back to the list after saving
     } catch (error) {
       console.error("Error saving customer: ", error);
     } finally {

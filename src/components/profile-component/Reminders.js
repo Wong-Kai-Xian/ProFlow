@@ -103,7 +103,8 @@ export default function Reminders({ reminders, onAddReminder, onReminderRemove }
             display: "flex",
             flexDirection: "column", 
             justifyContent: "space-between",
-            alignItems: "flex-start" 
+            alignItems: "flex-start",
+            position: "relative"
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", width: "100%", cursor: "pointer", alignItems: "center" }} onClick={() => toggleExpand(i)}>
               <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, overflow: "hidden" }}>
@@ -138,7 +139,6 @@ export default function Reminders({ reminders, onAddReminder, onReminderRemove }
                     {reminder.link}
                   </a>
                 )}
-                {isOverdue(reminder.date, reminder.time) && <span style={{ fontWeight: "bold", marginLeft: "5px", fontSize: "12px" }}>OVERDUE</span>}
               </div>
               <div style={{ fontSize: "12px", opacity: 0.8, flexShrink: 0, marginLeft: "10px" }}>
                 {getDaysLeft(reminder.date, reminder.time)}
@@ -160,6 +160,24 @@ export default function Reminders({ reminders, onAddReminder, onReminderRemove }
             >
               Remove
             </button>
+            {isOverdue(reminder.date, reminder.time) && (
+              <span style={{ 
+                position: "absolute",
+                bottom: "8px",
+                left: "10px",
+                fontSize: "11px",
+                fontWeight: "bold",
+                color: "#fff",
+                background: "rgba(231, 76, 60, 0.9)",
+                padding: "2px 6px",
+                borderRadius: "4px",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+              }}>
+                OVERDUE
+              </span>
+            )}
           </li>
         ))}
       </ul>

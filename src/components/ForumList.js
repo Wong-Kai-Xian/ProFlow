@@ -446,30 +446,56 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                 </div>
 
                 {/* Description */}
-                <p style={{
-                  color: DESIGN_SYSTEM.colors.background.secondaryText,
-                  fontSize: "15px",
+                <div style={{
+                  backgroundColor: "#f8f9fb",
+                  borderRadius: "8px",
+                  padding: "16px",
                   margin: "0 0 16px 0",
-                  lineHeight: "1.4",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden"
+                  minHeight: "80px",
+                  border: "1px solid #e2e8f0"
                 }}>
-                  {forum.description}
-                </p>
+                  <h4 style={{
+                    margin: "0 0 8px 0",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: DESIGN_SYSTEM.colors.text.primary
+                  }}>
+                    Description
+                  </h4>
+                  <p style={{
+                    color: DESIGN_SYSTEM.colors.background.secondaryText,
+                    fontSize: "14px",
+                    margin: "0",
+                    lineHeight: "1.5",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden"
+                  }}>
+                    {forum.description || "No description available"}
+                  </p>
+                </div>
 
                 {/* Last Activity */}
                 <div style={{
                   fontSize: "13px",
                   color: DESIGN_SYSTEM.colors.background.secondaryText,
                   padding: "12px 16px",
-                  backgroundColor: "#f8f9fb",
+                  backgroundColor: "#f0f9ff",
                   borderRadius: "8px",
                   fontWeight: "500",
-                  marginTop: "16px"
+                  border: "1px solid #e0f2fe"
                 }}>
-                  Last activity: {forum.lastActivity ? new Date(forum.lastActivity).toLocaleDateString() : 'Recently'}
+                  Last activity: {(() => {
+                    if (!forum.lastActivity) return 'No recent activity';
+                    try {
+                      const date = forum.lastActivity.toDate ? forum.lastActivity.toDate() : new Date(forum.lastActivity);
+                      if (isNaN(date.getTime())) return 'Invalid date';
+                      return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    } catch (error) {
+                      return 'Invalid date';
+                    }
+                  })()}
                 </div>
                 </div> {/* Close card body */}
               </div>
