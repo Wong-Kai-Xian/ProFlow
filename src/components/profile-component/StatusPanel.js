@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Card from "./Card";
 import { COLORS, INPUT_STYLES, BUTTON_STYLES } from "./constants";
 import IncompleteStageModal from "./IncompleteStageModal"; // Import the new modal
@@ -27,6 +27,16 @@ export default function StatusPanel({
   const [workingStages, setWorkingStages] = useState([]);
   const [originalStagesSnapshot, setOriginalStagesSnapshot] = useState([]);
   const [showStageSelectModal, setShowStageSelectModal] = useState(false);
+  const editRowRef = useRef(null);
+  const [showDeleteStageConfirm, setShowDeleteStageConfirm] = useState(false);
+  const [deleteStageIndex, setDeleteStageIndex] = useState(null);
+  const [deleteStageName, setDeleteStageName] = useState("");
+
+  useEffect(() => {
+    if (isEditingStages && editRowRef.current) {
+      editRowRef.current.scrollLeft = editRowRef.current.scrollWidth;
+    }
+  }, [workingStages.length, isEditingStages]);
 
   // Helper to check if all stages are completed
   // const areAllStagesCompleted = () => {
@@ -244,8 +254,15 @@ export default function StatusPanel({
 
   const handleDeleteStageAtEditing = (index) => {
     if (workingStages.length <= 1) return;
-    const confirmDelete = window.confirm('Delete this stage? All tasks inside will also be removed.');
-    if (!confirmDelete) return;
+    const stageName = workingStages[index];
+    const stageContent = stageData[stageName] || {};
+    const hasContent = (Array.isArray(stageContent.tasks) && stageContent.tasks.length > 0) || (Array.isArray(stageContent.notes) && stageContent.notes.length > 0);
+    if (hasContent) {
+      setDeleteStageIndex(index);
+      setDeleteStageName(stageName);
+      setShowDeleteStageConfirm(true);
+      return;
+    }
     setWorkingStages(workingStages.filter((_, i) => i !== index));
   };
 
@@ -281,7 +298,7 @@ export default function StatusPanel({
         newStageData[stageName] = stageData[originalName];
       } else if (stageData[stageName]) {
         newStageData[stageName] = stageData[stageName];
-      } else {
+    } else {
         newStageData[stageName] = { notes: [], tasks: [], completed: false };
       }
     });
@@ -354,23 +371,23 @@ export default function StatusPanel({
             </button>
           ) : (
             <>
-              <button
+          <button
                 onClick={cancelEditStages}
-                style={{
+            style={{
                   ...BUTTON_STYLES.secondary,
-                  marginRight: "10px"
-                }}
-              >
+              marginRight: "10px"
+            }}
+          >
                 Cancel
-              </button>
-              <button
+          </button>
+          <button
                 onClick={handleSaveStages}
-                style={{
+            style={{
                   ...BUTTON_STYLES.primary
-                }}
-              >
+            }}
+          >
                 Save
-              </button>
+          </button>
             </>
           )}
         </div>
@@ -379,60 +396,60 @@ export default function StatusPanel({
             {/* Stage Navigation */}
       <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" }}>
       {!isEditingStages ? (
-        <div style={{ 
-          display: "flex", 
-          justifyContent: "space-around", 
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "space-around", 
           marginBottom: "20px",
           width: "100%",
           maxWidth: "100%",
           minWidth: 0,
           overflowX: "hidden"
-        }}>
-          {stages.map((stage, index) => (
+      }}>
+        {stages.map((stage, index) => (
+          <div
+            key={stage}
+            onClick={() => handleStageClick(stage, index)}
+            style={{ 
+              cursor: "pointer", 
+              textAlign: "center", 
+              flex: 1,
+              transition: "all 0.2s ease",
+              opacity: isStageClickable(index) ? 1 : 0.5
+            }}
+          >
             <div
-              key={stage}
-              onClick={() => handleStageClick(stage, index)}
-              style={{ 
-                cursor: "pointer", 
-                textAlign: "center", 
-                flex: 1,
-                transition: "all 0.2s ease",
-                opacity: isStageClickable(index) ? 1 : 0.5
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "50%",
+                margin: "0 auto 8px",
+                background: stageData[stage]?.completed ? COLORS.success : (currentStage === stage ? COLORS.primary : COLORS.light),
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                color: stageData[stage]?.completed ? "white" : (currentStage === stage ? "white" : COLORS.lightText),
+                fontWeight: "bold",
+                fontSize: "16px",
+                boxShadow: currentStage === stage ? "0 2px 4px rgba(52, 152, 219, 0.3)" : "none"
               }}
             >
-              <div
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "50%",
-                  margin: "0 auto 8px",
-                  background: stageData[stage]?.completed ? COLORS.success : (currentStage === stage ? COLORS.primary : COLORS.light),
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  color: stageData[stage]?.completed ? "white" : (currentStage === stage ? "white" : COLORS.lightText),
-                  fontWeight: "bold",
-                  fontSize: "16px",
-                  boxShadow: currentStage === stage ? "0 2px 4px rgba(52, 152, 219, 0.3)" : "none"
-                }}
-              >
-                {index + 1}
-              </div>
-              <span
-                style={{ 
-                  fontSize: "12px", 
-                  color: currentStage === stage ? COLORS.primary : COLORS.lightText,
-                  fontWeight: currentStage === stage ? "600" : "normal"
-                }}
-              >
-                {stage}
-              </span>
+              {index + 1}
             </div>
-          ))}
+            <span
+              style={{ 
+                fontSize: "12px", 
+                color: currentStage === stage ? COLORS.primary : COLORS.lightText,
+                fontWeight: currentStage === stage ? "600" : "normal"
+              }}
+            >
+                {stage}
+            </span>
+          </div>
+        ))}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px", width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" }}>
-          <div style={{ display: "block", overflowX: "auto", whiteSpace: "nowrap", width: "100%", minWidth: 0, paddingBottom: "4px", overscrollBehaviorX: "contain" }}>
+          <div ref={editRowRef} style={{ display: "block", overflowX: "auto", whiteSpace: "nowrap", width: "100%", minWidth: 0, paddingBottom: "4px", overscrollBehaviorX: "contain" }}>
             {workingStages.map((stage, index) => (
               <div key={index} style={{ display: "inline-flex", alignItems: "center", gap: "6px", verticalAlign: "top" }}>
                 <button onClick={() => handleMoveStageLeftEditing(index)} disabled={index === 0} style={{ ...BUTTON_STYLES.secondary, padding: "2px 6px", fontSize: "12px" }}>{"◀"}</button>
@@ -583,6 +600,15 @@ export default function StatusPanel({
                               borderRadius: "10px",
                               whiteSpace: "nowrap"
                             }}>Other</span>
+                            <span style={{
+                              display: "inline-block",
+                              fontSize: "11px",
+                              background: "#F3F4F6",
+                              color: "#374151",
+                              padding: "2px 6px",
+                              borderRadius: "10px",
+                              whiteSpace: "nowrap"
+                            }}>{currentStage}</span>
                             <span style={{ 
                               flex: 1, 
                               minWidth: 0,
@@ -604,6 +630,15 @@ export default function StatusPanel({
                               borderRadius: "10px",
                               whiteSpace: "nowrap"
                             }}>{note.type || "Other"}</span>
+                            <span style={{
+                              display: "inline-block",
+                              fontSize: "11px",
+                              background: "#F3F4F6",
+                              color: "#374151",
+                              padding: "2px 6px",
+                              borderRadius: "10px",
+                              whiteSpace: "nowrap"
+                            }}>{currentStage}</span>
                             <span style={{ 
                               flex: 1,
                               minWidth: 0, 
@@ -761,6 +796,25 @@ export default function StatusPanel({
             </div>
             <div style={{ marginTop: 12, textAlign: 'right' }}>
               <button onClick={() => setShowStageSelectModal(false)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showDeleteStageConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 20, minWidth: 320, maxWidth: 420, boxShadow: "0 10px 25px rgba(0,0,0,0.15)" }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Delete stage "{deleteStageName}"?</div>
+            <div style={{ color: '#374151', lineHeight: 1.4, marginBottom: 12 }}>This stage has content. Deleting will remove its tasks/notes. This action cannot be undone.</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => { setShowDeleteStageConfirm(false); setDeleteStageIndex(null); setDeleteStageName(""); }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => {
+                if (deleteStageIndex !== null) {
+                  setWorkingStages(workingStages.filter((_, i) => i !== deleteStageIndex));
+                }
+                setShowDeleteStageConfirm(false);
+                setDeleteStageIndex(null);
+                setDeleteStageName("");
+              }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ef4444', background: '#fee2e2', color: '#b91c1c', cursor: 'pointer' }}>Delete</button>
             </div>
           </div>
         </div>

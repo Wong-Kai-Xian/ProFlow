@@ -36,6 +36,9 @@ export default function ProjectDetail() {
   const [workingStages, setWorkingStages] = useState([]);
   const [showStageSelectModal, setShowStageSelectModal] = useState(false);
   const [stageSelectOptions, setStageSelectOptions] = useState([]);
+  const [showDeleteStageConfirm, setShowDeleteStageConfirm] = useState(false);
+  const [deleteStageIndex, setDeleteStageIndex] = useState(null);
+  const [deleteStageName, setDeleteStageName] = useState("");
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -241,13 +244,19 @@ export default function ProjectDetail() {
 
   const handleAddStage = () => {
     const newStageName = `Stage ${workingStages.length + 1}`;
-    setWorkingStages([...workingStages, newStageName]);
+    setWorkingStages(prev => [...prev, newStageName]);
   };
 
   const handleDeleteStageAt = (index) => {
     if (workingStages.length <= 1) return;
-    const confirmed = window.confirm('Delete this stage? All tasks within this stage will also be removed.');
-    if (!confirmed) return;
+    const stageName = workingStages[index];
+    const hasContent = (projectData?.tasks || []).some(section => section.stage === stageName && ((section.tasks && section.tasks.length > 0) || (section.notes && section.notes.length > 0)));
+    if (hasContent) {
+      setDeleteStageIndex(index);
+      setDeleteStageName(stageName);
+      setShowDeleteStageConfirm(true);
+      return;
+    }
     const next = workingStages.filter((_, i) => i !== index);
     setWorkingStages(next);
   };
@@ -748,28 +757,22 @@ export default function ProjectDetail() {
         projectId={projectId}
         onTeamMemberAdded={handleTeamMemberAdded}
       />
-      {showStageSelectModal && (
+      {showDeleteStageConfirm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 20, minWidth: 300, boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
-            <div style={{ fontWeight: 600, marginBottom: 10 }}>Select current stage</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
-              {stageSelectOptions.map((s) => (
-                <button
-                  key={s}
-                  onClick={async () => {
-                    if (projectData?.id) {
-                      await updateDoc(doc(db, 'projects', projectData.id), { stage: s });
-                    }
-                    setCurrentStage(s);
-                    setProjectData(prev => prev ? { ...prev, stage: s } : prev);
-                    setShowStageSelectModal(false);
-                  }}
-                  style={{ textAlign: 'left', padding: '8px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer' }}
-                >{s}</button>
-              ))}
-            </div>
-            <div style={{ marginTop: 12, textAlign: 'right' }}>
-              <button onClick={() => setShowStageSelectModal(false)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}>Close</button>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 20, minWidth: 320, maxWidth: 420, boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Delete stage "{deleteStageName}"?</div>
+            <div style={{ color: '#374151', lineHeight: 1.4, marginBottom: 12 }}>This stage has content. Deleting will remove its tasks/notes. This action cannot be undone.</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => { setShowDeleteStageConfirm(false); setDeleteStageIndex(null); setDeleteStageName(""); }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => {
+                if (deleteStageIndex !== null) {
+                  const next = workingStages.filter((_, i) => i !== deleteStageIndex);
+                  setWorkingStages(next);
+                }
+                setShowDeleteStageConfirm(false);
+                setDeleteStageIndex(null);
+                setDeleteStageName("");
+              }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ef4444', background: '#fee2e2', color: '#b91c1c', cursor: 'pointer' }}>Delete</button>
             </div>
           </div>
         </div>

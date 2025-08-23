@@ -1,9 +1,16 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES } from '../profile-component/constants';
 
 export default function StageIndicator({ currentStage, allStages, onAdvanceStage, onGoBackStage, isCurrentStageTasksComplete, onStageSelect, canAdvance, editing = false, onAddStage, onDeleteStageAt, onRenameStage, onMoveStageLeft, onMoveStageRight }) {
   const currentStageIndex = allStages.indexOf(currentStage);
   const isLastStage = currentStageIndex === allStages.length - 1;
+  const rowRef = useRef(null);
+
+  useEffect(() => {
+    if (editing && rowRef.current) {
+      rowRef.current.scrollLeft = rowRef.current.scrollWidth;
+    }
+  }, [allStages.length, editing]);
 
   return (
     <div style={{
@@ -22,15 +29,15 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
       boxSizing: 'border-box',
       paddingBottom: 8
     }}>
-      <div style={{
+      <div ref={rowRef} style={{
         display: "flex",
-        justifyContent: "flex-start",
+        justifyContent: editing ? "flex-start" : "space-between",
         alignItems: "center",
         width: "100%",
-        overflowX: 'auto',
+        overflowX: editing ? 'auto' : 'hidden',
         flexWrap: 'nowrap',
         minWidth: 0,
-        gap: 12,
+        gap: editing ? 12 : 0,
         marginBottom: LAYOUT.smallGap, // Space between indicators and button
       }}>
         {allStages.map((stage, index) => {
@@ -63,8 +70,14 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
             textAlign: "center",
           };
 
-          const lineStyle = {
+          const lineStyle = editing ? {
             width: 32,
+            height: 2,
+            background: isCompleted ? COLORS.success : COLORS.border,
+            zIndex: 0,
+            flex: '0 0 auto'
+          } : {
+            flex: 1,
             height: 2,
             background: isCompleted ? COLORS.success : COLORS.border,
             zIndex: 0,
