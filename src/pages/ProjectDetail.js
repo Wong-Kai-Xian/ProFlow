@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import ProjectDetails from '../components/project-component/ProjectDetails';
@@ -9,11 +9,10 @@ import StageIndicator from '../components/project-component/StageIndicator';
 import ApprovalModal from '../components/project-component/ApprovalModal';
 import AdvanceStageChoiceModal from '../components/project-component/AdvanceStageChoiceModal';
 import SendApprovalModal from '../components/project-component/SendApprovalModal';
-import AdvancedApprovalRequestModal from '../components/project-component/AdvancedApprovalRequestModal';
 import AddTeamMemberModal from '../components/project-component/AddTeamMemberModal';
 import TeamMembersPanel from '../components/project-component/TeamMembersPanel';
 import { db } from "../firebase";
-import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs, arrayUnion, arrayRemove } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs, arrayUnion, arrayRemove, addDoc, serverTimestamp } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 
@@ -27,25 +26,98 @@ export default function ProjectDetail() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showAdvanceChoiceModal, setShowAdvanceChoiceModal] = useState(false);
   const [showSendApprovalModal, setShowSendApprovalModal] = useState(false);
-  const [showAdvancedApprovalModal, setShowAdvancedApprovalModal] = useState(false);
-  const [approvalModalType, setApprovalModalType] = useState('stage'); // 'stage' or 'general'
   const [projectForums, setProjectForums] = useState([]); // State to hold project-specific forums
   const { currentUser } = useAuth(); // Get current user from AuthContext
   const [currentApproval, setCurrentApproval] = useState(null); // State to hold the current approval request
   const [showAddTeamMemberModal, setShowAddTeamMemberModal] = useState(false); // New state for add team member modal
   const [allProjectNames, setAllProjectNames] = useState([]); // New state to store all project names
   const [projectTeamMembersDetails, setProjectTeamMembersDetails] = useState([]); // State for enriched team member details
+  // Stage editor state
   const [isEditingStages, setIsEditingStages] = useState(false);
   const [workingStages, setWorkingStages] = useState([]);
   const [showStageSelectModal, setShowStageSelectModal] = useState(false);
   const [stageSelectOptions, setStageSelectOptions] = useState([]);
+  const [showDeleteStageConfirm, setShowDeleteStageConfirm] = useState(false);
+  const [deleteStageIndex, setDeleteStageIndex] = useState(null);
+  const [deleteStageName, setDeleteStageName] = useState("");
+
+  // Meeting state
   const [showMeeting, setShowMeeting] = useState(false);
   const [meetingMinimized, setMeetingMinimized] = useState(false);
   const [meetingParticipants, setMeetingParticipants] = useState([]);
   const [suppressMeetingBar, setSuppressMeetingBar] = useState(false);
-  const [showDeleteStageConfirm, setShowDeleteStageConfirm] = useState(false);
-  const [deleteStageIndex, setDeleteStageIndex] = useState(null);
-  const [deleteStageName, setDeleteStageName] = useState("");
+  const userHasJoinedMeeting = meetingParticipants.includes(currentUser?.uid || "");
+
+  // Meeting session + transcription
+  const [meetingSessionId, setMeetingSessionId] = useState(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const recognitionRef = useRef(null);
+  const [sessionTranscripts, setSessionTranscripts] = useState([]);
+
+  useEffect(() => {
+    if (meetingSessionId) {
+      const sub = onSnapshot(collection(db, 'meetingSessions', meetingSessionId, 'transcripts'), (snap) => {
+        const lines = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b)=> (a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
+        setSessionTranscripts(lines);
+      });
+      return () => sub();
+    } else {
+      setSessionTranscripts([]);
+    }
+  }, [meetingSessionId]);
+
+  const startTranscription = async () => {
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { alert('Transcription not supported in this browser. Try Chrome.'); return; }
+      if (!meetingSessionId) {
+        // Create meeting session doc
+        const ref = await addDoc(collection(db, 'meetingSessions'), { projectId, startedAt: serverTimestamp(), participants: meetingParticipants });
+        setMeetingSessionId(ref.id);
+      }
+      const rec = new SR();
+      recognitionRef.current = rec;
+      rec.lang = 'en-US';
+      rec.interimResults = true;
+      rec.continuous = true;
+      rec.onresult = async (e) => {
+        let finalText = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) {
+            finalText += t + ' ';
+          } else {
+            setLiveTranscript(t);
+          }
+        }
+        if (finalText.trim() && meetingSessionId) {
+          await addDoc(collection(db, 'meetingSessions', meetingSessionId, 'transcripts'), {
+            text: finalText.trim(),
+            userId: currentUser?.uid || 'anon',
+            createdAt: serverTimestamp()
+          });
+          setLiveTranscript('');
+        }
+      };
+      rec.onerror = (e) => console.warn('SpeechRecognition error', e);
+      rec.onend = () => { if (isTranscribing) rec.start(); };
+      rec.start();
+      setIsTranscribing(true);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to start transcription.');
+    }
+  };
+
+  const stopTranscription = async () => {
+    setIsTranscribing(false);
+    try { recognitionRef.current && recognitionRef.current.stop(); } catch {}
+    recognitionRef.current = null;
+    if (meetingSessionId) {
+      await updateDoc(doc(db, 'meetingSessions', meetingSessionId), { endedAt: serverTimestamp() });
+    }
+  };
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -73,9 +145,7 @@ export default function ProjectDetail() {
   useEffect(() => {
     if (projectId && currentUser) {
       const forumsCollectionRef = collection(db, "forums");
-      // Fetch forums where projectId matches AND currentUser.uid is in the members array
       const q = query(forumsCollectionRef, where("projectId", "==", projectId), where("members", "array-contains", currentUser.uid));
-
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const forumsData = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -83,7 +153,6 @@ export default function ProjectDetail() {
         }));
         setProjectForums(forumsData);
       });
-
       return () => unsubscribe();
     }
   }, [projectId, currentUser]);
@@ -110,12 +179,10 @@ export default function ProjectDetail() {
         setProjectTeamMembersDetails([]);
         return;
       }
-
       try {
         const memberUids = projectData.team;
         const fetchedDetails = [];
         const chunkSize = 10; // Firestore 'in' query limit
-
         for (let i = 0; i < memberUids.length; i += chunkSize) {
           const chunk = memberUids.slice(i, i + chunkSize);
           const usersQuery = query(collection(db, "users"), where("uid", "in", chunk));
@@ -135,7 +202,6 @@ export default function ProjectDetail() {
         setProjectTeamMembersDetails([]);
       }
     };
-
     fetchProjectTeamMembersDetails();
   }, [projectData?.team]); // Re-run when projectData.team changes
 
@@ -146,29 +212,22 @@ export default function ProjectDetail() {
       const q = query(
         approvalsCollectionRef,
         where("projectId", "==", projectId),
-        where("status", "==", "pending") // Only interested in pending approvals for the current stage
+        where("status", "==", "pending")
       );
-
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const pendingApprovals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Assuming only one pending approval at a time for simplicity of stage advancement
         setCurrentApproval(pendingApprovals.length > 0 ? pendingApprovals[0] : null);
       });
-
       return () => unsubscribe();
     }
   }, [projectId, currentStage]);
 
   useEffect(() => {
     if (projectData) {
-    // Filter tasks based on the current stage
-    const filteredTasks = (projectData.tasks || []).filter(section => section.stage === currentStage);
-    setProjectTasks(filteredTasks);
+      const filteredTasks = (projectData.tasks || []).filter(section => section.stage === currentStage);
+      setProjectTasks(filteredTasks);
       setProjectReminders(projectData.reminders || []);
-      setProjectDetails(projectData); // This will be the main projectData from Firestore
-      if (!isEditingStages) {
-        setWorkingStages(projectStages);
-      }
+      setProjectDetails(projectData);
     }
   }, [projectData, currentStage]);
 
@@ -185,19 +244,12 @@ export default function ProjectDetail() {
       );
 
       if (allTasksCompleteInCurrentStage) {
-        // Open the new advanced approval request modal for stage advancement
-        setApprovalModalType('stage');
-        setShowAdvancedApprovalModal(true);
+        // Ask whether to require approval or advance directly
+        setShowAdvanceChoiceModal(true);
       } else {
         alert("All tasks in the current stage must be marked as 'Complete' before advancing.");
       }
     }
-  };
-
-  const handleSendApprovalRequest = () => {
-    // Open the new advanced approval request modal for general approval
-    setApprovalModalType('general');
-    setShowAdvancedApprovalModal(true);
   };
 
   const handleConfirmAdvanceStage = async () => {
@@ -221,10 +273,6 @@ export default function ProjectDetail() {
     }
   };
 
-  const handleApprovalRequestSuccess = (result) => {
-    setShowAdvancedApprovalModal(false);
-    alert(`Approval request sent successfully to ${result.recipientCount} team member(s)!\n\nTitle: ${result.title}\nType: ${result.type}\nEntity: ${result.entityName}`);
-  };
 
   const handleStageSelect = async (stage) => {
     if (projectData && projectData.id) {
@@ -396,6 +444,11 @@ export default function ProjectDetail() {
     setShowMeeting(true);
     setMeetingMinimized(false);
     setSuppressMeetingBar(false);
+    // Create new session when user joins if none
+    if (!meetingSessionId) {
+      const ref = await addDoc(collection(db, 'meetingSessions'), { projectId, startedAt: serverTimestamp(), participants: [currentUser.uid] });
+      setMeetingSessionId(ref.id);
+    }
   };
 
   const handleLeaveMeeting = async () => {
@@ -404,9 +457,9 @@ export default function ProjectDetail() {
     await updateDoc(projectRef, {
       meetingParticipants: arrayRemove(currentUser.uid)
     });
+    if (isTranscribing) await stopTranscription();
+    if (meetingSessionId) await updateDoc(doc(db, 'meetingSessions', meetingSessionId), { endedAt: serverTimestamp() });
   };
-
-  const userHasJoinedMeeting = meetingParticipants.includes(currentUser?.uid || "");
 
   const handleToggleMeeting = async () => {
     if (!showMeeting && !meetingMinimized) {
@@ -416,7 +469,7 @@ export default function ProjectDetail() {
       setSuppressMeetingBar(false);
       return;
     }
-    // close panel
+    // close panel but keep session alive only if minimized
     if (userHasJoinedMeeting) {
       await handleLeaveMeeting();
     }
@@ -494,25 +547,6 @@ export default function ProjectDetail() {
               >
                 {(showMeeting || meetingMinimized) ? 'Close Meeting' : 'Conduct Meeting'}
               </button>
-              {currentUser && currentUser.uid === projectData?.userId && (
-                <button
-                  onClick={() => setShowAddTeamMemberModal(true)}
-                  style={{
-                    ...getButtonStyle('primary', 'projects'),
-                    backgroundColor: "rgba(255, 255, 255, 0.2)",
-                    backdropFilter: "blur(10px)",
-                    border: "1px solid rgba(255, 255, 255, 0.3)",
-                    padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
-                    fontSize: DESIGN_SYSTEM.typography.fontSize.base,
-                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-                    borderRadius: DESIGN_SYSTEM.borderRadius.lg,
-                    color: DESIGN_SYSTEM.colors.text.inverse,
-                    boxShadow: "0 4px 15px rgba(255, 255, 255, 0.2)"
-                  }}
-                >
-                  Add Member
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -536,254 +570,236 @@ export default function ProjectDetail() {
               </div>
             )}
             {/* Expanded meeting */}
-            {showMeeting && (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.projects.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
-                  <div>Project Meeting</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
+            {(
+              (showMeeting || meetingMinimized) && (
+                <div>
+                  {showMeeting && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.projects.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
+                      <div>Project Meeting</div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {userHasJoinedMeeting ? (
+                          <>
+                            <button onClick={isTranscribing ? stopTranscription : startTranscription} style={{ ...getButtonStyle('secondary', 'projects') }}>{isTranscribing ? 'Stop Transcribe' : 'Transcribe'}</button>
+                            <button onClick={handleLeaveMeeting} style={{ ...getButtonStyle('secondary', 'projects') }}>Leave</button>
+                          </>
+                        ) : (
+                          <button onClick={handleJoinMeeting} style={{ ...getButtonStyle('secondary', 'projects') }}>Join</button>
+                        )}
+                        <button onClick={() => { setMeetingMinimized(true); setShowMeeting(false); }} style={{ ...getButtonStyle('secondary', 'projects') }}>Minimize</button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Iframe stays mounted in minimized state to keep session alive */}
+                  <div style={{ width: '100%', height: showMeeting ? '600px' : '1px', background: '#000' }}>
                     {userHasJoinedMeeting ? (
-                      <button onClick={handleLeaveMeeting} style={{ ...getButtonStyle('secondary', 'projects') }}>Leave</button>
+                      <iframe
+                        title="Project Meeting"
+                        src={`https://meet.jit.si/project-${projectId}-meeting`}
+                        style={{ width: '100%', height: '100%', border: '0', borderRadius: showMeeting ? `0 0 ${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg}` : 0, visibility: showMeeting ? 'visible' : 'hidden' }}
+                        allow="camera; microphone; fullscreen; display-capture"
+                      />
                     ) : (
-                      <button onClick={handleJoinMeeting} style={{ ...getButtonStyle('secondary', 'projects') }}>Join</button>
+                      showMeeting && (
+                        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
+                          Click Join to connect to the meeting
+                        </div>
+                      )
                     )}
-                    <button onClick={() => { setMeetingMinimized(true); setShowMeeting(false); }} style={{ ...getButtonStyle('secondary', 'projects') }}>Minimize</button>
                   </div>
-                </div>
-                <div style={{ width: '100%', height: '600px', background: '#000' }}>
-                  {userHasJoinedMeeting ? (
-                    <iframe
-                      title="Project Meeting"
-                      src={`https://meet.jit.si/project-${projectId}-meeting`}
-                      style={{ width: '100%', height: '100%', border: '0', borderRadius: `0 0 ${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg}` }}
-                      allow="camera; microphone; fullscreen; display-capture"
-                    />
-                  ) : (
-                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
-                      Click Join to connect to the meeting
+                  {/* Transcript viewer */}
+                  {showMeeting && (
+                    <div style={{ padding: DESIGN_SYSTEM.spacing.base, background: '#f8fafc', borderTop: `1px solid ${DESIGN_SYSTEM.colors.border}` }}>
+                      <div style={{ fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: DESIGN_SYSTEM.spacing.xs }}>Transcript</div>
+                      <div style={{ maxHeight: 200, overflowY: 'auto', fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary, background: '#fff', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: DESIGN_SYSTEM.borderRadius.lg, padding: DESIGN_SYSTEM.spacing.base }}>
+                        {sessionTranscripts.map((line) => (
+                          <div key={line.id} style={{ marginBottom: 6 }}>
+                            <span style={{ color: DESIGN_SYSTEM.colors.text.secondary, marginRight: 6 }}>{new Date((line.createdAt?.seconds || 0) * 1000).toLocaleTimeString()}</span>
+                            {line.text}
+                          </div>
+                        ))}
+                        {liveTranscript && (
+                          <div style={{ opacity: 0.7 }}>{liveTranscript}</div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
+              )
             )}
           </div>
         )}
 
-      <div style={{
-        display: "grid",
+        <div style={{
+          display: "grid",
           gridTemplateColumns: "380px 1fr",
           gridTemplateRows: "1fr",
           gap: DESIGN_SYSTEM.spacing.xl,
           minHeight: "calc(100vh - 300px)"
-      }}>
-        {/* Left Column */}
-        <div style={{ 
-          display: "flex", 
-          flexDirection: "column", 
-          gap: DESIGN_SYSTEM.spacing.lg,
-          gridColumn: 1, 
-          gridRow: 1,
-          maxHeight: "90vh",
-          overflowY: "auto"
         }}>
-          {/* Project Details Card */}
-          <div style={{
-            ...getCardStyle('projects'),
-            flexShrink: 0
+          {/* Left Column */}
+          <div style={{ 
+            display: "flex", 
+            flexDirection: "column", 
+            gap: DESIGN_SYSTEM.spacing.lg,
+            gridColumn: 1, 
+            gridRow: 1,
+            maxHeight: "90vh",
+            overflowY: "auto"
           }}>
+            {/* Project Details Card */}
             <div style={{
-              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              ...getCardStyle('projects'),
+              flexShrink: 0
             }}>
-              <h3 style={{
-                margin: 0,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
               }}>
-                Project Details
-              </h3>
+                <h3 style={{
+                  margin: 0,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                }}>
+                  Project Details
+                </h3>
+              </div>
+              <div style={{ padding: 0 }}>
+                <ProjectDetails 
+                  project={projectDetails} 
+                  onSave={handleSaveEditedProjectDetails}
+                  allProjectNames={allProjectNames}
+                  readOnly={false}
+                />
+              </div>
             </div>
-            <div style={{ padding: 0 }}>
-          <ProjectDetails 
-            project={projectDetails} 
-            onSave={handleSaveEditedProjectDetails}
-                allProjectNames={allProjectNames}
-                readOnly={false}
-              />
-            </div>
-          </div>
-          
-          {/* Reminders Section */}
-          <div style={{
-            ...getCardStyle('projects'),
-            flexShrink: 0
-          }}>
+            
+            {/* Reminders Section */}
             <div style={{
-              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              ...getCardStyle('projects'),
+              flexShrink: 0
             }}>
-              <h3 style={{
-                margin: 0,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
               }}>
-                Reminders
-              </h3>
+                <h3 style={{
+                  margin: 0,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                }}>
+                  Reminders
+                </h3>
+              </div>
+              <div style={{ padding: 0 }}>
+                <Reminders projectId={projectId} /> 
+              </div>
             </div>
-            <div style={{ padding: 0 }}>
-            <Reminders projectId={projectId} /> 
-          </div>
-          </div>
-          
-          {/* Project Forum Section */}
-          <div style={{
-            ...getCardStyle('projects'),
-            flex: "1 1 350px", 
-            minHeight: "300px",
-            maxHeight: "400px",
-            display: "flex",
-            flexDirection: "column"
-          }}>
+            
+            {/* Project Forum Section */}
             <div style={{
-              background: DESIGN_SYSTEM.pageThemes.forums.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-            }}>
-              <h3 style={{
-                margin: 0,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-              }}>
-                Project Forum
-              </h3>
-            </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
-            <ProjectGroupForum 
-              projectId={projectId} 
-                forums={projectForums}
-            />
-          </div>
-          </div>
-          
-          {/* Team Members Section */}
-          <div style={{
-            ...getCardStyle('projects'),
-            flex: "1 1 300px", 
-            minHeight: "250px",
-            maxHeight: "350px",
-            display: "flex",
-            flexDirection: "column"
-          }}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-            }}>
-              <h3 style={{
-                margin: 0,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-              }}>
-                Team Members
-              </h3>
-            </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
-            <TeamMembersPanel 
-              projectId={projectId}
-              teamMembers={projectData.team}
-              onAddMemberClick={() => setShowAddTeamMemberModal(true)}
-              onRemoveMember={handleRemoveTeamMember}
-              projectCreatorId={projectData.userId}
-              currentUserUid={currentUser?.uid}
-              currentUser={currentUser}
-            />
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column */}
-        <div style={{ 
-          display: "flex", 
-          flexDirection: "column", 
-          gap: DESIGN_SYSTEM.spacing.lg, 
-          gridColumn: 2, 
-          gridRow: 1,
-          minWidth: "0"
-        }}>
-          {/* Project Stages Section */}
-          <div style={{
-            ...getCardStyle('projects'),
-            padding: 0,
-            minWidth: "0",
-            overflowX: "hidden"
-          }}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
+              ...getCardStyle('projects'),
+              flex: "1 1 350px", 
+              minHeight: "300px",
+              maxHeight: "400px",
               display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
+              flexDirection: "column"
             }}>
-              <h3 style={{
-                margin: 0,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.forums.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
               }}>
-                Project Stages
-              </h3>
-            <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.base }}>
-              {!isEditingStages ? (
+                <h3 style={{
+                  margin: 0,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                }}>
+                  Project Forum
+                </h3>
+              </div>
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <ProjectGroupForum 
+                  projectId={projectId} 
+                  forums={projectForums}
+                />
+              </div>
+            </div>
+            
+            {/* Team Members Section */}
+            <div style={{
+              ...getCardStyle('projects'),
+              flex: "1 1 300px", 
+              minHeight: "250px",
+              maxHeight: "350px",
+              display: "flex",
+              flexDirection: "column"
+            }}>
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              }}>
+                <h3 style={{
+                  margin: 0,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                }}>
+                  Team Members
+                </h3>
+              </div>
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <TeamMembersPanel 
+                  projectId={projectId}
+                  teamMembers={projectData.team}
+                  onAddMemberClick={() => setShowAddTeamMemberModal(true)}
+                  onRemoveMember={handleRemoveTeamMember}
+                  projectCreatorId={projectData.userId}
+                  currentUserUid={currentUser?.uid}
+                  currentUser={currentUser}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column */}
+          <div style={{ 
+            display: "flex", 
+            flexDirection: "column", 
+            gap: DESIGN_SYSTEM.spacing.lg, 
+            gridColumn: 2, 
+            gridRow: 1 
+          }}>
+            {/* Project Stages Section */}
+            <div style={{
+              ...getCardStyle('projects'),
+              padding: 0
+            }}>
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center"
+              }}>
+                <h3 style={{
+                  margin: 0,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                }}>
+                  Project Stages
+                </h3>
                 <button
-                  onClick={enterEditStages}
+                  onClick={() => !currentApproval && setShowSendApprovalModal(true)}
+                  disabled={!!currentApproval}
                   style={{
-                    ...getButtonStyle('secondary', 'projects'),
-                    background: 'rgba(255,255,255,0.2)',
-                    color: DESIGN_SYSTEM.colors.text.inverse,
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
-                    fontSize: DESIGN_SYSTEM.typography.fontSize.sm
-                  }}
-                >
-                  Edit Stages
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={cancelEditStages}
-                    style={{
-                      ...getButtonStyle('secondary', 'projects'),
-                      background: 'rgba(255,255,255,0.15)',
-                      color: DESIGN_SYSTEM.colors.text.inverse,
-                      border: '1px solid rgba(255,255,255,0.3)',
-                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
-                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveStages}
-                    style={{
-                      ...getButtonStyle('primary', 'projects'),
-                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
-                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm
-                    }}
-                  >
-                    Save
-                  </button>
-                </>
-              )}
-              <button
-                onClick={() => !currentApproval && handleSendApprovalRequest()}
-                disabled={!!currentApproval}
-                style={{
                     ...getButtonStyle('secondary', 'projects'),
                     background: currentApproval ? 'rgba(107,114,128,0.3)' : 'rgba(255,255,255,0.2)',
                     color: currentApproval ? '#9CA3AF' : DESIGN_SYSTEM.colors.text.inverse,
@@ -791,65 +807,64 @@ export default function ProjectDetail() {
                     padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
                     fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
                     cursor: currentApproval ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {currentApproval ? 'Pending Approval' : 'Send Approval'}
-              </button>
+                  }}
+                >
+                  {currentApproval ? 'Pending Approval' : 'Send Approval'}
+                </button>
+              </div>
+              <div style={{ padding: DESIGN_SYSTEM.spacing.base, overflowX: 'hidden' }}>
+                <StageIndicator 
+                  currentStage={currentStage} 
+                  allStages={isEditingStages ? workingStages : projectStages} 
+                  onAdvanceStage={handleAdvanceStage} 
+                  onGoBackStage={handleGoBackStage} 
+                  isCurrentStageTasksComplete={isCurrentStageTasksComplete}
+                  onStageSelect={handleStageSelect}
+                  canAdvance={canAdvanceStage}
+                  editing={isEditingStages}
+                  onAddStage={handleAddStage}
+                  onDeleteStageAt={handleDeleteStageAt}
+                  onRenameStage={handleRenameStageAt}
+                  onMoveStageLeft={handleMoveStageLeft}
+                  onMoveStageRight={handleMoveStageRight}
+                />
+              </div>
             </div>
-          </div>
-            <div style={{ padding: DESIGN_SYSTEM.spacing.base, overflowX: 'hidden' }}>
-          <StageIndicator 
-            currentStage={currentStage} 
-            allStages={isEditingStages ? workingStages : projectStages} 
-            onAdvanceStage={handleAdvanceStage} 
-            onGoBackStage={handleGoBackStage} 
-            isCurrentStageTasksComplete={isCurrentStageTasksComplete}
-            onStageSelect={handleStageSelect}
-            canAdvance={canAdvanceStage}
-            editing={isEditingStages}
-            onAddStage={handleAddStage}
-            onDeleteStageAt={handleDeleteStageAt}
-            onRenameStage={handleRenameStageAt}
-            onMoveStageLeft={handleMoveStageLeft}
-            onMoveStageRight={handleMoveStageRight}
-          />
-            </div>
-          </div>
 
-          {/* Project Tasks Section */}
-          <div style={{
-            ...getCardStyle('projects'),
-            flex: 1,
-            display: "flex",
-            flexDirection: "column"
-          }}>
+            {/* Project Tasks Section */}
             <div style={{
-              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              ...getCardStyle('projects'),
+              flex: 1,
+              display: "flex",
+              flexDirection: "column"
             }}>
-              <h3 style={{
-                margin: 0,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
               }}>
-                Project Tasks
-              </h3>
+                <h3 style={{
+                  margin: 0,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                }}>
+                  Project Tasks
+                </h3>
+              </div>
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <ProjectTaskPanel 
+                  projectTasks={projectTasks}
+                  setProjectTasks={setProjectTasks}
+                  currentStage={currentStage} 
+                  projectId={projectId}
+                  setProjectData={setProjectData}
+                  projectMembers={projectTeamMembersDetails}
+                />
+              </div>
             </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
-          <ProjectTaskPanel 
-            projectTasks={projectTasks}
-            setProjectTasks={setProjectTasks}
-            currentStage={currentStage} 
-            projectId={projectId}
-                setProjectData={setProjectData}
-                projectMembers={projectTeamMembersDetails}
-          />
+          </div>
         </div>
-      </div>
-        </div>
-      </div>
       </div>
       
       {showApprovalModal && (
@@ -869,10 +884,10 @@ export default function ProjectDetail() {
         isOpen={showSendApprovalModal}
         onClose={() => setShowSendApprovalModal(false)}
         onSendApproval={(data) => console.log("Approval data sent:", data)}
-        defaultProject={projectDetails} // Pass current project details
-        defaultStatus={currentStage} // Pass current stage as default status
-        currentUser={currentUser} // Pass currentUser to the modal
-        teamMembers={projectTeamMembersDetails} // Pass enriched team members details
+        defaultProject={projectDetails}
+        defaultStatus={currentStage}
+        currentUser={currentUser}
+        teamMembers={projectTeamMembersDetails}
       />
       {/* Add Team Member Modal */}
       <AddTeamMemberModal
@@ -881,37 +896,6 @@ export default function ProjectDetail() {
         projectId={projectId}
         onTeamMemberAdded={handleTeamMemberAdded}
       />
-      <AdvancedApprovalRequestModal
-        isOpen={showAdvancedApprovalModal}
-        onClose={() => setShowAdvancedApprovalModal(false)}
-        onSuccess={handleApprovalRequestSuccess}
-        projectId={projectId}
-        projectName={projectData?.name || ""}
-        currentUser={currentUser}
-        currentStage={currentStage}
-        nextStage={projectStages[projectStages.indexOf(currentStage) + 1] || ""}
-        isStageAdvancement={approvalModalType === 'stage'}
-      />
-      {showDeleteStageConfirm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 20, minWidth: 320, maxWidth: 420, boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Delete stage "{deleteStageName}"?</div>
-            <div style={{ color: '#374151', lineHeight: 1.4, marginBottom: 12 }}>This stage has content. Deleting will remove its tasks/notes. This action cannot be undone.</div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button onClick={() => { setShowDeleteStageConfirm(false); setDeleteStageIndex(null); setDeleteStageName(""); }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}>Cancel</button>
-              <button onClick={() => {
-                if (deleteStageIndex !== null) {
-                  const next = workingStages.filter((_, i) => i !== deleteStageIndex);
-                  setWorkingStages(next);
-                }
-                setShowDeleteStageConfirm(false);
-                setDeleteStageIndex(null);
-                setDeleteStageName("");
-              }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ef4444', background: '#fee2e2', color: '#b91c1c', cursor: 'pointer' }}>Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
