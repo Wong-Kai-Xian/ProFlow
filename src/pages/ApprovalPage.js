@@ -59,44 +59,93 @@ export default function ApprovalPage() {
 
     console.log('Fetching approval requests for user:', currentUser.uid);
 
-    // Fetch all approval requests - everyone can see all requests
-    const q = query(
-      collection(db, 'approvalRequests')
+    // Fetch approval requests where user has access (creator, decision maker, or viewer)
+    const allRequestsMap = new Map();
+    
+    const updateRequestsList = (newRequests) => {
+      newRequests.forEach(request => {
+        allRequestsMap.set(request.id, request);
+      });
+      
+      const requestsArray = Array.from(allRequestsMap.values());
+      // Sort by dateRequested descending (most recent first)
+      requestsArray.sort((a, b) => {
+        if (!a.dateRequested && !b.dateRequested) return 0;
+        if (!a.dateRequested) return 1;
+        if (!b.dateRequested) return -1;
+        return b.dateRequested.getTime() - a.dateRequested.getTime();
+      });
+      
+      setAllRequests(requestsArray);
+      setLoading(false);
+      console.log('Processed approval requests:', requestsArray);
+    };
+
+    // Query 1: Requests created by user
+    const q1 = query(
+      collection(db, 'approvalRequests'),
+      where('requestedBy', '==', currentUser.uid)
     );
 
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        console.log('Approval requests snapshot received:', snapshot.docs.length, 'documents');
-        const requests = snapshot.docs.map(doc => {
-          const data = doc.data();
-          console.log('Request data:', data);
-          return {
-            id: doc.id,
-            ...data,
-            dateRequested: data.dateRequested?.toDate(),
-            decisionDate: data.decisionDate?.toDate(),
-            dueDate: data.dueDate?.toDate()
-          };
-        });
-        
-        // Sort by dateRequested in JavaScript instead of Firestore
-        requests.sort((a, b) => {
-          if (!a.dateRequested && !b.dateRequested) return 0;
-          if (!a.dateRequested) return 1;
-          if (!b.dateRequested) return -1;
-          return b.dateRequested.getTime() - a.dateRequested.getTime();
-        });
-        
-        setAllRequests(requests);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Error fetching approval requests:', error);
-        setLoading(false);
-      }
+    // Query 2: Requests where user is decision maker
+    const q2 = query(
+      collection(db, 'approvalRequests'),
+      where('requestedTo', '==', currentUser.uid)
     );
 
-    return () => unsubscribe();
+    // Query 3: Requests where user is a viewer
+    const q3 = query(
+      collection(db, 'approvalRequests'),
+      where('viewers', 'array-contains', currentUser.uid)
+    );
+
+    const unsubscribe1 = onSnapshot(q1, (snapshot) => {
+      const requests = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          dateRequested: data.dateRequested?.toDate(),
+          decisionDate: data.decisionDate?.toDate(),
+          dueDate: data.dueDate?.toDate()
+        };
+      });
+      updateRequestsList(requests);
+    });
+
+    const unsubscribe2 = onSnapshot(q2, (snapshot) => {
+      const requests = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          dateRequested: data.dateRequested?.toDate(),
+          decisionDate: data.decisionDate?.toDate(),
+          dueDate: data.dueDate?.toDate()
+        };
+      });
+      updateRequestsList(requests);
+    });
+
+    const unsubscribe3 = onSnapshot(q3, (snapshot) => {
+      const requests = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          dateRequested: data.dateRequested?.toDate(),
+          decisionDate: data.decisionDate?.toDate(),
+          dueDate: data.dueDate?.toDate()
+        };
+      });
+      updateRequestsList(requests);
+    });
+
+    return () => {
+      unsubscribe1();
+      unsubscribe2();
+      unsubscribe3();
+    };
   }, [currentUser]);
 
   // Filter and search requests

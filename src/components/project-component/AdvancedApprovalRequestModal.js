@@ -22,15 +22,18 @@ export default function AdvancedApprovalRequestModal({
   const [requestTitle, setRequestTitle] = useState("");
   const [requestDescription, setRequestDescription] = useState("");
   const [attachedFiles, setAttachedFiles] = useState([]);
-  const [selectedRecipients, setSelectedRecipients] = useState([]);
+  const [selectedDecisionMaker, setSelectedDecisionMaker] = useState(null);
+  const [selectedViewers, setSelectedViewers] = useState([]);
   const [allRecipients, setAllRecipients] = useState([]);
   
   // UI states
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
   const [uploading, setUploading] = useState(false);
-  const [recipientSearchTerm, setRecipientSearchTerm] = useState("");
-  const [showRecipientDropdown, setShowRecipientDropdown] = useState(false);
+  const [decisionMakerSearchTerm, setDecisionMakerSearchTerm] = useState("");
+  const [viewersSearchTerm, setViewersSearchTerm] = useState("");
+  const [showDecisionMakerDropdown, setShowDecisionMakerDropdown] = useState(false);
+  const [showViewersDropdown, setShowViewersDropdown] = useState(false);
 
   // Request type - Project or Customer
   const requestType = projectId ? 'Project' : 'Customer';
@@ -132,9 +135,12 @@ export default function AdvancedApprovalRequestModal({
       setRequestTitle("");
       setRequestDescription("");
       setAttachedFiles([]);
-      setSelectedRecipients([]);
-      setRecipientSearchTerm("");
-      setShowRecipientDropdown(false);
+      setSelectedDecisionMaker(null);
+      setSelectedViewers([]);
+      setDecisionMakerSearchTerm("");
+      setViewersSearchTerm("");
+      setShowDecisionMakerDropdown(false);
+      setShowViewersDropdown(false);
       
       // Set default title based on type and purpose
                     if (isStageAdvancement) {
@@ -164,17 +170,35 @@ export default function AdvancedApprovalRequestModal({
     setAttachedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const toggleRecipient = (recipientId) => {
-    setSelectedRecipients(prev => 
-      prev.includes(recipientId)
-        ? prev.filter(id => id !== recipientId)
-        : [...prev, recipientId]
-    );
+  const selectDecisionMaker = (recipient) => {
+    setSelectedDecisionMaker(recipient);
+    setDecisionMakerSearchTerm(recipient.name);
+    setShowDecisionMakerDropdown(false);
   };
 
-  const filteredRecipients = allRecipients.filter(recipient =>
-    recipient.name.toLowerCase().includes(recipientSearchTerm.toLowerCase()) ||
-    recipient.email.toLowerCase().includes(recipientSearchTerm.toLowerCase())
+  const toggleViewer = (recipient) => {
+    setSelectedViewers(prev => {
+      const isSelected = prev.some(v => v.id === recipient.id);
+      if (isSelected) {
+        return prev.filter(v => v.id !== recipient.id);
+      } else {
+        return [...prev, recipient];
+      }
+    });
+  };
+
+  const removeViewer = (viewerId) => {
+    setSelectedViewers(prev => prev.filter(v => v.id !== viewerId));
+  };
+
+  const filteredDecisionMakers = allRecipients.filter(recipient =>
+    recipient.name.toLowerCase().includes(decisionMakerSearchTerm.toLowerCase()) ||
+    recipient.email.toLowerCase().includes(decisionMakerSearchTerm.toLowerCase())
+  );
+
+  const filteredViewers = allRecipients.filter(recipient =>
+    recipient.name.toLowerCase().includes(viewersSearchTerm.toLowerCase()) ||
+    recipient.email.toLowerCase().includes(viewersSearchTerm.toLowerCase())
   );
 
   const handleSubmit = async () => {
@@ -188,13 +212,13 @@ export default function AdvancedApprovalRequestModal({
       return;
     }
 
-    if (selectedRecipients.length === 0) {
-      alert("Please select at least one recipient.");
+    if (!selectedDecisionMaker) {
+      alert("Please select a decision maker.");
       return;
     }
 
     // Prevent sender from making decision for themselves
-    if (selectedRecipients.includes(currentUser.uid)) {
+    if (selectedDecisionMaker.id === currentUser.uid) {
       alert("You cannot select yourself as a decision maker.");
       return;
     }
@@ -234,11 +258,8 @@ export default function AdvancedApprovalRequestModal({
 
       setUploading(false);
 
-      // Create approval requests for each recipient
-      const approvalPromises = selectedRecipients.map(recipientId => {
-        const recipient = allRecipients.find(r => r.id === recipientId);
-        
-        return addDoc(collection(db, "approvalRequests"), {
+      // Create a single approval request with decision maker and viewers
+      const approvalRequest = await addDoc(collection(db, "approvalRequests"), {
           // Request metadata
           requestTitle: requestTitle.trim(),
           requestDescription: requestDescription.trim(),
@@ -265,9 +286,19 @@ export default function AdvancedApprovalRequestModal({
           requestedBy: currentUser.uid,
           requestedByName: currentUser.name || currentUser.displayName || currentUser.email,
           requestedByEmail: currentUser.email,
-          requestedTo: recipientId,
-          requestedToName: recipient?.name || "Unknown",
-          requestedToEmail: recipient?.email || "",
+          
+          // Decision maker (who can approve/reject)
+          requestedTo: selectedDecisionMaker.id,
+          requestedToName: selectedDecisionMaker.name,
+          requestedToEmail: selectedDecisionMaker.email,
+          
+          // Viewers (who can see but not decide)
+          viewers: selectedViewers.map(viewer => viewer.id),
+          viewerDetails: selectedViewers.map(viewer => ({
+            id: viewer.id,
+            name: viewer.name,
+            email: viewer.email
+          })),
           
           // Status and timing
           status: "pending",
@@ -285,16 +316,16 @@ export default function AdvancedApprovalRequestModal({
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
-      });
 
-      await Promise.all(approvalPromises);
+      // Single approval request created (no need for Promise.all)
 
       // Success callback
       if (onSuccess) {
         onSuccess({
           type: requestType,
           entityName,
-          recipientCount: selectedRecipients.length,
+          decisionMaker: selectedDecisionMaker.name,
+          viewerCount: selectedViewers.length,
           title: requestTitle
         });
       }
@@ -520,7 +551,7 @@ export default function AdvancedApprovalRequestModal({
             )}
           </div>
 
-          {/* Recipients Selection */}
+          {/* Decision Maker Selection */}
           <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
             <label style={{
               display: "block",
@@ -529,19 +560,19 @@ export default function AdvancedApprovalRequestModal({
               fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
               color: DESIGN_SYSTEM.colors.text.primary
             }}>
-              Select Decision Makers * ({selectedRecipients.length} selected)
+              Select Decision Maker * (Who can approve/reject)
             </label>
             
             <div style={{ position: "relative" }}>
               <input
                 type="text"
-                value={recipientSearchTerm}
+                value={decisionMakerSearchTerm}
                 onChange={(e) => {
-                  setRecipientSearchTerm(e.target.value);
-                  setShowRecipientDropdown(true);
+                  setDecisionMakerSearchTerm(e.target.value);
+                  setShowDecisionMakerDropdown(true);
                 }}
-                onFocus={() => setShowRecipientDropdown(true)}
-                placeholder="Search team members..."
+                onFocus={() => setShowDecisionMakerDropdown(true)}
+                placeholder="Search for decision maker..."
                 style={{
                   width: "100%",
                   padding: DESIGN_SYSTEM.spacing.sm,
@@ -553,7 +584,7 @@ export default function AdvancedApprovalRequestModal({
                 disabled={loading}
               />
               
-              {showRecipientDropdown && (
+              {showDecisionMakerDropdown && (
                 <div style={{
                   position: "absolute",
                   top: "100%",
@@ -568,7 +599,7 @@ export default function AdvancedApprovalRequestModal({
                   zIndex: 10,
                   marginTop: "2px"
                 }}>
-                  {filteredRecipients.length === 0 ? (
+                  {filteredDecisionMakers.length === 0 ? (
                     <div style={{
                       padding: DESIGN_SYSTEM.spacing.sm,
                       color: DESIGN_SYSTEM.colors.text.tertiary,
@@ -577,25 +608,25 @@ export default function AdvancedApprovalRequestModal({
                       No team members found
                     </div>
                   ) : (
-                    filteredRecipients.map(recipient => (
+                    filteredDecisionMakers.map(recipient => (
                       <div
                         key={recipient.id}
-                        onClick={() => toggleRecipient(recipient.id)}
+                        onClick={() => selectDecisionMaker(recipient)}
                         style={{
                           display: "flex",
                           alignItems: "center",
                           padding: DESIGN_SYSTEM.spacing.sm,
                           cursor: "pointer",
-                          backgroundColor: selectedRecipients.includes(recipient.id)
+                          backgroundColor: selectedDecisionMaker?.id === recipient.id
                             ? DESIGN_SYSTEM.colors.primary[50]
                             : "transparent",
                           borderBottom: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`
                         }}
                       >
                         <input
-                          type="checkbox"
-                          checked={selectedRecipients.includes(recipient.id)}
-                          onChange={() => toggleRecipient(recipient.id)}
+                          type="radio"
+                          checked={selectedDecisionMaker?.id === recipient.id}
+                          onChange={() => selectDecisionMaker(recipient)}
                           style={{ marginRight: DESIGN_SYSTEM.spacing.sm }}
                         />
                         <div>
@@ -620,41 +651,50 @@ export default function AdvancedApprovalRequestModal({
               )}
             </div>
             
-            {/* Selected Recipients */}
-            {selectedRecipients.length > 0 && (
+            {/* Selected Decision Maker */}
+            {selectedDecisionMaker && (
               <div style={{
                 marginTop: DESIGN_SYSTEM.spacing.sm,
+                padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                backgroundColor: DESIGN_SYSTEM.colors.success + '20',
+                borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                border: `1px solid ${DESIGN_SYSTEM.colors.success}`,
                 display: "flex",
-                flexWrap: "wrap",
-                gap: DESIGN_SYSTEM.spacing.xs
+                alignItems: "center",
+                justifyContent: "space-between"
               }}>
-                {selectedRecipients.map(recipientId => {
-                  const recipient = allRecipients.find(r => r.id === recipientId);
-                  return (
-                    <div key={recipientId} style={{
-                      display: "flex",
-                      alignItems: "center",
-                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
-                      backgroundColor: DESIGN_SYSTEM.colors.primary[100],
-                      borderRadius: DESIGN_SYSTEM.borderRadius.full,
-                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm
-                    }}>
-                      <span>{recipient?.name || "Unknown"}</span>
-                      <button
-                        onClick={() => toggleRecipient(recipientId)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          marginLeft: DESIGN_SYSTEM.spacing.xs,
-                          cursor: "pointer",
-                          color: DESIGN_SYSTEM.colors.primary[700]
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  );
-                })}
+                <div>
+                  <div style={{
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
+                    color: DESIGN_SYSTEM.colors.text.primary
+                  }}>
+                    {selectedDecisionMaker.name}
+                  </div>
+                  <div style={{
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                    color: DESIGN_SYSTEM.colors.text.secondary
+                  }}>
+                    Decision Maker
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedDecisionMaker(null);
+                    setDecisionMakerSearchTerm("");
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: DESIGN_SYSTEM.colors.text.secondary,
+                    cursor: "pointer",
+                    fontSize: "16px",
+                    padding: "0",
+                    lineHeight: 1
+                  }}
+                >
+                  ×
+                </button>
               </div>
             )}
           </div>
@@ -687,7 +727,7 @@ export default function AdvancedApprovalRequestModal({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={loading || !requestTitle.trim() || !requestDescription.trim() || selectedRecipients.length === 0}
+            disabled={loading || !requestTitle.trim() || !requestDescription.trim() || !selectedDecisionMaker}
             style={{
               padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
               border: "none",
@@ -699,7 +739,7 @@ export default function AdvancedApprovalRequestModal({
               fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
               fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
               cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading || !requestTitle.trim() || !requestDescription.trim() || selectedRecipients.length === 0 ? 0.6 : 1,
+              opacity: loading || !requestTitle.trim() || !requestDescription.trim() || !selectedDecisionMaker ? 0.6 : 1,
               minWidth: "120px"
             }}
           >

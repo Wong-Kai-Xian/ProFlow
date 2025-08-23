@@ -9,6 +9,7 @@ import StageIndicator from '../components/project-component/StageIndicator';
 import ApprovalModal from '../components/project-component/ApprovalModal';
 import AdvanceStageChoiceModal from '../components/project-component/AdvanceStageChoiceModal';
 import SendApprovalModal from '../components/project-component/SendApprovalModal';
+import AdvancedApprovalRequestModal from '../components/project-component/AdvancedApprovalRequestModal';
 import AddTeamMemberModal from '../components/project-component/AddTeamMemberModal';
 import TeamMembersPanel from '../components/project-component/TeamMembersPanel';
 import { db } from "../firebase";
@@ -26,6 +27,8 @@ export default function ProjectDetail() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showAdvanceChoiceModal, setShowAdvanceChoiceModal] = useState(false);
   const [showSendApprovalModal, setShowSendApprovalModal] = useState(false);
+  const [showAdvancedApprovalModal, setShowAdvancedApprovalModal] = useState(false);
+  const [approvalModalType, setApprovalModalType] = useState('stage'); // 'stage' or 'general'
   const [projectForums, setProjectForums] = useState([]); // State to hold project-specific forums
   const { currentUser } = useAuth(); // Get current user from AuthContext
   const [currentApproval, setCurrentApproval] = useState(null); // State to hold the current approval request
@@ -420,8 +423,8 @@ Transcript:\n${promptText}` }
 
   useEffect(() => {
     if (projectData) {
-      const filteredTasks = (projectData.tasks || []).filter(section => section.stage === currentStage);
-      setProjectTasks(filteredTasks);
+    const filteredTasks = (projectData.tasks || []).filter(section => section.stage === currentStage);
+    setProjectTasks(filteredTasks);
       setProjectReminders(projectData.reminders || []);
       setProjectDetails(projectData);
     }
@@ -440,12 +443,23 @@ Transcript:\n${promptText}` }
       );
 
       if (allTasksCompleteInCurrentStage) {
-        // Ask whether to require approval or advance directly
-        setShowAdvanceChoiceModal(true);
+        // Use advanced approval modal for stage advancement
+        setApprovalModalType('stage');
+        setShowAdvancedApprovalModal(true);
       } else {
         alert("All tasks in the current stage must be marked as 'Complete' before advancing.");
       }
     }
+  };
+
+  const handleSendApprovalRequest = () => {
+    setApprovalModalType('general');
+    setShowAdvancedApprovalModal(true);
+  };
+
+  const handleApprovalRequestSuccess = (result) => {
+    console.log(`Project approval request sent for ${result.entityName}`);
+    // Could add notification or other success handling here
   };
 
   const handleConfirmAdvanceStage = async () => {
@@ -859,40 +873,40 @@ Transcript:\n${promptText}` }
             {/* Expanded meeting */}
             {(
               (showMeeting || meetingMinimized) && (
-                <div>
+              <div>
                   {showMeeting && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.projects.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
-                      <div>Project Meeting</div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        {userHasJoinedMeeting ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.projects.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
+                  <div>Project Meeting</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {userHasJoinedMeeting ? (
                           <>
                             <button onClick={isTranscribing ? stopTranscription : startTranscription} style={{ ...getButtonStyle('secondary', 'projects') }}>{isTranscribing ? 'Stop Transcribe' : 'Transcribe'}</button>
-                            <button onClick={handleLeaveMeeting} style={{ ...getButtonStyle('secondary', 'projects') }}>Leave</button>
+                      <button onClick={handleLeaveMeeting} style={{ ...getButtonStyle('secondary', 'projects') }}>Leave</button>
                           </>
-                        ) : (
-                          <button onClick={handleJoinMeeting} style={{ ...getButtonStyle('secondary', 'projects') }}>Join</button>
-                        )}
-                        <button onClick={() => { setMeetingMinimized(true); setShowMeeting(false); }} style={{ ...getButtonStyle('secondary', 'projects') }}>Minimize</button>
-                      </div>
-                    </div>
+                    ) : (
+                      <button onClick={handleJoinMeeting} style={{ ...getButtonStyle('secondary', 'projects') }}>Join</button>
+                    )}
+                    <button onClick={() => { setMeetingMinimized(true); setShowMeeting(false); }} style={{ ...getButtonStyle('secondary', 'projects') }}>Minimize</button>
+                  </div>
+                </div>
                   )}
                   {/* Iframe stays mounted in minimized state to keep session alive */}
                   <div style={{ width: '100%', height: showMeeting ? '600px' : '1px', background: '#000' }}>
-                    {userHasJoinedMeeting ? (
-                      <iframe
-                        title="Project Meeting"
-                        src={`https://meet.jit.si/project-${projectId}-meeting`}
+                  {userHasJoinedMeeting ? (
+                    <iframe
+                      title="Project Meeting"
+                      src={`https://meet.jit.si/project-${projectId}-meeting`}
                         style={{ width: '100%', height: '100%', border: '0', borderRadius: showMeeting ? `0 0 ${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg}` : 0, visibility: showMeeting ? 'visible' : 'hidden' }}
-                        allow="camera; microphone; fullscreen; display-capture"
-                      />
-                    ) : (
+                      allow="camera; microphone; fullscreen; display-capture"
+                    />
+                  ) : (
                       showMeeting && (
-                        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
-                          Click Join to connect to the meeting
-                        </div>
+                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
+                      Click Join to connect to the meeting
+                    </div>
                       )
-                    )}
-                  </div>
+                  )}
+                </div>
                   {/* Transcript viewer */}
                   {showMeeting && (
                     <div style={{ padding: DESIGN_SYSTEM.spacing.base, background: '#f8fafc', borderTop: `1px solid ${DESIGN_SYSTEM.colors.border}` }}>
@@ -902,7 +916,7 @@ Transcript:\n${promptText}` }
                           <div key={line.id} style={{ marginBottom: 6 }}>
                             <span style={{ color: DESIGN_SYSTEM.colors.text.secondary, marginRight: 6 }}>{new Date((line.createdAt?.seconds || 0) * 1000).toLocaleTimeString()}</span>
                             {line.text}
-                          </div>
+              </div>
                         ))}
                         {liveTranscript && (
                           <div style={{ opacity: 0.7 }}>{liveTranscript}</div>
@@ -926,142 +940,142 @@ Transcript:\n${promptText}` }
           </div>
         )}
 
-        <div style={{
-          display: "grid",
+      <div style={{
+        display: "grid",
           gridTemplateColumns: "380px 1fr",
           gridTemplateRows: "1fr",
           gap: DESIGN_SYSTEM.spacing.xl,
           minHeight: "calc(100vh - 300px)"
+      }}>
+        {/* Left Column */}
+        <div style={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: DESIGN_SYSTEM.spacing.lg,
+          gridColumn: 1, 
+          gridRow: 1,
+          maxHeight: "90vh",
+          overflowY: "auto"
         }}>
-          {/* Left Column */}
-          <div style={{ 
-            display: "flex", 
-            flexDirection: "column", 
-            gap: DESIGN_SYSTEM.spacing.lg,
-            gridColumn: 1, 
-            gridRow: 1,
-            maxHeight: "90vh",
-            overflowY: "auto"
+          {/* Project Details Card */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flexShrink: 0
           }}>
-            {/* Project Details Card */}
             <div style={{
-              ...getCardStyle('projects'),
-              flexShrink: 0
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
             }}>
-              <div style={{
-                background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-                color: DESIGN_SYSTEM.colors.text.inverse,
-                padding: DESIGN_SYSTEM.spacing.base,
-                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
               }}>
-                <h3 style={{
-                  margin: 0,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-                }}>
-                  Project Details
-                </h3>
-              </div>
-              <div style={{ padding: 0 }}>
-                <ProjectDetails 
-                  project={projectDetails} 
-                  onSave={handleSaveEditedProjectDetails}
-                  allProjectNames={allProjectNames}
-                  readOnly={false}
-                />
-              </div>
+                Project Details
+              </h3>
             </div>
-            
-            {/* Reminders Section */}
+            <div style={{ padding: 0 }}>
+          <ProjectDetails 
+            project={projectDetails} 
+            onSave={handleSaveEditedProjectDetails}
+                allProjectNames={allProjectNames}
+                readOnly={false}
+              />
+            </div>
+          </div>
+          
+          {/* Reminders Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flexShrink: 0
+          }}>
             <div style={{
-              ...getCardStyle('projects'),
-              flexShrink: 0
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
             }}>
-              <div style={{
-                background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-                color: DESIGN_SYSTEM.colors.text.inverse,
-                padding: DESIGN_SYSTEM.spacing.base,
-                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
               }}>
-                <h3 style={{
-                  margin: 0,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-                }}>
-                  Reminders
-                </h3>
-              </div>
-              <div style={{ padding: 0 }}>
-                <Reminders projectId={projectId} /> 
-              </div>
+                Reminders
+              </h3>
             </div>
-            
-            {/* Project Forum Section */}
+            <div style={{ padding: 0 }}>
+            <Reminders projectId={projectId} /> 
+          </div>
+          </div>
+          
+          {/* Project Forum Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flex: "1 1 350px", 
+            minHeight: "300px",
+            maxHeight: "400px",
+            display: "flex",
+            flexDirection: "column"
+          }}>
             <div style={{
-              ...getCardStyle('projects'),
-              flex: "1 1 350px", 
-              minHeight: "300px",
-              maxHeight: "400px",
-              display: "flex",
-              flexDirection: "column"
+              background: DESIGN_SYSTEM.pageThemes.forums.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
             }}>
-              <div style={{
-                background: DESIGN_SYSTEM.pageThemes.forums.gradient,
-                color: DESIGN_SYSTEM.colors.text.inverse,
-                padding: DESIGN_SYSTEM.spacing.base,
-                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
               }}>
-                <h3 style={{
-                  margin: 0,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-                }}>
-                  Project Forum
-                </h3>
-              </div>
-              <div style={{ flex: 1, overflow: "hidden" }}>
-                <ProjectGroupForum 
-                  projectId={projectId} 
-                  forums={projectForums}
-                />
-              </div>
+                Project Forum
+              </h3>
             </div>
-            
-            {/* Team Members Section */}
+            <div style={{ flex: 1, overflow: "hidden" }}>
+            <ProjectGroupForum 
+              projectId={projectId} 
+                forums={projectForums}
+            />
+          </div>
+          </div>
+          
+          {/* Team Members Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flex: "1 1 300px", 
+            minHeight: "250px",
+            maxHeight: "350px",
+            display: "flex",
+            flexDirection: "column"
+          }}>
             <div style={{
-              ...getCardStyle('projects'),
-              flex: "1 1 300px", 
-              minHeight: "250px",
-              maxHeight: "350px",
-              display: "flex",
-              flexDirection: "column"
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
             }}>
-              <div style={{
-                background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-                color: DESIGN_SYSTEM.colors.text.inverse,
-                padding: DESIGN_SYSTEM.spacing.base,
-                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
               }}>
-                <h3 style={{
-                  margin: 0,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-                }}>
-                  Team Members
-                </h3>
-              </div>
-              <div style={{ flex: 1, overflow: "hidden" }}>
-                <TeamMembersPanel 
-                  projectId={projectId}
-                  teamMembers={projectData.team}
-                  onAddMemberClick={() => setShowAddTeamMemberModal(true)}
-                  onRemoveMember={handleRemoveTeamMember}
-                  projectCreatorId={projectData.userId}
-                  currentUserUid={currentUser?.uid}
-                  currentUser={currentUser}
-                />
-              </div>
+                Team Members
+              </h3>
             </div>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+            <TeamMembersPanel 
+              projectId={projectId}
+              teamMembers={projectData.team}
+              onAddMemberClick={() => setShowAddTeamMemberModal(true)}
+              onRemoveMember={handleRemoveTeamMember}
+              projectCreatorId={projectData.userId}
+              currentUserUid={currentUser?.uid}
+              currentUser={currentUser}
+            />
+            </div>
+          </div>
 
             {/* Meeting Transcripts Section */}
             <div style={{
@@ -1145,41 +1159,41 @@ Transcript:\n${promptText}` }
                 )}
               </div>
             </div>
-          </div>
+        </div>
 
-          {/* Right Column */}
-          <div style={{ 
-            display: "flex", 
-            flexDirection: "column", 
-            gap: DESIGN_SYSTEM.spacing.lg, 
-            gridColumn: 2, 
+        {/* Right Column */}
+        <div style={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: DESIGN_SYSTEM.spacing.lg, 
+          gridColumn: 2, 
             gridRow: 1 
-          }}>
-            {/* Project Stages Section */}
-            <div style={{
-              ...getCardStyle('projects'),
+        }}>
+          {/* Project Stages Section */}
+          <div style={{
+            ...getCardStyle('projects'),
               padding: 0
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
             }}>
-              <div style={{
-                background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-                color: DESIGN_SYSTEM.colors.text.inverse,
-                padding: DESIGN_SYSTEM.spacing.base,
-                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center"
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
               }}>
-                <h3 style={{
-                  margin: 0,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-                }}>
-                  Project Stages
-                </h3>
+                Project Stages
+              </h3>
                 <button
-                  onClick={() => !currentApproval && setShowSendApprovalModal(true)}
-                  disabled={!!currentApproval}
-                  style={{
+                  onClick={() => !currentApproval && handleSendApprovalRequest()}
+                disabled={!!currentApproval}
+                style={{
                     ...getButtonStyle('secondary', 'projects'),
                     background: currentApproval ? 'rgba(107,114,128,0.3)' : 'rgba(255,255,255,0.2)',
                     color: currentApproval ? '#9CA3AF' : DESIGN_SYSTEM.colors.text.inverse,
@@ -1187,64 +1201,64 @@ Transcript:\n${promptText}` }
                     padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
                     fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
                     cursor: currentApproval ? 'not-allowed' : 'pointer'
-                  }}
-                >
-                  {currentApproval ? 'Pending Approval' : 'Send Approval'}
-                </button>
-              </div>
-              <div style={{ padding: DESIGN_SYSTEM.spacing.base, overflowX: 'hidden' }}>
-                <StageIndicator 
-                  currentStage={currentStage} 
-                  allStages={isEditingStages ? workingStages : projectStages} 
-                  onAdvanceStage={handleAdvanceStage} 
-                  onGoBackStage={handleGoBackStage} 
-                  isCurrentStageTasksComplete={isCurrentStageTasksComplete}
-                  onStageSelect={handleStageSelect}
-                  canAdvance={canAdvanceStage}
-                  editing={isEditingStages}
-                  onAddStage={handleAddStage}
-                  onDeleteStageAt={handleDeleteStageAt}
-                  onRenameStage={handleRenameStageAt}
-                  onMoveStageLeft={handleMoveStageLeft}
-                  onMoveStageRight={handleMoveStageRight}
-                />
-              </div>
-            </div>
-
-            {/* Project Tasks Section */}
-            <div style={{
-              ...getCardStyle('projects'),
-              flex: 1,
-              display: "flex",
-              flexDirection: "column"
-            }}>
-              <div style={{
-                background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-                color: DESIGN_SYSTEM.colors.text.inverse,
-                padding: DESIGN_SYSTEM.spacing.base,
-                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-              }}>
-                <h3 style={{
-                  margin: 0,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-                }}>
-                  Project Tasks
-                </h3>
-              </div>
-              <div style={{ flex: 1, overflow: "hidden" }}>
-                <ProjectTaskPanel 
-                  projectTasks={projectTasks}
-                  setProjectTasks={setProjectTasks}
-                  currentStage={currentStage} 
-                  projectId={projectId}
-                  setProjectData={setProjectData}
-                  projectMembers={projectTeamMembersDetails}
-                />
-              </div>
+                }}
+              >
+                {currentApproval ? 'Pending Approval' : 'Send Approval'}
+              </button>
+          </div>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base, overflowX: 'hidden' }}>
+          <StageIndicator 
+            currentStage={currentStage} 
+            allStages={isEditingStages ? workingStages : projectStages} 
+            onAdvanceStage={handleAdvanceStage} 
+            onGoBackStage={handleGoBackStage} 
+            isCurrentStageTasksComplete={isCurrentStageTasksComplete}
+            onStageSelect={handleStageSelect}
+            canAdvance={canAdvanceStage}
+            editing={isEditingStages}
+            onAddStage={handleAddStage}
+            onDeleteStageAt={handleDeleteStageAt}
+            onRenameStage={handleRenameStageAt}
+            onMoveStageLeft={handleMoveStageLeft}
+            onMoveStageRight={handleMoveStageRight}
+          />
             </div>
           </div>
+
+          {/* Project Tasks Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flex: 1,
+            display: "flex",
+            flexDirection: "column"
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Project Tasks
+              </h3>
+            </div>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+          <ProjectTaskPanel 
+            projectTasks={projectTasks}
+            setProjectTasks={setProjectTasks}
+            currentStage={currentStage} 
+            projectId={projectId}
+                setProjectData={setProjectData}
+                projectMembers={projectTeamMembersDetails}
+          />
         </div>
+      </div>
+        </div>
+      </div>
       </div>
       
       {showApprovalModal && (
@@ -1269,6 +1283,19 @@ Transcript:\n${promptText}` }
         currentUser={currentUser}
         teamMembers={projectTeamMembersDetails}
       />
+      
+      <AdvancedApprovalRequestModal
+        isOpen={showAdvancedApprovalModal}
+        onClose={() => setShowAdvancedApprovalModal(false)}
+        onSuccess={handleApprovalRequestSuccess}
+        projectId={projectId}
+        projectName={projectData?.name || ""}
+        currentUser={currentUser}
+        currentStage={currentStage}
+        nextStage={projectStages[projectStages.indexOf(currentStage) + 1] || ""}
+        isStageAdvancement={approvalModalType === 'stage'}
+      />
+      
       {/* Add Team Member Modal */}
       <AddTeamMemberModal
         isOpen={showAddTeamMemberModal}

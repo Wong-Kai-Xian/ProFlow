@@ -28,6 +28,7 @@ export default function CustomerProfile() {
   const [approvalModalType, setApprovalModalType] = useState('stage'); // 'stage' or 'general'
   const [showProjectConversionApprovalModal, setShowProjectConversionApprovalModal] = useState(false); // State for project conversion approval
   const [hasApprovedConversion, setHasApprovedConversion] = useState(false); // Track if conversion was approved
+  const [hasPendingConversionRequest, setHasPendingConversionRequest] = useState(false); // Track if conversion request was sent
   const [loading, setLoading] = useState(true); // Loading state
 
   // Initialize state variables with default values for new customer or null for existing to be loaded
@@ -81,6 +82,7 @@ export default function CustomerProfile() {
 
   const handleProjectConversionApprovalSuccess = (result) => {
     setShowProjectConversionApprovalModal(false);
+    setHasPendingConversionRequest(true);
     // Don't create project immediately - wait for approval
     alert("Conversion approval request sent successfully! You'll be able to create the project once it's approved.");
   };
@@ -210,35 +212,44 @@ export default function CustomerProfile() {
     fetchCustomerTeamMembersDetails();
   }, [projects]); // Re-run when projects array changes
 
-  // Check for approved conversion requests
+  // Check for approved conversion requests and pending requests
   useEffect(() => {
-    const checkApprovedConversion = async () => {
+    const checkConversionStatus = async () => {
       if (!currentUser || !id) return;
 
       try {
+        // Check for any conversion requests (approved or pending)
         const approvalRequestsQuery = query(
           collection(db, 'approvalRequests'),
           where('entityId', '==', id),
           where('requestedBy', '==', currentUser.uid),
-          where('status', '==', 'approved'),
           where('requestType', '==', 'Customer')
         );
         
         const snapshot = await getDocs(approvalRequestsQuery);
         
-        // Check if there's an approved conversion request
-        const hasApprovedConversionRequest = snapshot.docs.some(doc => {
+        let hasApproved = false;
+        let hasPending = false;
+        
+        snapshot.docs.forEach(doc => {
           const data = doc.data();
-          return data.requestTitle && data.requestTitle.toLowerCase().includes('convert');
+          if (data.requestTitle && data.requestTitle.toLowerCase().includes('convert')) {
+            if (data.status === 'approved') {
+              hasApproved = true;
+            } else if (data.status === 'pending') {
+              hasPending = true;
+            }
+          }
         });
         
-        setHasApprovedConversion(hasApprovedConversionRequest);
+        setHasApprovedConversion(hasApproved);
+        setHasPendingConversionRequest(hasPending);
       } catch (error) {
-        console.error("Error checking approved conversion requests:", error);
+        console.error("Error checking conversion request status:", error);
       }
     };
 
-    checkApprovedConversion();
+    checkConversionStatus();
   }, [currentUser, id]);
 
   const handleSaveCustomer = async (overrides = {}) => {
@@ -372,7 +383,17 @@ export default function CustomerProfile() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         customerId: id, // Link to the current customer
-        convertedFromCustomer: true
+        convertedFromCustomer: true,
+        
+        // Ensure project appears in ProjectList queries
+        userId: currentUser.uid, // Legacy field for compatibility
+        createdBy: currentUser.uid, // New field
+        createdByName: currentUser.name || currentUser.displayName || currentUser.email,
+        
+        // Ensure current user is in team if not already
+        team: projectData.team && projectData.team.length > 0 
+          ? (projectData.team.includes(currentUser.uid) ? projectData.team : [...projectData.team, currentUser.uid])
+          : [currentUser.uid]
       };
 
       const projectsCollectionRef = collection(db, "projects");
@@ -675,7 +696,7 @@ export default function CustomerProfile() {
               Quick Actions
             </h3>
             <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.base }}>
-              {areAllStagesCompleted() && !hasApprovedConversion && (
+              {areAllStagesCompleted() && !hasApprovedConversion && !hasPendingConversionRequest && (
                 <button
                   onClick={handleConvertToProject}
                   style={{
@@ -688,11 +709,28 @@ export default function CustomerProfile() {
                   Request Project Conversion
                 </button>
               )}
+              {areAllStagesCompleted() && hasPendingConversionRequest && !hasApprovedConversion && (
+                <button
+                  disabled
+                  style={{
+                    ...getButtonStyle('secondary', 'customers'),
+                    padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`,
+                    fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                    opacity: 0.6,
+                    cursor: 'not-allowed',
+                    background: DESIGN_SYSTEM.colors.secondary[200],
+                    color: DESIGN_SYSTEM.colors.text.secondary
+                  }}
+                >
+                  ⏳ Waiting for Approval
+                </button>
+              )}
               {hasApprovedConversion && (
                 <button
                   onClick={handleCreateProjectAfterApproval}
                   style={{
-                    ...getButtonStyle('primary', 'success'),
+                    ...getButtonStyle('primary', 'projects'),
                     padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`,
                     fontSize: DESIGN_SYSTEM.typography.fontSize.base,
                     fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
