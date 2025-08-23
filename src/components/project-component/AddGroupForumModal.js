@@ -116,22 +116,21 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
             }}>
               Link to Project
             </label>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
+            <input
+              type="text"
+              value={projects.find(p => p.id === selectedProjectId)?.name || ''}
+              readOnly
               style={{
                 ...INPUT_STYLES.base,
                 width: "100%",
-                fontSize: '14px'
+                fontSize: '14px',
+                background: '#f9fafb',
+                color: COLORS.lightText
               }}
-            >
-              <option value="">-- Select Project --</option>
-              {projects.map(project => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+            />
+            {!selectedProjectId && (
+              <div style={{ color: COLORS.danger, fontSize: '12px', marginTop: '6px' }}>Project is required.</div>
+            )}
           </div>
           
           {/* Forum Name */}
@@ -156,6 +155,7 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
                 fontSize: '14px'
               }}
             />
+            {!newForumName.trim() && (<div style={{ color: COLORS.danger, fontSize: '12px', marginTop: '6px' }}>Forum name is required.</div>)}
           </div>
 
           {/* Description */}
@@ -181,6 +181,7 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
                 resize: 'vertical'
               }}
             />
+            {!forumDescription.trim() && (<div style={{ color: COLORS.danger, fontSize: '12px', marginTop: '6px' }}>Description is required.</div>)}
           </div>
 
           {/* Members */}
@@ -283,12 +284,12 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
 
           <button 
             onClick={handleCreateClick} 
-            disabled={!newForumName.trim()}
+            disabled={!newForumName.trim() || !forumDescription.trim() || !selectedProjectId}
             style={{
               ...BUTTON_STYLES.primary,
               width: "100%",
-              opacity: !newForumName.trim() ? 0.5 : 1,
-              cursor: !newForumName.trim() ? 'not-allowed' : 'pointer'
+              opacity: (!newForumName.trim() || !forumDescription.trim() || !selectedProjectId) ? 0.5 : 1,
+              cursor: (!newForumName.trim() || !forumDescription.trim() || !selectedProjectId) ? 'not-allowed' : 'pointer'
             }}
           >
             Create Forum

@@ -5,6 +5,7 @@ import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-componen
 export default function ProjectDetails({ project, onSave, allProjectNames, readOnly, noCard }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editableProject, setEditableProject] = useState(project || {});
+  const [showDescModal, setShowDescModal] = useState(false);
 
   // Debugging: Log onSave prop
   useEffect(() => {
@@ -183,21 +184,20 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
             )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Status</label>
-            <div style={{ padding: "6px", fontSize: "12px", fontWeight: "400", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              <span style={{
-                backgroundColor: project.status === 'In Progress' ? COLORS.primary : 
-                                project.status === 'Completed' ? COLORS.success :
-                                project.status === 'Waiting for Approval' ? COLORS.warning : COLORS.lightText,
-                color: 'white',
-                padding: "2px 8px",
-                borderRadius: "12px",
-                fontSize: "10px",
-                fontWeight: "600"
-              }}>
-                {project.status || 'No status'}
-              </span>
-            </div>
+            <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Deadline</label>
+            {isEditing && !effectiveReadOnly ? (
+              <input
+                type="date"
+                name="deadline"
+                value={editableProject.deadline || ''}
+                onChange={handleChange}
+                style={{ ...INPUT_STYLES.base, width: "100%", fontSize: "12px", padding: "6px" }}
+              />
+            ) : (
+              <div style={{ padding: "6px", fontSize: "12px", color: COLORS.text, fontWeight: "400", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {project.deadline || 'No deadline'}
+              </div>
+            )}
           </div>
         </div>
 
@@ -216,12 +216,25 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
               flex: 1, 
               color: COLORS.lightText, 
               fontSize: "14px", 
-              lineHeight: "1.4", 
+              lineHeight: "1.6", 
               fontWeight: "400",
               overflowY: "auto",
-              paddingRight: "5px"
+              paddingRight: "5px",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              marginTop: "4px"
             }}>
               {project.description || 'No description provided.'}
+              {project.description && (
+                <div style={{ marginTop: '6px' }}>
+                  <button
+                    onClick={() => setShowDescModal(true)}
+                    style={{ ...BUTTON_STYLES.secondary, padding: '4px 8px', fontSize: '12px' }}
+                  >
+                    View Full
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -236,6 +249,22 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
   return (
     <Card style={cardStyle}>
       {content}
+      {showDescModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{ background: '#fff', padding: '16px', borderRadius: '10px', width: '90%', maxWidth: '700px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <h4 style={{ margin: 0, color: COLORS.dark }}>Full Description</h4>
+            <div style={{ marginTop: '8px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: '1.7', color: COLORS.text }}>
+              {project.description}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+              <button onClick={() => setShowDescModal(false)} style={BUTTON_STYLES.primary}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

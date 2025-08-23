@@ -304,6 +304,11 @@ export default function CustomerProfileList() {
           const updatedClients = currentClients.filter(client => client.id !== customerToDelete.id);
           await updateDoc(doc(db, "organizations", orgDoc.id), { clients: updatedClients });
           console.log(`Customer ${customerToDelete.id} removed from organization ${orgDoc.id}.`);
+          // If organization has no more clients, delete it as well
+          if (updatedClients.length === 0) {
+            await deleteDoc(doc(db, "organizations", orgDoc.id));
+            console.log(`Deleted empty organization ${orgDoc.id} after removing last client.`);
+          }
         }
       }
 
@@ -587,7 +592,7 @@ export default function CustomerProfileList() {
                       fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
                       textAlign: 'center'
                     }}>
-                      {customer.customerProfile.email || customer.companyProfile.industry}
+                      {customer.companyProfile.company || customer.customerProfile.email || customer.companyProfile.industry}
                     </p>
                   </div>
   

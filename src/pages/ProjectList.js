@@ -48,11 +48,33 @@ export default function ProjectList() {
     
     let allProjects = new Map(); // Use Map to avoid duplicates
     
-    const updateProjectsList = () => {
-      const projectList = Array.from(allProjects.values()).sort((a, b) => 
-        a.name.localeCompare(b.name)
-      );
-      setProjects(projectList);
+    const updateProjectsList = async () => {
+      const baseList = Array.from(allProjects.values());
+      // Enrich with teamDetails (names/emails) for avatars
+      const enriched = await Promise.all(baseList.map(async (p) => {
+        const team = p.team || [];
+        if (team.length === 0) return { ...p, teamDetails: [] };
+        try {
+          const chunkSize = 10;
+          let details = [];
+          for (let i = 0; i < team.length; i += chunkSize) {
+            const chunk = team.slice(i, i + chunkSize);
+            const usersRef = collection(db, 'users');
+            const qUsers = query(usersRef, where('uid', 'in', chunk));
+            const snap = await getDocs(qUsers);
+            snap.forEach(docSnap => {
+              const d = docSnap.data();
+              details.push({ uid: docSnap.id, name: d.name || d.email || 'User', email: d.email || '' });
+            });
+          }
+          return { ...p, teamDetails: details };
+        } catch (e) {
+          console.warn('Failed to load team details', e);
+          return { ...p, teamDetails: [] };
+        }
+      }));
+      enriched.sort((a, b) => a.name.localeCompare(b.name));
+      setProjects(enriched);
     };
     
     const unsubscribeCreated = onSnapshot(createdProjectsQuery, (snapshot) => {
@@ -122,14 +144,15 @@ export default function ProjectList() {
     if (!currentUser) return; // Ensure user is logged in to create projects
     await addDoc(collection(db, "projects"), {
       name: newProject.name,
-      stage: newProject.stage || "Proposal",
-      status: determineProjectStatus(newProject.stage || "Proposal"), // Set status based on stage progress
+      stage: "Planning",
+      status: determineProjectStatus("Planning"), // Set status based on stage
       team: newProject.team || [],
       tasks: newProject.tasks || [], // Initialize tasks as an empty array
       completedTasks: newProject.completedTasks || 0,
       userId: currentUser.uid, // Assign project to current user
       description: newProject.description || '', // Include description
       allowJoinById: newProject.allowJoinById !== undefined ? newProject.allowJoinById : true, // Include allowJoinById
+      deadline: newProject.deadline || null,
     });
     // setProjects will be handled by the onSnapshot listener, no need to refetch
     setShowCreateModal(false);
@@ -263,8 +286,9 @@ export default function ProjectList() {
         name: updatedProject.name,
         description: updatedProject.description,
         team: updatedProject.team,
-        stage: updatedProject.stage,
+        // Stage is controlled by workflow; do not change here
         allowJoinById: updatedProject.allowJoinById,
+        deadline: updatedProject.deadline || null,
       });
       // The onSnapshot listener will handle updating the projects state
       setShowCreateModal(false); // Close CreateProjectModal
@@ -548,19 +572,32 @@ export default function ProjectList() {
                     {project.name}
                   </h3>
 
-                  {/* Stage Badge */}
-                  <div style={{
-                    display: "inline-block",
-                    padding: "6px 14px",
-                    borderRadius: "20px",
-                    backgroundColor: `${getStageColor(project.stage)}20`,
-                    color: getStageColor(project.stage),
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    marginBottom: "16px",
-                    border: `1px solid ${getStageColor(project.stage)}40`
-                  }}>
-                    {project.stage}
+                  {/* Stage + Deadline Badges */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+                    <div style={{
+                      display: "inline-block",
+                      padding: "6px 14px",
+                      borderRadius: "20px",
+                      backgroundColor: `${getStageColor(project.stage)}20`,
+                      color: getStageColor(project.stage),
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      border: `1px solid ${getStageColor(project.stage)}40`
+                    }}>
+                      {project.stage}
+                    </div>
+                    <div style={{
+                      display: "inline-block",
+                      padding: "6px 14px",
+                      borderRadius: "20px",
+                      backgroundColor: `rgba(107,114,128,0.15)`,
+                      color: `#4B5563`,
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      border: `1px solid rgba(107,114,128,0.3)`
+                    }}>
+                      {project.deadline ? `Deadline: ${project.deadline}` : 'No deadline'}
+                    </div>
                   </div>
 
                   {/* Team Members */}
@@ -574,25 +611,25 @@ export default function ProjectList() {
                       Team ({project.team.length})
                     </div>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                      {project.team.length > 0 ? (
-                        project.team.map((member) => (
-                          <div
-                            key={member}
-                            title={member}
-                            style={{
-                              width: "36px",
-                              height: "36px",
-                              borderRadius: "50%",
-                              backgroundColor: bgColor,
-                              color: DESIGN_SYSTEM.colors.text.inverse,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "14px",
-                              fontWeight: "600"
-                            }}
-                          >
-                            {member[0].toUpperCase()}
+                      {project.teamDetails && project.teamDetails.length > 0 ? (
+                        project.teamDetails.map((member) => (
+                          <div key={member.uid} title={member.name} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div
+                              style={{
+                                width: "36px",
+                                height: "36px",
+                                borderRadius: "50%",
+                                backgroundColor: stringToColor(member.name || member.email || 'U'),
+                                color: DESIGN_SYSTEM.colors.text.inverse,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "14px",
+                                fontWeight: "600"
+                              }}
+                            >
+                              {(member.name || member.email || 'U')[0].toUpperCase()}
+                            </div>
                           </div>
                         ))
                       ) : (

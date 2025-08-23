@@ -17,6 +17,9 @@ export default function StatusPanel({
   onConvertToProject // New prop to convert to project
 }) {
   const [newNote, setNewNote] = useState("");
+  const [newNoteType, setNewNoteType] = useState("Other");
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [editingNoteIndex, setEditingNoteIndex] = useState(null);
   const [editingStageIndex, setEditingStageIndex] = useState(null); // State for editing stage name
   const [newStageName, setNewStageName] = useState(""); // State for new stage name
   const [showIncompleteStageModal, setShowIncompleteStageModal] = useState(false); // State for modal visibility
@@ -53,7 +56,9 @@ export default function StatusPanel({
 
   const handleAddNote = () => {
     if (newNote.trim()) {
-      const updatedNotes = [...(stageData[currentStage]?.notes || []), newNote];
+      const noteToAdd = { type: newNoteType, text: newNote.trim(), createdAt: Date.now() };
+      const existingNotes = stageData[currentStage]?.notes || [];
+      const updatedNotes = [...existingNotes, noteToAdd];
       setStageData({
         ...stageData,
         [currentStage]: {
@@ -62,7 +67,52 @@ export default function StatusPanel({
         },
       });
       setNewNote("");
+      setNewNoteType("Other");
+      setShowNoteModal(false);
+      setEditingNoteIndex(null);
     }
+  };
+
+  const openNewNoteModal = () => {
+    setEditingNoteIndex(null);
+    setNewNote("");
+    setNewNoteType("Other");
+    setShowNoteModal(true);
+  };
+
+  const openEditNoteModal = (index, note) => {
+    setEditingNoteIndex(index);
+    if (typeof note === "string") {
+      setNewNote(note);
+      setNewNoteType("Other");
+    } else {
+      setNewNote(note.text || "");
+      setNewNoteType(note.type || "Other");
+    }
+    setShowNoteModal(true);
+  };
+
+  const handleUpdateNote = () => {
+    if (editingNoteIndex === null || newNote.trim() === "") {
+      setShowNoteModal(false);
+      return;
+    }
+    setStageData(prev => {
+      const existingNotes = prev[currentStage]?.notes || [];
+      const updated = [...existingNotes];
+      updated[editingNoteIndex] = { type: newNoteType, text: newNote.trim(), createdAt: existingNotes[editingNoteIndex]?.createdAt || Date.now() };
+      return {
+        ...prev,
+        [currentStage]: {
+          ...prev[currentStage],
+          notes: updated
+        }
+      };
+    });
+    setShowNoteModal(false);
+    setEditingNoteIndex(null);
+    setNewNote("");
+    setNewNoteType("Other");
   };
 
   const handleDeleteNote = (indexToDelete) => {
@@ -404,10 +454,10 @@ export default function StatusPanel({
           )}
         </div>
         
-        {/* Create a grid layout for two sections */}
+        {/* Stack Notes above Tasks */}
         <div style={{ 
           display: "grid", 
-          gridTemplateColumns: "1fr 1fr", 
+          gridTemplateColumns: "1fr", 
           gap: "20px", 
           marginTop: "16px" 
         }}>
@@ -426,31 +476,19 @@ export default function StatusPanel({
               borderBottom: "2px solid #3498db",
               paddingBottom: "8px"
             }}>
-              📝 Working Notes
+              Notes
             </h4>
             
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-              <input
-                type="text"
-                placeholder="Add a new note..."
-                value={newNote}
-                onChange={(e) => setNewNote(e.target.value)}
-                onKeyPress={handleKeyPress}
-                style={{ 
-                  ...INPUT_STYLES.base,
-                  flex: 1,
-                  fontSize: "14px"
-                }}
-              />
               <button
-                onClick={handleAddNote}
+                onClick={openNewNoteModal}
                 style={{
                   ...BUTTON_STYLES.primary,
-                  padding: "6px 12px",
+                  padding: "8px 12px",
                   fontSize: "12px"
                 }}
               >
-                Add
+                Add Note
               </button>
             </div>
 
@@ -475,7 +513,7 @@ export default function StatusPanel({
                   margin: 0
                 }}>
                   {stageData[currentStage]?.notes?.map((note, index) => (
-                    <li key={index} style={{
+                    <li key={index} onClick={() => openEditNoteModal(index, note)} style={{
                       padding: "8px",
                       background: "#ffffff",
                       borderRadius: "6px",
@@ -486,11 +524,72 @@ export default function StatusPanel({
                       alignItems: "center",
                       justifyContent: "space-between",
                       gap: "8px",
-                      border: "1px solid #e2e8f0"
+                      border: "1px solid #e2e8f0",
+                      cursor: "pointer"
                     }}>
-                      {note}
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0 }}>
+                        {typeof note === "string" ? (
+                          <>
+                            <span style={{
+                              display: "inline-block",
+                              fontSize: "11px",
+                              background: "#EEF2FF",
+                              color: COLORS.primary,
+                              padding: "2px 6px",
+                              borderRadius: "10px",
+                              whiteSpace: "nowrap"
+                            }}>Other</span>
+                            <span style={{ 
+                              flex: 1, 
+                              minWidth: 0,
+                              overflow: "hidden", 
+                              display: "-webkit-box", 
+                              WebkitBoxOrient: "vertical", 
+                              WebkitLineClamp: 2,
+                              wordBreak: "break-word"
+                            }}>{note}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{
+                              display: "inline-block",
+                              fontSize: "11px",
+                              background: note.type === "Email" ? "#E6FFFA" : note.type === "Phone Call" ? "#FFF5F5" : note.type === "Meeting" ? "#F0FFF4" : "#EEF2FF",
+                              color: note.type === "Email" ? "#0D9488" : note.type === "Phone Call" ? "#B91C1C" : note.type === "Meeting" ? "#15803D" : COLORS.primary,
+                              padding: "2px 6px",
+                              borderRadius: "10px",
+                              whiteSpace: "nowrap"
+                            }}>{note.type || "Other"}</span>
+                            <span style={{ 
+                              flex: 1,
+                              minWidth: 0, 
+                              overflow: "hidden", 
+                              display: "-webkit-box", 
+                              WebkitBoxOrient: "vertical", 
+                              WebkitLineClamp: 2,
+                              wordBreak: "break-word"
+                            }}>{note.text}</span>
+                          </>
+                        )}
+                      </div>
                       <button 
-                        onClick={() => handleDeleteNote(index)}
+                        onClick={(e) => { e.stopPropagation(); openEditNoteModal(index, note); }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: COLORS.primary,
+                          padding: "2px",
+                          fontSize: "12px",
+                          borderRadius: "3px",
+                          cursor: "pointer",
+                          flexShrink: 0
+                        }}
+                        title="View / Edit"
+                      >
+                        ✏️
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleDeleteNote(index); }}
                         style={{
                           background: "none",
                           border: "none",
@@ -509,6 +608,65 @@ export default function StatusPanel({
                 </ul>
               )}
             </div>
+            {showNoteModal && (
+              <div style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: "rgba(0,0,0,0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 1000
+              }}>
+                <div style={{
+                  background: "white",
+                  borderRadius: "8px",
+                  padding: "16px",
+                  width: "90%",
+                  maxWidth: "600px",
+                  boxShadow: "0 10px 25px rgba(0,0,0,0.15)"
+                }}>
+                  <h4 style={{ margin: 0, color: COLORS.dark, fontSize: "16px", marginBottom: "8px" }}>{editingNoteIndex === null ? "Add Note" : "Edit Note"}</h4>
+                  <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                    <select
+                      value={newNoteType}
+                      onChange={(e) => setNewNoteType(e.target.value)}
+                      style={{ ...INPUT_STYLES.base, width: "180px", fontSize: "14px" }}
+                    >
+                      <option value="Email">Email</option>
+                      <option value="Phone Call">Phone Call</option>
+                      <option value="Meeting">Meeting</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <textarea
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    placeholder="Type your note here..."
+                    style={{
+                      ...INPUT_STYLES.textarea,
+                      width: "100%",
+                      minHeight: "160px",
+                      maxHeight: "50vh",
+                      fontSize: "14px",
+                      boxSizing: "border-box",
+                      wordBreak: "break-word"
+                    }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "12px" }}>
+                    <button onClick={() => { setShowNoteModal(false); setEditingNoteIndex(null); }} style={{ ...BUTTON_STYLES.secondary }}>Cancel</button>
+                    {editingNoteIndex === null ? (
+                      <button onClick={handleAddNote} style={{ ...BUTTON_STYLES.primary }}>Add</button>
+                    ) : (
+                      <button onClick={handleUpdateNote} style={{ ...BUTTON_STYLES.primary }}>Save</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Tasks Section */}
@@ -526,7 +684,7 @@ export default function StatusPanel({
               borderBottom: "2px solid #2ecc71",
               paddingBottom: "8px"
             }}>
-              ✅ Tasks
+              Tasks
             </h4>
             
             {/* Custom Stage Content - Tasks */}

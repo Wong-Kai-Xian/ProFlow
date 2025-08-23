@@ -105,7 +105,6 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
           team: arrayUnion(memberUid)
         });
 
-        alert("Team member added successfully!");
         onTeamMemberAdded(memberUid); // Notify parent component
         setMemberEmail('');
         setSelectedUserId('');
@@ -189,7 +188,7 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
                   setMemberEmail(e.target.value);
                   setSelectedUserId(''); // Clear selection when typing email
                 }}
-                style={{ ...INPUT_STYLES.base, width: "100%" }}
+                style={{ ...INPUT_STYLES.base, width: "100%", maxWidth: "100%" }}
                 disabled={loading}
               />
             </div>
@@ -201,7 +200,16 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
           <button onClick={onClose} style={BUTTON_STYLES.secondary} disabled={loading}>
             Cancel
           </button>
-          <button onClick={handleAddMember} style={BUTTON_STYLES.primary} disabled={loading}>
+          <button onClick={async () => {
+            await handleAddMember();
+            if (!error) {
+              const popup = document.createElement('div');
+              popup.textContent = 'Member added successfully!';
+              popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:20px;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.15);z-index:1100;color:#16a34a;font-weight:600';
+              document.body.appendChild(popup);
+              setTimeout(() => document.body.removeChild(popup), 1500);
+            }
+          }} style={BUTTON_STYLES.primary} disabled={loading}>
             {loading ? "Adding..." : "Add Member"}
           </button>
         </div>
@@ -228,7 +236,9 @@ const modalContentStyle = {
   padding: LAYOUT.gap,
   borderRadius: LAYOUT.borderRadius,
   boxShadow: LAYOUT.shadow,
-  width: "90%",
-  maxWidth: "400px",
+  width: "95%",
+  maxWidth: "640px",
+  maxHeight: "90vh",
+  overflowY: "auto",
   textAlign: "left",
 };

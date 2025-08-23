@@ -4,13 +4,16 @@ import Card from "./Card";
 import { BUTTON_STYLES, INPUT_STYLES } from "./constants"; // Import BUTTON_STYLES and INPUT_STYLES
 import { COLORS } from "./constants"; // Import COLORS
 
-export default function CompanyInfo({ data, setCompanyProfile }) {
+export default function CompanyInfo({ data, setCompanyProfile, onSave }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedData, setEditedData] = useState(data);
 
   const handleEditToggle = () => {
     if (isEditing) {
       setCompanyProfile(editedData);
+      if (typeof onSave === "function") {
+        onSave(editedData);
+      }
     }
     setIsEditing(!isEditing);
   };

@@ -11,14 +11,15 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
   const [teamMembersEmails, setTeamMembersEmails] = useState([]); // Stores only emails
   const [teamMembers, setTeamMembers] = useState([]); // Stores enriched member objects {uid, email, displayName}
   const [newMember, setNewMember] = useState('');
-  const [selectedStage, setSelectedStage] = useState('Proposal');
+  const [selectedStage, setSelectedStage] = useState('Planning');
+  const [deadline, setDeadline] = useState('');
   const [projectDescription, setProjectDescription] = useState(''); // New state for project description
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
   const [allowJoinById, setAllowJoinById] = useState(true); // New state for "Allow Join by ID"
   const [acceptedTeamMembers, setAcceptedTeamMembers] = useState([]); // Accepted team members
   const [loadingAcceptedMembers, setLoadingAcceptedMembers] = useState(false);
 
-  const projectStages = ['Proposal', 'Negotiation', 'Complete'];
+  const projectStages = ['Planning', 'Development', 'Testing', 'Completed'];
 
   // Fetch accepted team members when modal opens
   React.useEffect(() => {
@@ -45,16 +46,18 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
     if (editingProject) {
       setProjectName(editingProject.name || '');
       setTeamMembersEmails(editingProject.team || []);
-      setSelectedStage(editingProject.stage || 'Proposal');
+      setSelectedStage(editingProject.stage || 'Planning');
       setProjectDescription(editingProject.description || ''); // Populate description
       setAllowJoinById(editingProject.allowJoinById !== undefined ? editingProject.allowJoinById : true); // Populate allowJoinById, default to true
+      setDeadline(editingProject.deadline || '');
     } else {
       // For new projects, pre-fill from customerProfile and companyProfile if available
       if (!projectName) setProjectName(customerProfile?.name || '');
       // Don't automatically add creator to team members - they're already the project owner
       // Leave team members empty by default
-      if (!selectedStage) setSelectedStage('Proposal');
+      if (!selectedStage) setSelectedStage('Planning');
       if (!projectDescription) setProjectDescription(companyProfile?.description || '');
+      setDeadline('');
       // Only set allowJoinById if it hasn't been explicitly set yet, or if it needs to be reset for a new project
       if (editingProject === null) { // Only for truly new projects
         setAllowJoinById(true);
@@ -111,6 +114,7 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
         team: teamMembersEmails,
         stage: selectedStage,
         description: projectDescription, // Include description
+        deadline: deadline || '',
         tasks: editingProject ? editingProject.tasks : 0,
         completedTasks: editingProject ? editingProject.completedTasks : 0,
         ownerId: currentUser.uid, // Associate project with the current user
@@ -121,9 +125,10 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
       setProjectName('');
       setTeamMembersEmails([]); // Reset to empty - don't auto-add creator
       setNewMember('');
-      setSelectedStage('Proposal');
+      setSelectedStage('Planning');
       setProjectDescription(''); // Reset description
       setAllowJoinById(true); // Reset allowJoinById
+      setDeadline('');
     }
   };
 
@@ -131,9 +136,10 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
     setProjectName('');
     setTeamMembersEmails([]); // Reset to empty - don't auto-add creator
     setNewMember('');
-    setSelectedStage('Proposal');
+    setSelectedStage('Planning');
     setProjectDescription(''); // Reset description
     setAllowJoinById(true); // Reset allowJoinById
+    setDeadline('');
     onClose();
   };
 
@@ -338,8 +344,8 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
           )}
         </div>
 
-        {/* Project Stage */}
-        <div style={{ marginBottom: '24px' }}>
+        {/* Deadline */}
+        <div style={{ marginBottom: '20px' }}>
           <label style={{ 
             display: 'block', 
             marginBottom: '8px', 
@@ -347,22 +353,19 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
             fontSize: '16px',
             fontWeight: '600'
           }}>
-            Project Stage
+            Deadline
           </label>
-          <select
-            value={selectedStage}
-            onChange={(e) => setSelectedStage(e.target.value)}
+          <input
+            type="date"
+            value={deadline}
+            onChange={(e) => setDeadline(e.target.value)}
             style={{
               ...INPUT_STYLES.base,
               width: '100%',
               fontSize: '16px',
               padding: '12px'
             }}
-          >
-            {projectStages.map(stage => (
-              <option key={stage} value={stage}>{stage}</option>
-            ))}
-          </select>
+          />
         </div>
 
         {/* Buttons */}

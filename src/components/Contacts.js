@@ -458,8 +458,8 @@ export default function Contacts() {
                       }}
                     >
                       <div style={{ marginBottom: "8px", width: "100%" }}> {/* Added margin-bottom and full width */}
-                        <strong style={{ color: COLORS.text, wordBreak: "break-word", fontSize: "13px" }}>{c.name}</strong><br/> {/* Reduced font size */}
-                        <span style={{ fontSize: "11px", color: COLORS.lightText, wordBreak: "break-word" }}>{c.email}</span> {/* Reduced font size */}
+                        <strong style={{ color: COLORS.text, wordBreak: "break-word", fontSize: "13px" }}>{c.name}</strong><br/>
+                        <span style={{ fontSize: "11px", color: COLORS.lightText, wordBreak: "break-word" }}>{c.email}</span>
                       </div>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-start", width: "100%", marginTop: "8px" }}> {/* Changed to flex-start, increased gap, added margin-top */}
                         <button onClick={(e) => { e.stopPropagation(); openWhatsApp(c.phone); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaWhatsapp /></button> {/* Increased size */}

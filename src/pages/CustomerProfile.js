@@ -11,7 +11,7 @@ import TaskManager from "../components/profile-component/TaskManager";
 import SendApprovalModal from "../components/project-component/SendApprovalModal";
 import CreateProjectModal from "../components/project-component/CreateProjectModal";
 import { db } from "../firebase";
-import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc, query, where, getDocs, deleteDoc } from "firebase/firestore";
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getPageHeaderStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 
 const STAGES = ["Working", "Qualified", "Converted"];
@@ -163,11 +163,13 @@ export default function CustomerProfile() {
     fetchCustomerTeamMembersDetails();
   }, [projects]); // Re-run when projects array changes
 
-  const handleSaveCustomer = async () => {
+  const handleSaveCustomer = async (overrides = {}) => {
     setLoading(true);
+    const mergedCustomerProfile = overrides.customerProfile || customerProfile;
+    const mergedCompanyProfile = overrides.companyProfile || companyProfile;
     const customerDataToSave = {
-      customerProfile,
-      companyProfile,
+      customerProfile: mergedCustomerProfile,
+      companyProfile: mergedCompanyProfile,
       reputation,
       activities,
       reminders,
@@ -206,22 +208,62 @@ export default function CustomerProfile() {
           // Find the client with matching ID
           const clientIndex = clients.findIndex(client => client.id === id);
           if (clientIndex !== -1) {
-            // Update the client entry with new details
-            const updatedClients = [...clients];
-            updatedClients[clientIndex] = {
-              id: id,
-              name: customerProfile.name,
-              email: customerProfile.email,
-              phone: customerProfile.phone,
-              company: companyProfile.company
-            };
-            
-            // Update the organization document
-            await updateDoc(doc(db, "organizations", orgDoc.id), {
-              clients: updatedClients
-            });
-            console.log("Updated client details in organization:", orgDoc.id);
-            break; // Found and updated, exit loop
+            const isCompanyChanged = mergedCompanyProfile.company && orgData.name !== mergedCompanyProfile.company;
+            if (isCompanyChanged) {
+              // Remove from the old organization first
+              const prunedClients = clients.filter(c => c.id !== id);
+              await updateDoc(doc(db, "organizations", orgDoc.id), { clients: prunedClients });
+              if (prunedClients.length === 0) {
+                await deleteDoc(doc(db, "organizations", orgDoc.id));
+                console.log("Deleted empty organization:", orgDoc.id);
+              }
+
+              // Move to destination organization (create if needed), preventing duplicates
+              const destQuery = query(organizationsRef, where("name", "==", mergedCompanyProfile.company), where("userId", "==", orgData.userId));
+              const destSnapshot = await getDocs(destQuery);
+              const clientPayload = {
+                id: id,
+                name: mergedCustomerProfile.name,
+                email: mergedCustomerProfile.email,
+                phone: mergedCustomerProfile.phone,
+                company: mergedCompanyProfile.company
+              };
+              if (!destSnapshot.empty) {
+                const destDoc = destSnapshot.docs[0];
+                const destClients = destDoc.data().clients || [];
+                const exists = destClients.some(c => c.id === id);
+                if (!exists) {
+                  await updateDoc(doc(db, "organizations", destDoc.id), { clients: [...destClients, clientPayload] });
+                  console.log("Moved client to organization:", destDoc.id);
+                } else {
+                  // Also ensure details are up to date if exists
+                  const updatedDest = destClients.map(c => c.id === id ? clientPayload : c);
+                  await updateDoc(doc(db, "organizations", destDoc.id), { clients: updatedDest });
+                  console.log("Updated existing client in destination organization:", destDoc.id);
+                }
+              } else {
+                await addDoc(organizationsRef, {
+                  name: mergedCompanyProfile.company,
+                  clients: [clientPayload],
+                  collapsed: false,
+                  userId: orgData.userId
+                });
+                console.log("Created new organization and moved client:", mergedCompanyProfile.company);
+              }
+            } else {
+              // Same organization: just update client details in place
+              const updatedClients = [...clients];
+              updatedClients[clientIndex] = {
+                id: id,
+                name: mergedCustomerProfile.name,
+                email: mergedCustomerProfile.email,
+                phone: mergedCustomerProfile.phone,
+                company: mergedCompanyProfile.company
+              };
+              await updateDoc(doc(db, "organizations", orgDoc.id), { clients: updatedClients });
+              console.log("Updated client details in organization:", orgDoc.id);
+            }
+            break; // Found and handled
           }
         }
       } catch (orgError) {
@@ -397,7 +439,14 @@ export default function CustomerProfile() {
               </h2>
             </div>
             <div style={{ padding: "0" }}>
-              <CompanyInfo data={companyProfile} setCompanyProfile={setCompanyProfile} />
+              <CompanyInfo 
+                data={companyProfile} 
+                setCompanyProfile={(updated) => {
+                  // Only update local state; persistence happens on explicit Save
+                  setCompanyProfile(updated);
+                }} 
+                onSave={(updated) => handleSaveCustomer({ companyProfile: updated })}
+              />
             </div>
           </div>
           

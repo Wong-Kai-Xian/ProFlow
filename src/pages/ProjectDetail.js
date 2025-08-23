@@ -7,6 +7,7 @@ import ProjectTaskPanel from '../components/project-component/ProjectTaskPanel';
 import ProjectGroupForum from '../components/ProjectGroupForum';
 import StageIndicator from '../components/project-component/StageIndicator';
 import ApprovalModal from '../components/project-component/ApprovalModal';
+import AdvanceStageChoiceModal from '../components/project-component/AdvanceStageChoiceModal';
 import SendApprovalModal from '../components/project-component/SendApprovalModal';
 import AddTeamMemberModal from '../components/project-component/AddTeamMemberModal';
 import TeamMembersPanel from '../components/project-component/TeamMembersPanel';
@@ -22,6 +23,7 @@ export default function ProjectDetail() {
   const [projectData, setProjectData] = useState(null);
   const [currentStage, setCurrentStage] = useState(STAGES[0]);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [showAdvanceChoiceModal, setShowAdvanceChoiceModal] = useState(false);
   const [showSendApprovalModal, setShowSendApprovalModal] = useState(false);
   const [projectForums, setProjectForums] = useState([]); // State to hold project-specific forums
   const { currentUser } = useAuth(); // Get current user from AuthContext
@@ -181,7 +183,7 @@ export default function ProjectDetail() {
             return;
           }
         }
-        setShowApprovalModal(true);
+        setShowAdvanceChoiceModal(true);
       } else {
         alert("All tasks in the current stage must be marked as 'Complete' before advancing.");
       }
@@ -197,6 +199,15 @@ export default function ProjectDetail() {
       setCurrentStage(nextStage);
     setShowApprovalModal(false);
       // alert(`Advancing to next stage: ${nextStage}`);
+    }
+  };
+
+  const handleAdvanceChoice = (requireApproval) => {
+    setShowAdvanceChoiceModal(false);
+    if (requireApproval) {
+      setShowApprovalModal(true);
+    } else {
+      handleConfirmAdvanceStage();
     }
   };
 
@@ -255,7 +266,7 @@ export default function ProjectDetail() {
       return;
     }
 
-    if (window.confirm(`Are you sure you want to remove this member?`)) {
+    if (true) {
       try {
         const projectRef = doc(db, "projects", projectData.id);
         await updateDoc(projectRef, {
@@ -265,7 +276,11 @@ export default function ProjectDetail() {
           ...prevData, 
           team: prevData.team.filter(uid => uid !== memberUid) 
         }));
-        alert("Team member removed successfully!");
+        const popup = document.createElement('div');
+        popup.textContent = 'Team member removed';
+        popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:20px;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.15);z-index:1100;color:#ef4444;font-weight:600';
+        document.body.appendChild(popup);
+        setTimeout(() => document.body.removeChild(popup), 1200);
       } catch (error) {
         console.error("Error removing team member:", error);
         alert("Failed to remove team member.");
@@ -292,7 +307,7 @@ export default function ProjectDetail() {
         ...getContentContainerStyle(),
         paddingTop: DESIGN_SYSTEM.spacing['2xl']
       }}>
-        {/* Enhanced Project Header */}
+        {/* Project Header - single line summary */}
         <div style={{
           background: DESIGN_SYSTEM.pageThemes.projects.gradient,
           borderRadius: DESIGN_SYSTEM.borderRadius.xl,
@@ -304,25 +319,27 @@ export default function ProjectDetail() {
           <div style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center"
+            alignItems: "center",
+            gap: DESIGN_SYSTEM.spacing.base,
+            whiteSpace: "nowrap"
           }}>
-            <div>
-              <h1 style={{
-                margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
-                fontSize: DESIGN_SYSTEM.typography.fontSize['3xl'],
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold
-              }}>
-                {projectData?.name || 'Project Details'}
-              </h1>
-              <p style={{
-                margin: 0,
+            <div style={{ display: "flex", alignItems: "center", gap: DESIGN_SYSTEM.spacing.base, overflow: "hidden" }}>
+              <span style={{
                 fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                opacity: 0.9
-              }}>
-                {projectData?.description || 'Manage project tasks and collaborate with your team'} • Stage: {projectData?.stage || 'Unknown'}
-              </p>
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold,
+                overflow: "hidden",
+                textOverflow: "ellipsis"
+              }} title={projectData?.name || 'Project Details'}>
+                {projectData?.name || 'Project Details'}
+              </span>
+              <span style={{ opacity: 0.85 }}>|</span>
+              <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Members: {projectData?.team?.length || 0}</span>
+              <span style={{ opacity: 0.85 }}>|</span>
+              <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Stage: {projectData?.stage || currentStage}</span>
+              <span style={{ opacity: 0.85 }}>|</span>
+              <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Deadline: {projectData?.deadline || 'No deadline'}</span>
             </div>
-            <div style={{ display: "flex", gap: DESIGN_SYSTEM.spacing.base }}>
+            <div style={{ display: "flex", gap: DESIGN_SYSTEM.spacing.base, flexShrink: 0 }}>
               {currentUser && currentUser.uid === projectData?.userId && (
                 <button
                   onClick={() => setShowAddTeamMemberModal(true)}
@@ -514,17 +531,19 @@ export default function ProjectDetail() {
                 Project Stages
               </h3>
             <button
-              onClick={() => setShowSendApprovalModal(true)}
+              onClick={() => !currentApproval && setShowSendApprovalModal(true)}
+              disabled={!!currentApproval}
               style={{
                   ...getButtonStyle('secondary', 'projects'),
-                  background: 'rgba(255,255,255,0.2)',
-                  color: DESIGN_SYSTEM.colors.text.inverse,
-                  border: `1px solid rgba(255,255,255,0.3)`,
+                  background: currentApproval ? 'rgba(107,114,128,0.3)' : 'rgba(255,255,255,0.2)',
+                  color: currentApproval ? '#9CA3AF' : DESIGN_SYSTEM.colors.text.inverse,
+                  border: currentApproval ? `1px solid rgba(156,163,175,0.5)` : `1px solid rgba(255,255,255,0.3)`,
                   padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                  cursor: currentApproval ? 'not-allowed' : 'pointer'
               }}
             >
-              Send Approval
+              {currentApproval ? 'Pending Approval' : 'Send Approval'}
             </button>
           </div>
             <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
@@ -584,6 +603,11 @@ export default function ProjectDetail() {
           projectId={projectId}
         />
       )}
+      <AdvanceStageChoiceModal
+        isOpen={showAdvanceChoiceModal}
+        onClose={() => setShowAdvanceChoiceModal(false)}
+        onChoose={handleAdvanceChoice}
+      />
       <SendApprovalModal
         isOpen={showSendApprovalModal}
         onClose={() => setShowSendApprovalModal(false)}

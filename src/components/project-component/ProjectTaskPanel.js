@@ -79,6 +79,21 @@ const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onE
         fontWeight: "700",
         textAlign: "left"
       }}>{task.name}</strong>
+      <button
+        onClick={() => onEdit(task)}
+        style={{
+          background: 'transparent',
+          border: `1px solid ${COLORS.lightBorder}`,
+          color: COLORS.text,
+          padding: '4px 8px',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          flexShrink: 0
+        }}
+        title="View / Edit task details"
+      >
+        Details
+      </button>
       
       <div style={{
         width: "70px",
@@ -556,8 +571,9 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
                   </span>
                   </div>
                 )}
-                {/* Add Task Button - Inside each subtitle */}
+                {/* Stage label and Add Task Button - Inside each subtitle */}
                 <div style={{ display: "flex", gap: LAYOUT.smallGap, alignItems: "center" }}>
+                <span title="Stage" style={{ fontSize: '12px', background: 'rgba(255,255,255,0.2)', padding: '4px 8px', borderRadius: '6px' }}>{subtitle.stage}</span>
                 <button 
                   onClick={() => handleShowTaskFormModal(subtitleIndex)} 
                     style={{
@@ -585,6 +601,7 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
                 >
                   Add Task
                 </button>
+                {/* Removed per-stage Set Deadline control per request */}
                 <button
                   onClick={() => handleRemoveSubtitle(subtitleIndex)}
                   style={{
@@ -691,6 +708,7 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
         onSaveTask={currentEditTask ? handleSaveEditedTask : handleAddTask}
         initialTaskData={currentEditTask}
         projectMembers={projectMembers}
+        projectId={projectId}
       />
 
       {/* Task Chat Modal */}
