@@ -10,8 +10,10 @@ import AttachedFiles from "../components/profile-component/AttachedFiles";
 import TaskManager from "../components/profile-component/TaskManager";
 import SendApprovalModal from "../components/project-component/SendApprovalModal";
 import CreateProjectModal from "../components/project-component/CreateProjectModal";
+import AdvancedApprovalRequestModal from "../components/project-component/AdvancedApprovalRequestModal";
 import { db } from "../firebase";
 import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc, query, where, getDocs, deleteDoc } from "firebase/firestore";
+import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getPageHeaderStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 
 const STAGES = ["Working", "Qualified", "Converted"];
@@ -19,8 +21,11 @@ const STAGES = ["Working", "Qualified", "Converted"];
 export default function CustomerProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const [showSendApprovalModal, setShowSendApprovalModal] = useState(false); // New state for SendApprovalModal
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false); // State for CreateProjectModal
+  const [showAdvancedApprovalModal, setShowAdvancedApprovalModal] = useState(false); // State for AdvancedApprovalRequestModal
+  const [approvalModalType, setApprovalModalType] = useState('stage'); // 'stage' or 'general'
   const [loading, setLoading] = useState(true); // Loading state
 
   // Initialize state variables with default values for new customer or null for existing to be loaded
@@ -69,6 +74,21 @@ export default function CustomerProfile() {
 
   const handleConvertToProject = () => {
     setShowCreateProjectModal(true);
+  };
+
+  const handleRequestApproval = (currentStage, nextStage) => {
+    setApprovalModalType('stage');
+    setShowAdvancedApprovalModal(true);
+  };
+
+  const handleSendApprovalRequest = () => {
+    setApprovalModalType('general');
+    setShowAdvancedApprovalModal(true);
+  };
+
+  const handleApprovalRequestSuccess = (result) => {
+    setShowAdvancedApprovalModal(false);
+    alert(`Approval request sent successfully to ${result.recipientCount} team member(s)!\n\nTitle: ${result.title}\nType: ${result.type}\nEntity: ${result.entityName}`);
   };
 
   useEffect(() => {
@@ -513,6 +533,9 @@ export default function CustomerProfile() {
                 setStages={setStages}
                 onStagesUpdate={handleStagesUpdate}
                 onConvertToProject={handleConvertToProject}
+                onRequestApproval={handleRequestApproval}
+                customerId={id}
+                customerName={`${customerProfile.firstName || ''} ${customerProfile.lastName || ''}`.trim() || companyProfile.companyName || 'Unknown Customer'}
                 renderStageContent={(stage, currentStageData, setCurrentStageData) => (
                   <TaskManager 
                     stage={stage}
@@ -605,7 +628,7 @@ export default function CustomerProfile() {
                 </button>
               )}
               <button
-                onClick={() => setShowSendApprovalModal(true)}
+                onClick={() => handleSendApprovalRequest()}
                 style={{
                   ...getButtonStyle('primary', 'customers'),
                   padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`,
@@ -634,6 +657,18 @@ export default function CustomerProfile() {
         customerProfile={customerProfile}
         companyProfile={companyProfile}
         onSave={handleSaveProjectFromConversion}
+      />
+
+      <AdvancedApprovalRequestModal
+        isOpen={showAdvancedApprovalModal}
+        onClose={() => setShowAdvancedApprovalModal(false)}
+        onSuccess={handleApprovalRequestSuccess}
+        customerId={id}
+        customerName={`${customerProfile.firstName || ''} ${customerProfile.lastName || ''}`.trim() || companyProfile.companyName || 'Unknown Customer'}
+        currentUser={currentUser}
+        currentStage={currentStage}
+        nextStage={stages[stages.indexOf(currentStage) + 1] || ""}
+        isStageAdvancement={approvalModalType === 'stage'}
       />
     </div>
   );

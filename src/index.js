@@ -9,6 +9,7 @@ import CustomerProfile from "./pages/CustomerProfile";
 import ProjectDetail from "./pages/ProjectDetail";
 import CustomerProfileList from "./pages/CustomerProfileList";
 import ApprovalList from "./pages/ApprovalList"; // Import the new ApprovalList component
+import ApprovalPage from "./pages/ApprovalPage"; // Import the new ApprovalPage component
 import Login from "./pages/Login"; // Import the new Login component
 import Signup from "./pages/Signup"; // Import the new Signup component
 import VerifyEmail from "./pages/VerifyEmail"; // Import the VerifyEmail component
@@ -97,6 +98,14 @@ root.render(
           />
           <Route 
             path="/approvals" 
+            element={
+              <PrivateRoute>
+                <ApprovalPage />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/approvals-old" 
             element={
               <PrivateRoute>
                 <ApprovalList />

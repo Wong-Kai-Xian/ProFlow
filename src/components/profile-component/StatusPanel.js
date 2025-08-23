@@ -14,7 +14,10 @@ export default function StatusPanel({
   renderStageContent,
   setStages, // Receive setStages prop
   onStagesUpdate, // New prop to update stages in parent and database
-  onConvertToProject // New prop to convert to project
+  onConvertToProject, // New prop to convert to project
+  onRequestApproval, // New prop to request approval for stage advancement
+  customerId, // Customer ID for approval requests
+  customerName // Customer name for approval requests
 }) {
   const [newNote, setNewNote] = useState("");
   const [newNoteType, setNewNoteType] = useState("Other");
@@ -501,17 +504,33 @@ export default function StatusPanel({
               Uncomplete
             </button>
           ) : (
-            <button
-              onClick={handleMarkComplete}
-              style={{
-                ...BUTTON_STYLES.primary, // Apply primary button styles
-                background: COLORS.success, // Green color for complete
-                padding: "4px 8px", // Smaller padding for this button
-                fontSize: "12px", // Smaller font size
-              }}
-            >
-              Mark as Complete
-            </button>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={handleMarkComplete}
+                style={{
+                  ...BUTTON_STYLES.primary, // Apply primary button styles
+                  background: COLORS.success, // Green color for complete
+                  padding: "4px 8px", // Smaller padding for this button
+                  fontSize: "12px", // Smaller font size
+                }}
+              >
+                Mark as Complete
+              </button>
+              {onRequestApproval && (
+                <button
+                  onClick={() => onRequestApproval(currentStage, stages[stages.indexOf(currentStage) + 1])}
+                  style={{
+                    ...BUTTON_STYLES.secondary,
+                    background: COLORS.primary, // Blue for approval request
+                    color: "white",
+                    padding: "4px 8px",
+                    fontSize: "12px",
+                  }}
+                >
+                  Request Approval
+                </button>
+              )}
+            </div>
           )}
         </div>
         
