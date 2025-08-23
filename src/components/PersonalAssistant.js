@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import CatAvatar from './shared/CatAvatar';
 
 export default function PersonalAssistant() {
   const { currentUser } = useAuth();
@@ -317,7 +318,9 @@ export default function PersonalAssistant() {
   const launcher = (
     <div style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: 2147483647 }}>
       {!isOpen && (
-        <button onMouseDown={startDrag} onClick={(e) => { if (dragMoved) { e.preventDefault(); return; } setIsOpen(true); }} style={{ width: 56, height: 56, borderRadius: 28, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg,#6366f1,#22c55e)', color: '#fff', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', fontWeight: 700 }} title="Personal Assistant">PA</button>
+        <div onMouseDown={startDrag} onClick={(e) => { if (dragMoved) { e.preventDefault(); return; } setIsOpen(true); }} title="Personal Assistant" style={{ lineHeight: 0 }}>
+          <CatAvatar size={76} fluffy={true} noBackground={true} />
+        </div>
       )}
     </div>
   );
