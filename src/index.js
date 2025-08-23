@@ -19,6 +19,7 @@ import Quote from "./pages/Quote"; // Import the new Quote component
 import TeamPage from "./pages/TeamPage"; // Import the new TeamPage component
 import { AuthProvider } from './contexts/AuthContext'; // Import AuthProvider
 import PrivateRoute from './components/PrivateRoute'; // Import PrivateRoute
+import PersonalAssistant from './components/PersonalAssistant';
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
@@ -129,6 +130,7 @@ root.render(
             }
           />
         </Routes>
+        <PersonalAssistant />
       </BrowserRouter>
     </AuthProvider>
   </React.StrictMode>
