@@ -929,7 +929,20 @@ export default function Forum() {
                     };
                   });
                   for (const rem of newRems) {
-                    await addDoc(collection(db, `forums/${forumId}/reminders`), { ...rem, timestamp: serverTimestamp() });
+                    const rref = await addDoc(collection(db, `forums/${forumId}/reminders`), { ...rem, timestamp: serverTimestamp() });
+                    // Notification for forum reminder
+                    try {
+                      await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+                        unread: true,
+                        createdAt: serverTimestamp(),
+                        origin: 'forum',
+                        title: 'New Forum Reminder',
+                        message: `${forumData?.name || 'Forum'}: ${rem.title} on ${rem.date}${rem.time ? ' ' + rem.time : ''}`,
+                        refType: 'forumReminder',
+                        forumId: forumId,
+                        refId: rref.id
+                      });
+                    } catch {}
                   }
                   setAiModalOpen(false);
                 } catch (e) {

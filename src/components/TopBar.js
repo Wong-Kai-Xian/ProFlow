@@ -2,8 +2,11 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 import { db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, onSnapshot, query } from 'firebase/firestore';
 import UserAvatar from './shared/UserAvatar';
+import NotificationCenter from './NotificationCenter';
+import NotificationAgent from './NotificationAgent';
+import FollowUpAgent from './FollowUpAgent';
 
 export default function TopBar() {
   const location = useLocation();
@@ -11,6 +14,8 @@ export default function TopBar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
   const [userProfile, setUserProfile] = useState(null);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Fetch user profile data including photo
   useEffect(() => {
@@ -29,6 +34,17 @@ export default function TopBar() {
     };
 
     fetchUserProfile();
+  }, [currentUser?.uid]);
+
+  // Listen for unread notifications
+  useEffect(() => {
+    if (!currentUser?.uid) { setUnreadCount(0); return; }
+    const q = query(collection(db, 'users', currentUser.uid, 'notifications'));
+    const unsub = onSnapshot(q, snap => {
+      const cnt = snap.docs.reduce((acc, d) => (d.data().unread ? acc + 1 : acc), 0);
+      setUnreadCount(cnt);
+    });
+    return () => unsub();
   }, [currentUser?.uid]);
 
   const getLinkStyle = (path) => {
@@ -81,6 +97,8 @@ export default function TopBar() {
       top: 0,
       zIndex: 1000
     }}>
+      <NotificationAgent />
+      <FollowUpAgent />
       <img 
         src="/proflow-logo.png" 
         alt="ProFlow Logo" 
@@ -224,7 +242,16 @@ export default function TopBar() {
 
       {/* User Profile and Logout */}
       {currentUser && (
-        <div style={{ marginLeft: 'auto', position: 'relative' }}>
+        <div style={{ marginLeft: 'auto', position: 'relative', display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Notifications bell */}
+          <div onClick={() => setIsNotifOpen(true)} style={{ cursor: 'pointer', position: 'relative', width: 36, height: 36, borderRadius: 9999, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.35)' }} title="Notifications">
+            <span style={{ fontSize: 18, color: '#fff' }}>🔔</span>
+            {unreadCount > 0 && (
+              <span style={{ position: 'absolute', top: -6, right: -8, background: '#ef4444', color: '#fff', borderRadius: 9999, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </div>
           <div 
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             style={{ marginRight: '25px', cursor: 'pointer' }}
@@ -273,6 +300,9 @@ export default function TopBar() {
             </div>
           )}
         </div>
+      )}
+      {currentUser && (
+        <NotificationCenter userId={currentUser.uid} isOpen={isNotifOpen} onClose={() => setIsNotifOpen(false)} />
       )}
     </nav>
   );

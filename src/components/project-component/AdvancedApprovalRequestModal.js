@@ -25,6 +25,8 @@ export default function AdvancedApprovalRequestModal({
   const [selectedDecisionMaker, setSelectedDecisionMaker] = useState(null);
   const [selectedViewers, setSelectedViewers] = useState([]);
   const [allRecipients, setAllRecipients] = useState([]);
+  const [dueDate, setDueDate] = useState("");
+  const [dueTime, setDueTime] = useState("");
   
   // UI states
   const [loading, setLoading] = useState(false);
@@ -303,7 +305,8 @@ export default function AdvancedApprovalRequestModal({
           // Status and timing
           status: "pending",
           dateRequested: serverTimestamp(),
-          dueDate: null, // Can be enhanced later
+          dueDate: dueDate || null,
+          dueTime: dueTime || null,
           
           // Decision tracking
           decisionMade: false,
@@ -318,6 +321,51 @@ export default function AdvancedApprovalRequestModal({
         });
 
       // Single approval request created (no need for Promise.all)
+      // Write notifications: decision maker + viewers + requester (confirmation)
+      try {
+        // Decision maker
+        if (selectedDecisionMaker?.id) {
+          await addDoc(collection(db, 'users', selectedDecisionMaker.id, 'notifications'), {
+            unread: true,
+            createdAt: serverTimestamp(),
+            origin: 'approval',
+            title: 'Approval request',
+            message: `${currentUser.displayName || currentUser.email} requested your approval: ${requestTitle} (${requestType}: ${entityName})`,
+            refType: 'approval',
+            approvalId: approvalRequest.id,
+            projectId: projectId || null,
+            customerId: customerId || null
+          });
+        }
+        // Viewers
+        for (const viewer of selectedViewers) {
+          try {
+            await addDoc(collection(db, 'users', viewer.id, 'notifications'), {
+              unread: true,
+              createdAt: serverTimestamp(),
+              origin: 'approval',
+              title: 'Approval shared',
+              message: `You were added as a viewer: ${requestTitle} (${requestType}: ${entityName})`,
+              refType: 'approval',
+              approvalId: approvalRequest.id,
+              projectId: projectId || null,
+              customerId: customerId || null
+            });
+          } catch {}
+        }
+        // Requester confirmation
+        await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+          unread: true,
+          createdAt: serverTimestamp(),
+          origin: 'approval',
+          title: 'Approval request sent',
+          message: `Sent to ${selectedDecisionMaker?.name || 'assignee'} • ${requestTitle}`,
+          refType: 'approval',
+          approvalId: approvalRequest.id,
+          projectId: projectId || null,
+          customerId: customerId || null
+        });
+      } catch {}
 
       // Success callback
       if (onSuccess) {
@@ -476,6 +524,30 @@ export default function AdvancedApprovalRequestModal({
               disabled={loading}
               maxLength={1000}
             />
+          </div>
+
+          {/* Due Date / Time */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DESIGN_SYSTEM.spacing.base, marginBottom: DESIGN_SYSTEM.spacing.base }}>
+            <div>
+              <label style={{
+                display: 'block',
+                marginBottom: DESIGN_SYSTEM.spacing.xs,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
+                color: DESIGN_SYSTEM.colors.text.primary
+              }}>Due Date (optional)</label>
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ width: '100%', padding: DESIGN_SYSTEM.spacing.sm, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: DESIGN_SYSTEM.borderRadius.base, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }} />
+            </div>
+            <div>
+              <label style={{
+                display: 'block',
+                marginBottom: DESIGN_SYSTEM.spacing.xs,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
+                color: DESIGN_SYSTEM.colors.text.primary
+              }}>Due Time (optional)</label>
+              <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} style={{ width: '100%', padding: DESIGN_SYSTEM.spacing.sm, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: DESIGN_SYSTEM.borderRadius.base, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }} />
+            </div>
           </div>
 
           {/* File Attachments */}

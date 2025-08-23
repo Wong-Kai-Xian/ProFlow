@@ -1279,6 +1279,20 @@ export default function CustomerProfile() {
                     const next = [...base, ...newRems];
                     setReminders(next);
                     if (id) await updateDoc(doc(db, 'customerProfiles', id), { reminders: next });
+                    // Write notifications for each added reminder
+                    try {
+                      for (let r of newRems) {
+                        await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+                          unread: true,
+                          createdAt: serverTimestamp(),
+                          origin: 'customer',
+                          title: 'New Customer Reminder',
+                          message: `${getCustomerName()}: ${r.title} on ${r.date}${r.time ? ' ' + r.time : ''}`,
+                          refType: 'customerReminder',
+                          customerId: id
+                        });
+                      }
+                    } catch {}
                     setAiModalOpen(false);
                   } else {
                     // Add to current stage notes

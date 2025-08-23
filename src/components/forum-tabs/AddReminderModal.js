@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { COLORS, INPUT_STYLES, BUTTON_STYLES, CARD_STYLES, LAYOUT } from '../profile-component/constants'; // Import CARD_STYLES and LAYOUT
 
 export default function AddReminderModal({ isOpen, onClose, onSave, editingReminder }) {
@@ -52,7 +53,7 @@ export default function AddReminderModal({ isOpen, onClose, onSave, editingRemin
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div style={{
       position: "fixed",
       top: 0,
@@ -63,9 +64,9 @@ export default function AddReminderModal({ isOpen, onClose, onSave, editingRemin
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      zIndex: 1000
-    }}>
-      <div style={{
+      zIndex: 3000
+    }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{
         backgroundColor: COLORS.white,
         borderRadius: LAYOUT.borderRadius,
         padding: LAYOUT.gap,
@@ -172,6 +173,7 @@ export default function AddReminderModal({ isOpen, onClose, onSave, editingRemin
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

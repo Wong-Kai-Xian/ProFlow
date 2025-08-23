@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"; // Import useNavigate
 import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT } from "./profile-component/constants"; // Import constants
 import { db } from "../firebase"; // Import db
-import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore"; // Import Firestore functions
+import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore"; // Import Firestore functions
 import { FaFolder, FaUser, FaComments } from 'react-icons/fa'; // Import icons for origin
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
@@ -150,15 +150,94 @@ export default function UpcomingEvents() {
       });
     }));
 
-    const updateEvents = () => {
+    const updateEvents = async () => {
       console.log("Updating events with fetchedReminders:", fetchedReminders);
       // Sort events by date, closest deadline first
       const sortedEvents = [...fetchedReminders].sort((a, b) => a.date.getTime() - b.date.getTime());
       setEvents(sortedEvents);
+      try {
+        await maybeNotifyDueSoon(sortedEvents);
+      } catch (e) { /* noop */ }
     };
 
     return () => unsubscribes.forEach(unsub => unsub());
   }, [currentUser]); // Add currentUser to dependency array
+
+  // Notify for items due within user-configured window and overdue (lightweight automation)
+  const maybeNotifyDueSoon = async (sorted) => {
+    try {
+      if (!currentUser) return;
+      const now = Date.now();
+      // Load per-user rule
+      let dueSoonMs = 24 * 60 * 60 * 1000;
+      try {
+        const ref = doc(db, 'users', currentUser.uid, 'settings', 'notifications');
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const d = snap.data();
+          if (typeof d.dueSoonHours === 'number') {
+            dueSoonMs = Math.max(1, Math.min(168, d.dueSoonHours)) * 60 * 60 * 1000;
+          }
+          var enableOverdue = d.enableOverdueAlerts !== false;
+        } else {
+          var enableOverdue = true;
+        }
+      } catch {
+        var enableOverdue = true;
+      }
+      const seenKey = `proflow_notified_${currentUser.uid}`;
+      const seenRaw = localStorage.getItem(seenKey);
+      const seen = seenRaw ? JSON.parse(seenRaw) : {};
+      let changed = false;
+      for (const ev of sorted) {
+        const dt = ev.date?.getTime?.();
+        if (!dt) continue;
+        const timeTo = dt - now;
+        // Due soon within configured window
+        if (timeTo <= dueSoonMs && timeTo >= 0) {
+          const key = `${ev.origin}:${ev.sourceId}:${ev.id}`;
+          if (!seen[key]) {
+            // Write notification
+            try {
+              await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+                unread: true,
+                createdAt: serverTimestamp(),
+                origin: ev.origin,
+                title: 'Upcoming event',
+                message: `${ev.name} • ${ev.date.toLocaleString()}`,
+                refType: 'upcomingEvent',
+                sourceId: ev.sourceId,
+                eventId: ev.id
+              });
+              seen[key] = Date.now();
+              changed = true;
+            } catch {}
+          }
+        }
+        // Overdue
+        if (enableOverdue && timeTo < 0) {
+          const keyOver = `overdue:${ev.origin}:${ev.sourceId}:${ev.id}`;
+          if (!seen[keyOver]) {
+            try {
+              await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+                unread: true,
+                createdAt: serverTimestamp(),
+                origin: ev.origin,
+                title: 'Overdue',
+                message: `${ev.name} • was due ${ev.date.toLocaleString()}`,
+                refType: 'upcomingEvent',
+                sourceId: ev.sourceId,
+                eventId: ev.id
+              });
+              seen[keyOver] = Date.now();
+              changed = true;
+            } catch {}
+          }
+        }
+      }
+      if (changed) localStorage.setItem(seenKey, JSON.stringify(seen));
+    } catch {}
+  };
 
   const getDaysLeft = (eventDate) => {
     const today = new Date();

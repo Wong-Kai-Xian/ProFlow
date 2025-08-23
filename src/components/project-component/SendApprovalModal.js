@@ -24,6 +24,8 @@ export default function SendApprovalModal({
   const [uploadProgress, setUploadProgress] = useState(0); // For file upload progress
   const [uploading, setUploading] = useState(false); // For file upload status
   const [acceptedTeamMembers, setAcceptedTeamMembers] = useState([]); // Accepted team members only
+  const [dueDate, setDueDate] = useState("");
+  const [dueTime, setDueTime] = useState("");
 
   useEffect(() => {
     const fetchAcceptedTeamMembers = async () => {
@@ -127,7 +129,7 @@ export default function SendApprovalModal({
       }
 
       for (let i = 0; i < recipientUids.length; i++) {
-        requests.push(addDoc(collection(db, "approvalRequests"), {
+        const req = addDoc(collection(db, "approvalRequests"), {
           projectId: defaultProject ? defaultProject.id : null,
           projectName: defaultProject ? defaultProject.name : "",
           status: "pending",
@@ -139,7 +141,37 @@ export default function SendApprovalModal({
           requestedTo: recipientUids[i],
           requestedToName: recipientNames[i],
           timestamp: serverTimestamp(),
-        }));
+          dueDate: dueDate || null,
+          dueTime: dueTime || null,
+        }).then(async (ref) => {
+          try {
+            // Notify recipient
+            await addDoc(collection(db, 'users', recipientUids[i], 'notifications'), {
+              unread: true,
+              createdAt: serverTimestamp(),
+              origin: 'approval',
+              title: 'Approval request',
+              message: `${currentUser?.displayName || currentUser?.email || 'Someone'} requested your approval${defaultProject ? ` for ${defaultProject.name}` : ''}`,
+              refType: 'approval',
+              approvalId: ref.id,
+              projectId: defaultProject ? defaultProject.id : null
+            });
+            // Notify requester
+            if (currentUser?.uid) {
+              await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+                unread: true,
+                createdAt: serverTimestamp(),
+                origin: 'approval',
+                title: 'Approval request sent',
+                message: `Sent to ${recipientNames[i]}`,
+                refType: 'approval',
+                approvalId: ref.id,
+                projectId: defaultProject ? defaultProject.id : null
+              });
+            }
+          } catch {}
+        });
+        requests.push(req);
       }
       console.log("Awaiting all approval requests to complete.");
       await Promise.all(requests); // Wait for all requests to complete
@@ -299,6 +331,17 @@ export default function SendApprovalModal({
             }}
             disabled={loading || uploading}
           />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div>
+            <label style={{ ...INPUT_STYLES.label, marginBottom: "8px", fontSize: "14px" }}>Due Date (optional)</label>
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ ...INPUT_STYLES.base, width: '100%', padding: '10px' }} />
+          </div>
+          <div>
+            <label style={{ ...INPUT_STYLES.label, marginBottom: "8px", fontSize: "14px" }}>Due Time (optional)</label>
+            <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} style={{ ...INPUT_STYLES.base, width: '100%', padding: '10px' }} />
+          </div>
         </div>
 
         <div style={{ marginBottom: "10px" }}>

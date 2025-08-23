@@ -1481,13 +1481,26 @@ export default function ProjectDetail() {
                       const it = selected[idx];
                       const { date, time } = parseDeadline(it.deadline);
                       const finalDate = date || new Date().toISOString().slice(0,10);
-                      await addDoc(collection(db, 'projects', projectData.id, 'reminders'), {
+                      const ref = await addDoc(collection(db, 'projects', projectData.id, 'reminders'), {
                         title: (it.displayTitle || it.title || it.name || `Reminder ${idx + 1}`).toString(),
                         description: it.description || '',
                         date: finalDate,
                         time: time || '',
                         timestamp: serverTimestamp(),
                       });
+                      // Write notification
+                      try {
+                        await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+                          unread: true,
+                          createdAt: serverTimestamp(),
+                          origin: 'project',
+                          title: 'New Project Reminder',
+                          message: `${projectData?.name || 'Project'}: ${it.displayTitle || it.title || 'Reminder'} on ${finalDate}${time ? ' ' + time : ''}`,
+                          refType: 'projectReminder',
+                          refId: ref.id,
+                          projectId: projectData.id
+                        });
+                      } catch {}
                     }
                     setAiModalOpen(false);
                   }

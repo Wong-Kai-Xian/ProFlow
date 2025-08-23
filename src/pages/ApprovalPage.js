@@ -366,6 +366,39 @@ export default function ApprovalPage() {
 
       await updateDoc(requestRef, updateData);
 
+      // Notifications to stakeholders
+      try {
+        // Notify requester
+        await addDoc(collection(db, 'users', selectedRequest.requestedBy, 'notifications'), {
+          unread: true,
+          createdAt: serverTimestamp(),
+          origin: 'approval',
+          title: `Approval ${actionType === 'approve' ? 'approved' : 'rejected'}`,
+          message: `${selectedRequest.requestTitle || selectedRequest.projectName || 'Request'} was ${actionType === 'approve' ? 'approved' : 'rejected'} by ${currentUser.name || currentUser.displayName || currentUser.email}`,
+          refType: 'approval',
+          approvalId: selectedRequest.id,
+          projectId: selectedRequest.projectId || null,
+          customerId: selectedRequest.customerId || null
+        });
+        // Notify viewers
+        const viewerIds = selectedRequest.viewers || [];
+        for (const vid of viewerIds) {
+          try {
+            await addDoc(collection(db, 'users', vid, 'notifications'), {
+              unread: true,
+              createdAt: serverTimestamp(),
+              origin: 'approval',
+              title: 'Approval decision',
+              message: `${selectedRequest.requestTitle || selectedRequest.projectName || 'Request'} was ${actionType === 'approve' ? 'approved' : 'rejected'}`,
+              refType: 'approval',
+              approvalId: selectedRequest.id,
+              projectId: selectedRequest.projectId || null,
+              customerId: selectedRequest.customerId || null
+            });
+          } catch {}
+        }
+      } catch {}
+
       // If approved and it's a project stage advancement, update the project
       if (actionType === 'approve' && selectedRequest.projectId && selectedRequest.nextStage) {
         const projectRef = doc(db, 'projects', selectedRequest.projectId);

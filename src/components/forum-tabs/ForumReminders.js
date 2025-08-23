@@ -202,6 +202,27 @@ export default function ForumReminders({ forumId }) {
                 {/* Reminder actions */}
                 <div style={{ display: 'flex', gap: '5px', marginLeft: '10px' }}>
                   <button
+                    onClick={() => {
+                      if (!reminder?.date) return;
+                      const time = (reminder.time && reminder.time.trim()) ? reminder.time : '09:00';
+                      const start = new Date(`${reminder.date}T${time}`);
+                      if (isNaN(start.getTime())) return;
+                      const dt = start.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+                      const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ProFlow//EN\nBEGIN:VEVENT\nUID:${(reminder.id || Math.random()) + '@proflow'}\nDTSTAMP:${dt}\nDTSTART:${dt}\nSUMMARY:${(reminder.title || '').replace(/\n/g,' ')}\nDESCRIPTION:${(reminder.note || '').replace(/\n/g,' ')}\nEND:VEVENT\nEND:VCALENDAR`;
+                      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${(reminder.title || 'reminder').replace(/[^a-z0-9]+/gi,'-')}.ics`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 6px', cursor: 'pointer' }}
+                    title="Add to Calendar"
+                  >
+                    📅
+                  </button>
+                  <button
                     onClick={() => { setEditingReminder(reminder); setShowReminderModal(true); }}
                     style={{
                       background: 'none',

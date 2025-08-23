@@ -138,8 +138,28 @@ export default function Reminders({ reminders, onAddReminder, onReminderRemove }
                   </a>
                 )}
               </div>
-              <div style={{ fontSize: "12px", opacity: 0.8, flexShrink: 0, marginLeft: "10px" }}>
-                {getDaysLeft(reminder.date, reminder.time)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: "12px", opacity: 0.8, flexShrink: 0, marginLeft: "10px" }}>
+                <span>{getDaysLeft(reminder.date, reminder.time)}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const start = toDate(reminder.date, reminder.time);
+                    if (!start) return;
+                    const dt = start.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+                    const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ProFlow//EN\nBEGIN:VEVENT\nUID:${(reminder.id || i) + '@proflow'}\nDTSTAMP:${dt}\nDTSTART:${dt}\nSUMMARY:${(reminder.title || '').replace(/\n/g,' ')}\nDESCRIPTION:${(reminder.description || '').replace(/\n/g,' ')}\nEND:VEVENT\nEND:VCALENDAR`;
+                    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${(reminder.title || 'reminder').replace(/[^a-z0-9]+/gi,'-')}.ics`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  style={{ background: 'rgba(255,255,255,0.25)', border: '1px solid rgba(255,255,255,0.4)', color: '#fff', padding: '2px 6px', borderRadius: 6, cursor: 'pointer' }}
+                  title="Add to Calendar"
+                >
+                  📅
+                </button>
               </div>
             </div>
             {expandedReminder === i && (
