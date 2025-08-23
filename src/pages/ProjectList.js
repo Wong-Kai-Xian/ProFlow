@@ -46,21 +46,7 @@ export default function ProjectList() {
     // Query 2: Projects where user is a team member
     const teamProjectsQuery = query(projectsRef, where("team", "array-contains", currentUser.uid));
     
-    const allProjects = new Map(); // Use Map to avoid duplicates
-    
-    const unsubscribeCreated = onSnapshot(createdProjectsQuery, (snapshot) => {
-      snapshot.docs.forEach(doc => {
-        allProjects.set(doc.id, { id: doc.id, ...doc.data() });
-      });
-      updateProjectsList();
-    });
-    
-    const unsubscribeTeam = onSnapshot(teamProjectsQuery, (snapshot) => {
-      snapshot.docs.forEach(doc => {
-        allProjects.set(doc.id, { id: doc.id, ...doc.data() });
-      });
-      updateProjectsList();
-    });
+    let allProjects = new Map(); // Use Map to avoid duplicates
     
     const updateProjectsList = () => {
       const projectList = Array.from(allProjects.values()).sort((a, b) => 
@@ -68,6 +54,30 @@ export default function ProjectList() {
       );
       setProjects(projectList);
     };
+    
+    const unsubscribeCreated = onSnapshot(createdProjectsQuery, (snapshot) => {
+      // Handle document changes properly
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          allProjects.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+        } else if (change.type === 'removed') {
+          allProjects.delete(change.doc.id);
+        }
+      });
+      updateProjectsList();
+    });
+    
+    const unsubscribeTeam = onSnapshot(teamProjectsQuery, (snapshot) => {
+      // Handle document changes properly
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          allProjects.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+        } else if (change.type === 'removed') {
+          allProjects.delete(change.doc.id);
+        }
+      });
+      updateProjectsList();
+    });
 
     return () => {
       unsubscribeCreated();
@@ -84,6 +94,7 @@ export default function ProjectList() {
   const [projectToEdit, setProjectToEdit] = useState(null); // State to hold project being edited
   const [showDeleteConfirmationModal, setShowDeleteConfirmationModal] = useState(false); // State for delete confirmation modal
   const [projectToDelete, setProjectToDelete] = useState(null); // State to hold the project to be deleted
+  const [isDeleting, setIsDeleting] = useState(false); // Add loading state for deletion
   const navigate = useNavigate();
 
   const getProgress = (project) => {
@@ -141,17 +152,47 @@ export default function ProjectList() {
   };
 
   const confirmDeleteProject = async () => {
-    if (!projectToDelete || !currentUser) return; // Ensure project is selected and user is logged in
+    if (!projectToDelete || !currentUser || isDeleting) return; // Ensure project is selected and user is logged in
 
+    setIsDeleting(true);
     try {
+      // Delete related forums first
+      const forumsQuery = query(
+        collection(db, "forums"), 
+        where("linkedProjectId", "==", projectToDelete.id)
+      );
+      const forumsSnapshot = await getDocs(forumsQuery);
+      
+      // Delete forums and their posts
+      const forumDeletionPromises = forumsSnapshot.docs.map(async (forumDoc) => {
+        const forumId = forumDoc.id;
+        
+        // Delete all posts in this forum
+        const postsQuery = collection(db, "forums", forumId, "posts");
+        const postsSnapshot = await getDocs(postsQuery);
+        const postDeletionPromises = postsSnapshot.docs.map(postDoc => 
+          deleteDoc(postDoc.ref)
+        );
+        await Promise.all(postDeletionPromises);
+        
+        // Delete the forum
+        await deleteDoc(forumDoc.ref);
+      });
+      
+      await Promise.all(forumDeletionPromises);
+      
+      // Delete the project
       await deleteDoc(doc(db, "projects", projectToDelete.id));
-      console.log("Project deleted with ID:", projectToDelete.id);
+      console.log("Project and related data deleted with ID:", projectToDelete.id);
+      
       // The onSnapshot listener will handle updating the projects state
       setShowDeleteConfirmationModal(false); // Close the modal
       setProjectToDelete(null); // Clear the project to delete
     } catch (error) {
       console.error("Error deleting project:", error);
-      alert("Failed to delete project.");
+      alert("Failed to delete project. Please try again.");
+    } finally {
+      setIsDeleting(false);
     }
   };
   
@@ -753,6 +794,7 @@ export default function ProjectList() {
         onConfirm={confirmDeleteProject}
         itemName={projectToDelete?.name || ''}
         itemType="project"
+        isLoading={isDeleting}
       />
     </div>
   );

@@ -255,19 +255,27 @@ export default function Forum() {
         }}>
         {/* Left column: Project Details + Reminders */}
         <div style={{ 
+          position: "sticky",
+          top: DESIGN_SYSTEM.spacing.xl,
           display: "flex", 
           flexDirection: "column", 
-          gap: DESIGN_SYSTEM.spacing.base, 
-          overflowY: "auto",
-          maxHeight: "calc(100vh - 320px)"
+          gap: DESIGN_SYSTEM.spacing.base,
+          height: "calc(150vh - 320px)", // 50% longer
+          overflowY: "hidden"
         }}>
-          {/* Project Details Section */}
-          <div style={getCardStyle('forums')}>
+          {/* Project Details Section - 50% height */}
+          <div style={{
+            ...getCardStyle('forums'),
+            height: "calc(50% - 8px)", // 50% minus half the gap
+            display: "flex",
+            flexDirection: "column"
+          }}>
             <div style={{
               background: DESIGN_SYSTEM.pageThemes.forums.accent,
               color: DESIGN_SYSTEM.colors.text.inverse,
               padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
+              flexShrink: 0
             }}>
               <h3 style={{
                 margin: 0,
@@ -277,16 +285,27 @@ export default function Forum() {
                 Project Details
               </h3>
             </div>
-            <div style={{ padding: 0 }}>
+            <div style={{ 
+              flex: 1,
+              overflow: "auto",
+              padding: 0
+            }}>
               {linkedProjectData ? (
-                <ProjectDetails 
-                  project={linkedProjectData} 
-                  readOnly={true}
-                />
+                <div style={{ padding: '16px', height: '100%' }}>
+                  <ProjectDetails 
+                    project={linkedProjectData} 
+                    readOnly={true}
+                    noCard={true}
+                  />
+                </div>
               ) : (
                 <div style={{
                   padding: DESIGN_SYSTEM.spacing.base,
-                  textAlign: "center"
+                  textAlign: "center",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
                 }}>
                   <p style={{ 
                     color: DESIGN_SYSTEM.colors.text.secondary, 
@@ -300,13 +319,19 @@ export default function Forum() {
             </div>
           </div>
           
-          {/* Reminders Section */}
-          <div style={getCardStyle('forums')}>
+          {/* Reminders Section - 50% height */}
+          <div style={{
+            ...getCardStyle('forums'),
+            height: "calc(50% - 8px)", // 50% minus half the gap
+            display: "flex",
+            flexDirection: "column"
+          }}>
             <div style={{
               background: DESIGN_SYSTEM.pageThemes.forums.accent,
               color: DESIGN_SYSTEM.colors.text.inverse,
               padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
+              flexShrink: 0
             }}>
               <h3 style={{
                 margin: 0,
@@ -316,7 +341,11 @@ export default function Forum() {
                 Reminders
               </h3>
             </div>
-            <div style={{ padding: 0 }}>
+            <div style={{ 
+              flex: 1,
+              overflow: "auto",
+              padding: 0
+            }}>
               <ForumReminders forumId={forumId} />
             </div>
           </div>
@@ -342,19 +371,27 @@ export default function Forum() {
 
         {/* Right column: Online Members + Trending Posts */}
         <div style={{ 
+          position: "sticky",
+          top: DESIGN_SYSTEM.spacing.xl,
           display: "flex", 
           flexDirection: "column", 
-          gap: DESIGN_SYSTEM.spacing.base, 
-          overflowY: "auto",
-          maxHeight: "calc(100vh - 320px)"
+          gap: DESIGN_SYSTEM.spacing.base,
+          height: "calc(150vh - 320px)", // 50% longer
+          overflowY: "hidden"
         }}>
-          {/* Active Users Section */}
-          <div style={getCardStyle('forums')}>
+          {/* Active Users Section - 50% height */}
+          <div style={{
+            ...getCardStyle('forums'),
+            height: "calc(50% - 8px)", // 50% minus half the gap
+            display: "flex",
+            flexDirection: "column"
+          }}>
             <div style={{
               background: DESIGN_SYSTEM.pageThemes.forums.accent,
               color: DESIGN_SYSTEM.colors.text.inverse,
               padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
+              flexShrink: 0
             }}>
               <h3 style={{
                 margin: 0,
@@ -364,18 +401,28 @@ export default function Forum() {
                 Active Members
               </h3>
             </div>
-            <div style={{ padding: 0 }}>
+            <div style={{ 
+              flex: 1,
+              overflow: "auto",
+              padding: 0
+            }}>
               <ActiveUsers members={enrichedForumMembersDetails} />
             </div>
           </div>
           
-          {/* Starred Posts Section */}
-          <div style={getCardStyle('forums')}>
+          {/* Starred Posts Section - 50% height */}
+          <div style={{
+            ...getCardStyle('forums'),
+            height: "calc(50% - 8px)", // 50% minus half the gap
+            display: "flex",
+            flexDirection: "column"
+          }}>
             <div style={{
               background: DESIGN_SYSTEM.pageThemes.forums.accent,
               color: DESIGN_SYSTEM.colors.text.inverse,
               padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
+              flexShrink: 0
             }}>
               <h3 style={{
                 margin: 0,
@@ -385,7 +432,11 @@ export default function Forum() {
                 Starred Posts
               </h3>
             </div>
-            <div style={{ padding: 0 }}>
+            <div style={{ 
+              flex: 1,
+              overflow: "auto",
+              padding: 0
+            }}>
               <StarredPosts onPostClick={handleTrendingPostClick} forumId={forumId} currentUser={currentUser} />
             </div>
           </div>

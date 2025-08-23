@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Card from '../profile-component/Card';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
 
-export default function ProjectDetails({ project, onSave, allProjectNames, readOnly }) {
+export default function ProjectDetails({ project, onSave, allProjectNames, readOnly, noCard }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editableProject, setEditableProject] = useState(project || {});
 
@@ -16,11 +16,19 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
 
   // Early return if no project data
   if (!project) {
+    const loadingContent = (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+        <p style={{ color: COLORS.lightText }}>Loading project details...</p>
+      </div>
+    );
+    
+    if (noCard) {
+      return <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>{loadingContent}</div>;
+    }
+    
     return (
       <Card style={{ height: "250px", minHeight: "250px", maxHeight: "250px", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
-          <p style={{ color: COLORS.lightText }}>Loading project details...</p>
-        </div>
+        {loadingContent}
       </Card>
     );
   }
@@ -60,18 +68,20 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
     }
   };
 
-  return (
-    <Card style={{
-      height: "250px", 
-      minHeight: "250px", 
-      maxHeight: "250px", 
-      display: "flex", 
-      flexDirection: "column", 
-      overflow: (isEditing && !effectiveReadOnly) ? "hidden" : "hidden", // Keep outer card hidden, inner div will scroll
-      position: "relative", // Needed for absolute positioning of overlay
-      opacity: isWaitingForApproval ? 0.6 : 1, // Grey out effect
-      pointerEvents: isWaitingForApproval ? "none" : "auto", // Disable interactions
-    }}>
+  const cardStyle = {
+    height: noCard ? "100%" : "250px", 
+    minHeight: noCard ? "auto" : "250px", 
+    maxHeight: noCard ? "none" : "250px", 
+    display: "flex", 
+    flexDirection: "column", 
+    overflow: (isEditing && !effectiveReadOnly) ? "hidden" : "hidden",
+    position: "relative",
+    opacity: isWaitingForApproval ? 0.6 : 1,
+    pointerEvents: isWaitingForApproval ? "none" : "auto"
+  };
+
+  const content = (
+    <>
       {isWaitingForApproval && (
         <div style={{
           position: "absolute",
@@ -79,11 +89,11 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: "rgba(255, 255, 255, 0.7)", // White overlay for grey-out
+          backgroundColor: "rgba(255, 255, 255, 0.7)",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          zIndex: 10, // Ensure it's on top
+          zIndex: 10,
           borderRadius: "12px",
           flexDirection: "column",
           gap: "10px",
@@ -112,73 +122,92 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
         ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: (isEditing && !effectiveReadOnly) ? "auto" : "hidden", paddingRight: "5px" }}> {/* Apply scroll here */}
-        {/* Editable Info at the top */}
-        <div style={{ marginBottom: LAYOUT.smallGap }}>
-          <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
-            <strong style={{ fontWeight: "600" }}>Project Name:</strong> 
-            <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {(isEditing && !effectiveReadOnly) ? (
-                <input 
-                  type="text" 
-                  name="name" 
-                  value={editableProject.name || ''} 
-                  onChange={handleChange} 
-                  style={INPUT_STYLES.base} 
-                />
-              ) : (
-                project.name || 'Untitled Project'
-              )}
-            </span>
-          </p>
-          {/* Project ID (always read-only) */}
-          <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
-            <strong style={{ fontWeight: "600" }}>Project ID:</strong> 
-            <span style={{ marginLeft: "8px", fontWeight: "400", userSelect: "all" }}>
-              {project.id || 'Auto-generated'}
-            </span>
-          </p>
-          <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
-            <strong style={{ fontWeight: "600" }}>Company:</strong> 
-            <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {(isEditing && !effectiveReadOnly) ? (
-                <input type="text" name="companyInfo.name" value={editableProject.companyInfo?.name || ''} onChange={handleChange} style={INPUT_STYLES.base} />
-              ) : (
-                project.companyInfo?.name || 'No company specified'
-              )}
-            </span>
-          </p>
-          <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
-            <strong style={{ fontWeight: "600" }}>Industry:</strong> 
-            <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {(isEditing && !effectiveReadOnly) ? (
-                <input type="text" name="companyInfo.industry" value={editableProject.companyInfo?.industry || ''} onChange={handleChange} style={INPUT_STYLES.base} />
-              ) : (
-                project.companyInfo?.industry || 'No industry specified'
-              )}
-            </span>
-          </p>
-          <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px" }}>
-            <strong style={{ fontWeight: "600" }}>Contact:</strong> 
-            <span style={{ marginLeft: "8px", fontWeight: "400" }}>
-              {(isEditing && !effectiveReadOnly) ? (
-                <input type="text" name="companyInfo.contact" value={editableProject.companyInfo?.contact || ''} onChange={handleChange} style={INPUT_STYLES.base} />
-              ) : (
-                project.companyInfo?.contact || 'No contact provided'
-              )}
-            </span>
-          </p>
+      <div style={{ 
+        flex: 1, 
+        overflowY: (isEditing && !effectiveReadOnly) ? "auto" : "auto", 
+        padding: "0px",
+        display: "flex", 
+        flexDirection: "column",
+        gap: LAYOUT.smallGap
+      }}>
+        <div style={{ display: "flex", flexDirection: "row", gap: LAYOUT.smallGap }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Project Name</label>
+            {isEditing && !effectiveReadOnly ? (
+              <input
+                type="text"
+                name="name"
+                value={editableProject.name || ''}
+                onChange={handleChange}
+                style={{ ...INPUT_STYLES.base, width: "100%", fontSize: "12px", padding: "6px" }}
+              />
+            ) : (
+              <div style={{ padding: "6px", fontSize: "12px", color: COLORS.text, fontWeight: "400", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {project.name || 'No name'}
+              </div>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Company</label>
+            {isEditing && !effectiveReadOnly ? (
+              <input
+                type="text"
+                name="companyInfo.companyName"
+                value={editableProject.companyInfo?.companyName || ''}
+                onChange={handleChange}
+                style={{ ...INPUT_STYLES.base, width: "100%", fontSize: "12px", padding: "6px" }}
+              />
+            ) : (
+              <div style={{ padding: "6px", fontSize: "12px", color: COLORS.text, fontWeight: "400", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {project.companyInfo?.companyName || 'No company'}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Description at the bottom */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <p style={{ margin: "0 0 8px 0", color: COLORS.dark, fontSize: "14px", fontWeight: "600" }}>
-            <strong>Description:</strong>
-          </p>
-          {(isEditing && !effectiveReadOnly) ? (
+        <div style={{ display: "flex", flexDirection: "row", gap: LAYOUT.smallGap }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Customer Email</label>
+            {isEditing && !effectiveReadOnly ? (
+              <input
+                type="email"
+                name="companyInfo.customerEmail"
+                value={editableProject.companyInfo?.customerEmail || ''}
+                onChange={handleChange}
+                style={{ ...INPUT_STYLES.base, width: "100%", fontSize: "12px", padding: "6px" }}
+              />
+            ) : (
+              <div style={{ padding: "6px", fontSize: "12px", color: COLORS.text, fontWeight: "400", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {project.companyInfo?.customerEmail || 'No email'}
+              </div>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Status</label>
+            <div style={{ padding: "6px", fontSize: "12px", fontWeight: "400", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{
+                backgroundColor: project.status === 'In Progress' ? COLORS.primary : 
+                                project.status === 'Completed' ? COLORS.success :
+                                project.status === 'Waiting for Approval' ? COLORS.warning : COLORS.lightText,
+                color: 'white',
+                padding: "2px 8px",
+                borderRadius: "12px",
+                fontSize: "10px",
+                fontWeight: "600"
+              }}>
+                {project.status || 'No status'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Description</label>
+          {isEditing && !effectiveReadOnly ? (
             <textarea
               name="description"
               value={editableProject.description || ''}
+              placeholder="Enter project description..."
               onChange={handleChange}
               style={{ ...INPUT_STYLES.textarea, width: "100%", flex: 1, resize: "none" }}
             />
@@ -197,6 +226,16 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
           )}
         </div>
       </div>
+    </>
+  );
+
+  if (noCard) {
+    return <div style={cardStyle}>{content}</div>;
+  }
+
+  return (
+    <Card style={cardStyle}>
+      {content}
     </Card>
   );
 }

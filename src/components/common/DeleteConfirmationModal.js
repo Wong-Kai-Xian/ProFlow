@@ -1,7 +1,7 @@
 import React from 'react';
 import { DESIGN_SYSTEM, getButtonStyle } from '../../styles/designSystem';
 
-export default function DeleteConfirmationModal({ isOpen, onClose, onConfirm, itemName, itemType = 'item' }) {
+export default function DeleteConfirmationModal({ isOpen, onClose, onConfirm, itemName, itemType = 'item', isLoading = false }) {
   if (!isOpen) return null;
 
   const modalOverlayStyle = {
@@ -58,13 +58,16 @@ export default function DeleteConfirmationModal({ isOpen, onClose, onConfirm, it
           </button>
           <button
             onClick={onConfirm}
+            disabled={isLoading}
             style={{
               ...getButtonStyle('primary', 'error'),
               padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.lg}`,
               fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+              opacity: isLoading ? 0.6 : 1,
+              cursor: isLoading ? 'not-allowed' : 'pointer',
             }}
           >
-            Delete
+            {isLoading ? 'Deleting...' : 'Delete'}
           </button>
         </div>
       </div>

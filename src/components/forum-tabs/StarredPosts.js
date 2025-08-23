@@ -50,12 +50,10 @@ export default function StarredPosts({ onPostClick, forumId, currentUser }) {
 
   return (
     <div style={{
-      backgroundColor: 'white',
-      borderRadius: '10px',
-      padding: '15px',
-      marginBottom: '15px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-      border: '1px solid #ECF0F1'
+      padding: '16px',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column'
     }}>
       <div style={{
         display: 'flex',
@@ -83,7 +81,7 @@ export default function StarredPosts({ onPostClick, forumId, currentUser }) {
       </div>
 
       {isExpanded && (
-        <div>
+        <div style={{ flex: 1, overflow: 'auto' }}>
           {starredPosts.length === 0 ? (
             <p style={{ 
               fontSize: '15px', 

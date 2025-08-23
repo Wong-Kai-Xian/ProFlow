@@ -1,18 +1,114 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { COLORS } from '../profile-component/constants';
+import { db } from '../../firebase';
+import { doc, updateDoc, serverTimestamp, onSnapshot, collection, query, where } from 'firebase/firestore';
+import { useAuth } from '../../contexts/AuthContext';
 import UserAvatar from '../shared/UserAvatar';
 
 export default function ActiveUsers({ members }) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [userActivities, setUserActivities] = useState({});
+  const { currentUser } = useAuth();
 
-  const usersWithStatus = members.map(member => ({
-    id: member.id,
-    name: member.name,
-    avatar: member.name ? member.name[0].toUpperCase() : '?',
-    email: member.email,
-    isOnline: Math.random() > 0.5, // Randomly assign online status
-    lastSeen: Math.random() > 0.5 ? `${Math.floor(Math.random() * 10) + 1} minutes ago` : null // Random last seen
-  }));
+  // Update current user's last activity
+  useEffect(() => {
+    const updateUserActivity = async () => {
+      if (currentUser?.uid) {
+        try {
+          await updateDoc(doc(db, "users", currentUser.uid), {
+            lastActivity: serverTimestamp(),
+            isOnline: true
+          });
+        } catch (error) {
+          console.error("Error updating user activity:", error);
+        }
+      }
+    };
+
+    updateUserActivity();
+    
+    // Update activity every 30 seconds while user is active
+    const interval = setInterval(updateUserActivity, 30000);
+    
+    // Update activity when user leaves
+    const handleBeforeUnload = () => {
+      if (currentUser?.uid) {
+        updateDoc(doc(db, "users", currentUser.uid), {
+          isOnline: false
+        }).catch(console.error);
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (currentUser?.uid) {
+        updateDoc(doc(db, "users", currentUser.uid), {
+          isOnline: false
+        }).catch(console.error);
+      }
+    };
+  }, [currentUser?.uid]);
+
+  // Listen to user activities
+  useEffect(() => {
+    if (members.length === 0) return;
+
+    const userIds = members.map(member => member.id).filter(Boolean);
+    if (userIds.length === 0) return;
+
+    const unsubscribes = userIds.map(userId => {
+      return onSnapshot(doc(db, "users", userId), (doc) => {
+        if (doc.exists()) {
+          const data = doc.data();
+          setUserActivities(prev => ({
+            ...prev,
+            [userId]: {
+              isOnline: data.isOnline || false,
+              lastActivity: data.lastActivity
+            }
+          }));
+        }
+      });
+    });
+
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [members]);
+
+  const formatLastSeen = (timestamp) => {
+    if (!timestamp) return 'Never';
+    
+    const now = new Date();
+    const lastActivity = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const diffMs = now - lastActivity;
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    return `${diffDays} days ago`;
+  };
+
+  const usersWithStatus = members.map(member => {
+    const activity = userActivities[member.id] || {};
+    const isRecentlyActive = activity.lastActivity && 
+      (new Date() - (activity.lastActivity.toDate ? activity.lastActivity.toDate() : new Date(activity.lastActivity))) < 5 * 60 * 1000; // 5 minutes
+
+    return {
+      id: member.id,
+      name: member.name,
+      avatar: member.name ? member.name[0].toUpperCase() : '?',
+      email: member.email,
+      isOnline: activity.isOnline && isRecentlyActive,
+      lastSeen: formatLastSeen(activity.lastActivity)
+    };
+  });
 
   const onlineUsers = usersWithStatus.filter(user => user.isOnline);
   const offlineUsers = usersWithStatus.filter(user => !user.isOnline);
@@ -25,12 +121,10 @@ export default function ActiveUsers({ members }) {
 
   return (
     <div style={{
-      backgroundColor: 'white',
-      borderRadius: '10px',
-      padding: '12px',
-      marginBottom: '15px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-      border: '1px solid #ECF0F1'
+      padding: '16px',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column'
     }}>
       <div style={{
         display: 'flex',
@@ -58,7 +152,7 @@ export default function ActiveUsers({ members }) {
       </div>
 
       {isExpanded && (
-        <div>
+        <div style={{ flex: 1, overflow: 'auto' }}>
           {/* Online Users */}
           {onlineUsers.map((user, index) => (
             <div key={user.id} style={{
@@ -138,21 +232,12 @@ export default function ActiveUsers({ members }) {
                     position: 'relative',
                     marginRight: '8px'
                   }}>
-                    <div style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      backgroundColor: getAvatarColor(user.name),
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      color: 'white',
-                      opacity: 0.8
-                    }}>
-                      {user.avatar}
-                    </div>
+                    <UserAvatar 
+                      user={user} 
+                      size={32}
+                      showBorder={false}
+                      style={{ opacity: 0.8 }}
+                    />
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ 

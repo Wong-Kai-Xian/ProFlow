@@ -244,7 +244,7 @@ export default function TopBar() {
               backgroundColor: '#34495E',
               borderRadius: '5px',
               boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
-              zIndex: 100,
+              zIndex: 9999,
               minWidth: '120px',
             }}>
               <div 

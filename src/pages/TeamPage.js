@@ -163,7 +163,9 @@ export default function TeamPage() {
           padding: "40px",
           marginBottom: "32px",
           boxShadow: "0 25px 50px rgba(0, 0, 0, 0.1)",
-          border: "1px solid rgba(255, 255, 255, 0.2)"
+          border: "1px solid rgba(255, 255, 255, 0.2)",
+          position: "relative",
+          zIndex: 1
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "20px" }}>
             <div>
@@ -228,7 +230,9 @@ export default function TeamPage() {
           padding: "32px",
           marginBottom: "32px",
           boxShadow: "0 20px 40px rgba(0, 0, 0, 0.08)",
-          border: "1px solid rgba(255, 255, 255, 0.2)"
+          border: "1px solid rgba(255, 255, 255, 0.2)",
+          position: "relative",
+          zIndex: 1
         }}>
           {/* Action Buttons */}
           <div style={{
@@ -404,7 +408,9 @@ export default function TeamPage() {
           padding: "32px",
           marginBottom: "32px",
           boxShadow: "0 20px 40px rgba(0, 0, 0, 0.08)",
-          border: "1px solid rgba(255, 255, 255, 0.2)"
+          border: "1px solid rgba(255, 255, 255, 0.2)",
+          position: "relative",
+          zIndex: 1
         }}>
           <div style={{
             display: "flex",
@@ -532,7 +538,9 @@ export default function TeamPage() {
           borderRadius: "24px",
           padding: "32px",
           boxShadow: "0 20px 40px rgba(0, 0, 0, 0.08)",
-          border: "1px solid rgba(255, 255, 255, 0.2)"
+          border: "1px solid rgba(255, 255, 255, 0.2)",
+          position: "relative",
+          zIndex: 1
         }}>
           <div style={{
             display: "flex",
