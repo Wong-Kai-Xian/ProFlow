@@ -235,6 +235,8 @@ export default function UpcomingEvents() {
       display: "flex",
       flexDirection: "column",
       minHeight: 0,
+      position: 'relative',
+      zIndex: 0
     }}>
       <h3 style={{ marginTop: 0, color: COLORS.text, fontSize: "18px" }}>Upcoming Events</h3>
       <ul style={{ listStyle: 'none', padding: 0, overflowY: "auto", flexGrow: 1 }}>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "./profile-component/Card";
 import { COLORS, LAYOUT } from "./profile-component/constants";
@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 export default function HomeGroupForum() {
   const [sortBy, setSortBy] = useState("recent");
   const [forums, setForums] = useState([]);
+  const postsUnsubsRef = useRef([]);
   const navigate = useNavigate();
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
 
@@ -22,14 +23,29 @@ export default function HomeGroupForum() {
     // Query for forums where the current user is a member
     const q = query(collection(db, "forums"), where("members", "array-contains", currentUser.uid), orderBy('lastActivity', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const forumsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const forumsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setForums(forumsData);
+
+      // Reset existing post listeners
+      postsUnsubsRef.current.forEach(unsub => { try { unsub(); } catch {} });
+      postsUnsubsRef.current = [];
+
+      // Attach live post count listeners per forum
+      forumsData.forEach(f => {
+        const postsRef = collection(db, 'forums', f.id, 'posts');
+        const unsubPosts = onSnapshot(postsRef, (snap) => {
+          const count = snap.size;
+          setForums(prev => prev.map(x => x.id === f.id ? { ...x, actualPostCount: count } : x));
+        });
+        postsUnsubsRef.current.push(unsubPosts);
+      });
     });
 
-    return () => unsubscribe();
+    return () => {
+      try { unsubscribe(); } catch {}
+      postsUnsubsRef.current.forEach(unsub => { try { unsub(); } catch {} });
+      postsUnsubsRef.current = [];
+    };
   }, [currentUser]); // Add currentUser to dependency array
 
   const sortForums = () => {
@@ -100,7 +116,7 @@ export default function HomeGroupForum() {
               <strong style={{ color: COLORS.dark, fontSize: "14px", fontWeight: "600" }}>{forum.name}</strong>
               <br />
               <small style={{ color: COLORS.lightText, fontSize: "12px" }}>
-                {typeof forum.actualPostCount === 'number' ? forum.actualPostCount : (forum.posts || 0)} posts
+                {(typeof forum.actualPostCount === 'number' ? forum.actualPostCount : (forum.posts || 0))} posts
                 <br />
                 Last activity: {forum.lastActivity && typeof forum.lastActivity.toDate === 'function' ? forum.lastActivity.toDate().toLocaleString() : 'N/A'}
               </small>

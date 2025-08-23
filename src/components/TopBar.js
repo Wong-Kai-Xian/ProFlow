@@ -76,7 +76,10 @@ export default function TopBar() {
       alignItems: 'center', 
       gap: '16px',
       boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
-      backdropFilter: 'blur(10px)'
+      backdropFilter: 'blur(10px)',
+      position: 'sticky',
+      top: 0,
+      zIndex: 1000
     }}>
       <img 
         src="/proflow-logo.png" 

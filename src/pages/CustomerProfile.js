@@ -759,7 +759,9 @@ export default function CustomerProfile() {
 
       <div style={{
         ...getContentContainerStyle(),
-        paddingTop: DESIGN_SYSTEM.spacing['2xl']
+        paddingTop: DESIGN_SYSTEM.spacing['2xl'],
+        position: 'relative',
+        zIndex: 0
       }}>
         {/* Page-level actions */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: DESIGN_SYSTEM.spacing.base }}>
