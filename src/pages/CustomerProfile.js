@@ -88,6 +88,24 @@ export default function CustomerProfile() {
   // Default CRM tab to Stages on load
   const [defaultCrmTab, setDefaultCrmTab] = useState('Stages');
 
+  // Wire AI Actions button inside CRM transcripts to this page modal
+  useEffect(() => {
+    const handler = (e) => {
+      try {
+        const detail = e?.detail || {};
+        if (!detail.transcript) return;
+        setAiModalTranscriptDoc(detail.transcript);
+        setAiModalItems([]);
+        setAiModalSelection({});
+        setAiModalTarget('tasks');
+        setAiModalError('');
+        setAiModalOpen(true);
+      } catch {}
+    };
+    window.addEventListener('proflow-ai-actions', handler);
+    return () => window.removeEventListener('proflow-ai-actions', handler);
+  }, []);
+
   // Helper to check if a stage is completed
   const isStageCompleted = (stageName) => stageData[stageName]?.completed;
 

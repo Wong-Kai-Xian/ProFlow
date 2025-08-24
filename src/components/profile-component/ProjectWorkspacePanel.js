@@ -7,7 +7,7 @@ import CustomerReminders from './Reminders';
 import StatusPanel from './StatusPanel';
 import TaskManager from './TaskManager';
 import { db } from '../../firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 
 export default function ProjectWorkspacePanel({
   selectedProjectId,
@@ -46,6 +46,8 @@ export default function ProjectWorkspacePanel({
   const [transcripts, setTranscripts] = useState([]);
   const [isSwitching, setIsSwitching] = useState(false);
   const switchTimerRef = useRef(null);
+  const [confirmDelete, setConfirmDelete] = useState(null); // { scope: 'project'|'customer', file }
+  const [confirmDeleteStep, setConfirmDeleteStep] = useState(0);
 
   useEffect(() => {
     // Show loading indicator on project change
@@ -197,7 +199,7 @@ export default function ProjectWorkspacePanel({
                         URL.revokeObjectURL(url);
                       }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fff', color: '#111827', border: '1px solid #e5e7eb' }}>⬇️ Download</button>
                       <button onClick={() => { /* AI modal handled at page level; emit event */ try { const ev = new CustomEvent('proflow-ai-actions', { detail: { scope: 'project', transcript: file } }); window.dispatchEvent(ev); } catch {} }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#111827', color: '#fff', border: '1px solid #111827' }}>🤖 AI Actions</button>
-                      <button onClick={async () => { try { const { deleteDoc, doc } = await import('firebase/firestore'); const { db } = await import('../../firebase'); await deleteDoc(doc(db, 'projects', selectedProjectId, 'meetingTranscripts', file.id)); } catch { alert('Failed to delete'); } }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fee2e2', border: '1px solid #fecaca', color: '#b91c1c' }}>🗑️ Delete</button>
+                      <button onClick={() => { setConfirmDelete({ scope: 'project', file }); setConfirmDeleteStep(1); }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fee2e2', border: '1px solid #fecaca', color: '#b91c1c' }}>🗑️ Delete</button>
                     </div>
                   </div>
                 ))}
@@ -225,7 +227,7 @@ export default function ProjectWorkspacePanel({
                         URL.revokeObjectURL(url);
                       }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fff', color: '#111827', border: '1px solid #e5e7eb' }}>⬇️ Download</button>
                       <button onClick={() => { try { const ev = new CustomEvent('proflow-ai-actions', { detail: { scope: 'customer', transcript: file } }); window.dispatchEvent(ev); } catch {} }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#111827', color: '#fff', border: '1px solid #111827' }}>🤖 AI Actions</button>
-                      <button onClick={async () => { try { const { deleteDoc, doc } = await import('firebase/firestore'); const { db } = await import('../../firebase'); await deleteDoc(doc(db, 'customerProfiles', customerId, 'meetingTranscripts', file.id)); } catch { alert('Failed to delete'); } }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fee2e2', border: '1px solid #fecaca', color: '#b91c1c' }}>🗑️ Delete</button>
+                      <button onClick={() => { setConfirmDelete({ scope: 'customer', file }); setConfirmDeleteStep(1); }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fee2e2', border: '1px solid #fecaca', color: '#b91c1c' }}>🗑️ Delete</button>
                     </div>
                   </div>
                 ))}
@@ -270,6 +272,41 @@ export default function ProjectWorkspacePanel({
           </div>
         )}
       </div>
+      {/* Double-confirmation modals for transcript delete */}
+      {confirmDelete && confirmDeleteStep === 1 && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => { setConfirmDelete(null); setConfirmDeleteStep(0); }}>
+          <div onClick={(e)=>e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: 420, maxWidth: '92vw', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', padding: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Delete Transcript</div>
+            <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, marginBottom: 12 }}>Delete "{confirmDelete.file?.name || 'this transcript'}"?</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => { setConfirmDelete(null); setConfirmDeleteStep(0); }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+              <button onClick={() => setConfirmDeleteStep(2)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Continue</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmDelete && confirmDeleteStep === 2 && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 2100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => { setConfirmDelete(null); setConfirmDeleteStep(0); }}>
+          <div onClick={(e)=>e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: 420, maxWidth: '92vw', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', padding: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8, color: '#b91c1c' }}>Are you absolutely sure?</div>
+            <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, marginBottom: 12 }}>This action cannot be undone.</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => { setConfirmDelete(null); setConfirmDeleteStep(0); }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+              <button onClick={async () => {
+                try {
+                  if (confirmDelete.scope === 'project' && selectedProjectId) {
+                    await deleteDoc(doc(db, 'projects', selectedProjectId, 'meetingTranscripts', confirmDelete.file.id));
+                  } else if (confirmDelete.scope === 'customer' && customerId) {
+                    await deleteDoc(doc(db, 'customerProfiles', customerId, 'meetingTranscripts', confirmDelete.file.id));
+                  }
+                } catch {}
+                setConfirmDelete(null);
+                setConfirmDeleteStep(0);
+              }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #fecaca', background: '#fee2e2', cursor: 'pointer', fontSize: 12, color: '#b91c1c' }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`@keyframes proflow-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
