@@ -1145,7 +1145,7 @@ export default function ProjectDetail() {
                 Team Members
               </h3>
             </div>
-            <div style={{ flex: 1, overflow: "visible" }}>
+            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <TeamMembersPanel 
               projectId={projectId}
               teamMembers={projectData.team}
