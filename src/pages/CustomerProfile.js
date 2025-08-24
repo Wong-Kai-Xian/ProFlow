@@ -8,7 +8,10 @@ import CompanyNewsPanel from "../components/profile-component/CompanyNewsPanel";
 import ConvertedProjectRow from "../components/profile-component/ConvertedProjectRow";
 import StatusPanel from "../components/profile-component/StatusPanel";
 import Reminders from "../components/profile-component/Reminders";
+import ProjectReminders from "../components/project-component/Reminders";
 import AttachedFiles from "../components/profile-component/AttachedFiles";
+import CustomerQuotesPanel from "../components/profile-component/CustomerQuotesPanel";
+import ProjectWorkspacePanel from "../components/profile-component/ProjectWorkspacePanel";
 import TaskManager from "../components/profile-component/TaskManager";
 import SendApprovalModal from "../components/project-component/SendApprovalModal";
 import CreateProjectModal from "../components/project-component/CreateProjectModal";
@@ -47,6 +50,8 @@ export default function CustomerProfile() {
   const [projectSnapshots, setProjectSnapshots] = useState({}); // Per-project saved data snapshots
   const [activeStageTab, setActiveStageTab] = useState('current');
   const [projectNames, setProjectNames] = useState({}); // Map of projectId -> name
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [projectMeetingTranscripts, setProjectMeetingTranscripts] = useState([]);
   const [lastContact, setLastContact] = useState("N/A"); // Default last contact
   const [customerTeamMembersDetails, setCustomerTeamMembersDetails] = useState([]); // State for enriched team member details
 
@@ -501,6 +506,20 @@ export default function CustomerProfile() {
     loadNames();
   }, [projects]);
 
+  // Do not auto-select a project; default stays as "No Project" until user selects
+
+  // Load meeting transcripts for selected project
+  useEffect(() => {
+    if (!selectedProjectId) { setProjectMeetingTranscripts([]); return; }
+    const colRef = collection(db, 'projects', selectedProjectId, 'meetingTranscripts');
+    const unsub = onSnapshot(colRef, snap => {
+      const files = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setProjectMeetingTranscripts(files);
+    });
+    return () => unsub();
+  }, [selectedProjectId]);
+
   // Check for approved conversion requests and pending requests
   useEffect(() => {
     const checkConversionStatus = async () => {
@@ -806,15 +825,6 @@ export default function CustomerProfile() {
         position: 'relative',
         zIndex: 0
       }}>
-        {/* Page-level actions */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: DESIGN_SYSTEM.spacing.base }}>
-          <button
-            onClick={handleToggleMeeting}
-            style={{ ...getButtonStyle('primary', 'customers') }}
-          >
-            {(showMeeting || meetingMinimized) ? 'Close Meeting' : 'Conduct Meeting'}
-          </button>
-        </div>
 
         {/* Meeting Section */}
         {(showMeeting || meetingMinimized) && (
@@ -909,6 +919,75 @@ export default function CustomerProfile() {
           overflowX: "hidden"
         }}>
         
+        {/* Middle + Right: Toolbar and Project Workspace (moved up near TopBar) */}
+        <div style={{ gridColumn: "2 / span 2", gridRow: "1", display: "grid", gridTemplateColumns: "1fr 350px", gap: DESIGN_SYSTEM.spacing.lg, alignItems: "start", alignSelf: 'start' }}>
+          {/* Toolbar only for middle+right columns */}
+          <div style={{ gridColumn: "1 / span 2", marginBottom: DESIGN_SYSTEM.spacing.sm }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: 10,
+              borderRadius: 12,
+              boxShadow: DESIGN_SYSTEM.shadows.sm
+            }}>
+              <div style={{ fontSize: 12, opacity: 0.9 }}>Project:</div>
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e5e7eb', minWidth: 220 }}
+              >
+                <option value="">No Project</option>
+                {(projects || []).map(pid => (
+                  <option key={pid} value={pid}>{projectNames[pid] || pid}</option>
+                ))}
+              </select>
+              <div style={{ flex: 1 }} />
+              <button
+                onClick={handleToggleMeeting}
+                style={{ ...getButtonStyle('secondary', 'customers'), background: 'rgba(255,255,255,0.15)', borderColor: 'transparent' }}
+              >
+                {(showMeeting || meetingMinimized) ? 'Close Meeting' : 'Conduct Meeting'}
+              </button>
+            </div>
+          </div>
+
+          {/* Project Workspace sits directly below toolbar */}
+          <div style={{ gridColumn: "1 / span 2" }}>
+            <ProjectWorkspacePanel
+              selectedProjectId={selectedProjectId}
+              projects={projects}
+              projectNames={projectNames}
+              files={files}
+              onFileAdd={handleFileAdd}
+              onFileRemove={handleFileRemove}
+              onFileRename={handleFileRename}
+              customerId={id}
+              customerProfile={customerProfile}
+              onConvertToProject={handleConvertToProject}
+              onSendApprovalRequest={handleSendApprovalRequest}
+              stages={stages}
+              currentStage={currentStage}
+              setCurrentStage={setCurrentStage}
+              stageData={stageData}
+              setStageData={setStageData}
+              setStages={setStages}
+              onStagesUpdate={handleStagesUpdate}
+              hasApprovedConversion={hasApprovedConversion}
+              onCreateProjectAfterApproval={handleCreateProjectAfterApproval}
+              onRequestApproval={handleRequestApproval}
+              customerName={getCustomerName()}
+              projectSnapshots={projectSnapshots}
+              customerReminders={reminders}
+              onAddCustomerReminder={handleAddReminder}
+              onCustomerReminderRemove={handleReminderRemove}
+              customerTranscripts={meetingTranscriptsList}
+            />
+          </div>
+        </div>
+
         {/* Left Column - Customer Information */}
         <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg }}>
           <div style={getCardStyle('customers')}>
@@ -1015,254 +1094,7 @@ export default function CustomerProfile() {
           {/* Removed Converted Projects panel as requested */}
         </div>
 
-        {/* Removed View/project list block to restore layout */}
-
-        <div style={{ gridColumn: "2 / span 2", display: "grid", gridTemplateColumns: "1fr 350px", gap: DESIGN_SYSTEM.spacing.lg, alignItems: "start" }}>
-
-        {/* Middle Column - Main Workflow */}
-        <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg, minWidth: 0, overflowX: "hidden" }}>
-          {/* Tab bar above the Stage Management panel */}
-          <div style={{ gridColumn: "1 / span 1", marginBottom: DESIGN_SYSTEM.spacing.sm }}>
-            <div style={{
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
-              background: DESIGN_SYSTEM.colors.background.primary,
-              padding: 8,
-              borderRadius: 12,
-              boxShadow: DESIGN_SYSTEM.shadows.sm
-            }}>
-              <button onClick={() => setActiveStageTab('current')} style={{
-                padding: '8px 12px',
-                borderRadius: 9999,
-                border: `1px solid ${activeStageTab === 'current' ? DESIGN_SYSTEM.pageThemes.customers.accent : DESIGN_SYSTEM.colors.secondary[300]}`,
-                background: activeStageTab === 'current' ? DESIGN_SYSTEM.colors.secondary[200] : DESIGN_SYSTEM.colors.background.primary,
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: 700
-              }}>Current</button>
-              {(projects || []).map(pid => (
-                <button key={pid} onClick={() => setActiveStageTab(pid)} style={{
-                  padding: '8px 12px',
-                  borderRadius: 9999,
-                  border: `1px solid ${activeStageTab === pid ? DESIGN_SYSTEM.pageThemes.customers.accent : DESIGN_SYSTEM.colors.secondary[300]}`,
-                  background: activeStageTab === pid ? DESIGN_SYSTEM.colors.secondary[200] : DESIGN_SYSTEM.colors.background.primary,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  maxWidth: '100%',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {projectNames[pid] || `Project ${pid.slice(0,6)}`}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{
-            ...getCardStyle('customers'),
-            minHeight: "800px",
-            display: "flex",
-            flexDirection: "column"
-          }}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.lg,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-            }}>
-              <h2 style={{ margin: 0, fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>Stage Management Panel</h2>
-            </div>
-            <div style={{ flex: 1, padding: "0", minWidth: 0, overflowX: "hidden" }}>
-              {activeStageTab === 'current' ? (
-                <StatusPanel
-                  stages={stages}
-                  currentStage={currentStage}
-                  setCurrentStage={setCurrentStage}
-                  stageData={stageData}
-                  setStageData={setStageData}
-                  setStages={setStages}
-                  onStagesUpdate={handleStagesUpdate}
-                  onConvertToProject={handleConvertToProject}
-                  onCreateProjectAfterApproval={handleCreateProjectAfterApproval}
-                  hasApprovedConversion={hasApprovedConversion}
-                  onRequestApproval={handleRequestApproval}
-                  customerId={id}
-                  customerName={getCustomerName()}
-                  renderStageContent={(stage, currentStageData, setCurrentStageData) => (
-                    <TaskManager 
-                      stage={stage}
-                      stageData={currentStageData}
-                      setStageData={setCurrentStageData}
-                    />
-                  )}
-                />
-              ) : (
-                (() => {
-                  const snap = (projectSnapshots && projectSnapshots[activeStageTab]) || null;
-                  const snapStages = snap?.stages || stages;
-                  const snapStageData = snap?.stageData || stageData;
-                  const snapCurrent = snap?.currentStage || currentStage;
-                  return (
-                    <StatusPanel
-                      stages={snapStages}
-                      currentStage={snapCurrent}
-                      setCurrentStage={() => {}}
-                      stageData={snapStageData}
-                      setStageData={() => {}}
-                      setStages={() => {}}
-                      onStagesUpdate={() => {}}
-                      readOnly={true}
-                      customerId={id}
-                      customerName={getCustomerName()}
-                      renderStageContent={(stage, currentStageData) => (
-                        <TaskManager 
-                          stage={stage}
-                          stageData={currentStageData}
-                          setStageData={() => {}}
-                        />
-                      )}
-                    />
-                  );
-                })()
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column - Tools & Actions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg, gridColumn: "2" }}>
-          {/* Meeting Transcripts */}
-          <div style={getCardStyle('customers')}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-            }}>
-              <h2 style={{ 
-                margin: 0, 
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
-              }}>
-                Meeting Transcripts
-              </h2>
-            </div>
-            <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
-              {meetingTranscriptsList.length === 0 ? (
-                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No transcripts yet.</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {meetingTranscriptsList.map(file => (
-                    <div key={file.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, borderRadius: 8, padding: 8, background: '#fff' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ fontWeight: 600 }}>{file.name}</div>
-                        <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((file.createdAt?.seconds||0)*1000).toLocaleString()}</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => { setAiModalTranscriptDoc(file); setAiModalOpen(true); setAiModalSelection({}); setAiModalItems([]); }} style={{ ...getButtonStyle('secondary', 'customers') }}>AI Actions</button>
-                        <button onClick={async () => { await deleteDoc(doc(db, 'customerProfiles', id, 'meetingTranscripts', file.id)); }} style={{ ...getButtonStyle('secondary', 'customers') }}>Delete</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div style={getCardStyle('customers')}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-            }}>
-              <h2 style={{ 
-                margin: 0, 
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
-              }}>
-                Reminders & Alerts
-              </h2>
-            </div>
-            <div style={{ padding: "0" }}>
-              <Reminders 
-                reminders={reminders}
-                onAddReminder={handleAddReminder}
-                onReminderRemove={handleReminderRemove}
-              />
-            </div>
-          </div>
-          
-          <div style={getCardStyle('customers')}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-            }}>
-              <h2 style={{ 
-                margin: 0, 
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
-              }}>
-                Document Management
-              </h2>
-            </div>
-            <div style={{ padding: "0" }}>
-              <AttachedFiles 
-                files={files} 
-                onFileAdd={handleFileAdd} 
-                onFileRemove={handleFileRemove} 
-                onFileRename={handleFileRename} 
-              />
-            </div>
-          </div>
-          
-          {/* Action Center */}
-          <div style={{
-            ...getCardStyle('customers'),
-            padding: DESIGN_SYSTEM.spacing.lg
-          }}>
-            <h3 style={{ 
-              margin: `0 0 ${DESIGN_SYSTEM.spacing.base} 0`, 
-              color: DESIGN_SYSTEM.colors.text.primary, 
-              fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
-              fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-              textAlign: "center"
-            }}>
-              Quick Actions
-            </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.base }}>
-              <button
-                onClick={() => setShowCreateProjectModal(true)}
-                style={{
-                  ...getButtonStyle('primary', 'projects'),
-                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
-                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-                }}
-              >
-                Convert to Project
-              </button>
-              <button
-                onClick={() => handleSendApprovalRequest()}
-                style={{
-                  ...getButtonStyle('primary', 'customers'),
-                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
-                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-                }}
-              >
-                Send Approval Request
-              </button>
-            </div>
-          </div>
-        </div>
-        </div>
+        {/* Duplicate Middle+Right block removed */}
       </div>
       </div>
       

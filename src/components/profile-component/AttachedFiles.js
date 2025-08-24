@@ -5,7 +5,7 @@ import FileUploadModal from "./FileUploadModal"; // Import the new modal compone
 import { BUTTON_STYLES, COLORS, INPUT_STYLES, LAYOUT } from "./constants"; // Import constants
 import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa'; // Import FaPlus, FaEdit, FaTrash icons
 
-export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRename }) {
+export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRename, readOnly = false }) {
   const [expandedFile, setExpandedFile] = useState(null);
   const [showModal, setShowModal] = useState(false); // State to control modal visibility
   const [editingFileIndex, setEditingFileIndex] = useState(null);
@@ -77,15 +77,17 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
   return (
     <Card style={{ minHeight: "250px" }}>
       <h3>Attached Files</h3>
-      <div style={{ marginBottom: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
-        <button onClick={() => setShowModal(true)} style={{ 
-          ...BUTTON_STYLES.primary, 
-          padding: "4px 8px", // Smaller padding
-          fontSize: "14px" // Adjust font size for the icon
-        }}>
-          <FaPlus />
-        </button>
-      </div>
+      {!readOnly && (
+        <div style={{ marginBottom: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <button onClick={() => setShowModal(true)} style={{ 
+            ...BUTTON_STYLES.primary, 
+            padding: "4px 8px", // Smaller padding
+            fontSize: "14px" // Adjust font size for the icon
+          }}>
+            <FaPlus />
+          </button>
+        </div>
+      )}
       <ul style={{ 
         marginTop: "10px", 
         maxHeight: "150px", 
@@ -125,7 +127,7 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
                 )}
               </span>
               <div style={{ flexShrink: 0, marginLeft: "10px" }}>
-                {editingFileIndex !== i && (
+                {!readOnly && editingFileIndex !== i && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); handleRenameClick(i, file.name); }} 
                     style={{ 
@@ -140,18 +142,20 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
                     <FaEdit />
                   </button>
                 )}
-                <button 
-                  onClick={(e) => { e.stopPropagation(); onFileRemove(i); }} 
-                  style={{ 
-                    ...BUTTON_STYLES.primary, 
-                    background: COLORS.danger, 
-                    padding: "4px 8px", // Consistent padding
-                    fontSize: "14px", // Consistent font size
-                    borderRadius: "3px"
-                  }}
-                >
-                  <FaTrash />
-                </button>
+                {!readOnly && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onFileRemove(i); }} 
+                    style={{ 
+                      ...BUTTON_STYLES.primary, 
+                      background: COLORS.danger, 
+                      padding: "4px 8px", // Consistent padding
+                      fontSize: "14px", // Consistent font size
+                      borderRadius: "3px"
+                    }}
+                  >
+                    <FaTrash />
+                  </button>
+                )}
               </div>
             </div>
             {expandedFile === i && (
@@ -169,11 +173,13 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
           </li>
         ))}
       </ul>
-      <FileUploadModal 
-        isOpen={showModal} 
-        onClose={() => setShowModal(false)} 
-        onUpload={handleModalUpload}
-      />
+      {!readOnly && (
+        <FileUploadModal 
+          isOpen={showModal} 
+          onClose={() => setShowModal(false)} 
+          onUpload={handleModalUpload}
+        />
+      )}
     </Card>
   );
 }

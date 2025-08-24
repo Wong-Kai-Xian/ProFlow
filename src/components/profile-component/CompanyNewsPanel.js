@@ -31,7 +31,20 @@ export default function CompanyNewsPanel({ companyName }) {
   if (loading) return <div style={{ color: COLORS.lightText, fontSize: 12 }}>Loading news…</div>;
   if (error) return <div style={{ color: '#b91c1c', fontSize: 12 }}>{error}</div>;
 
-  if (!articles.length) return <div style={{ color: COLORS.lightText, fontSize: 12 }}>No recent news found.</div>;
+  if (!articles.length) return (
+    <div style={{
+      padding: 16,
+      border: '1px solid #e5e7eb',
+      borderRadius: 8,
+      background: '#fff',
+      textAlign: 'center'
+    }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>No recent news</div>
+      <div style={{ fontSize: 13, color: COLORS.lightText, marginTop: 4 }}>
+        We couldn’t find recent articles for "{companyName}".
+      </div>
+    </div>
+  );
 
   const clamp = (s, n = 160) => (s && s.length > n ? s.slice(0, n - 1) + '…' : s || '');
   return (
