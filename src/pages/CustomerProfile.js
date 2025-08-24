@@ -408,14 +408,23 @@ export default function CustomerProfile() {
       setSuppressMeetingBar(false);
       return;
     }
-    if (userHasJoinedMeeting) {
-      await handleLeaveMeeting();
-    }
+    // Always attempt to leave the meeting and end the transcription/session
+    try { await handleLeaveMeeting(); } catch {}
     if (isTranscribing) {
       try { await stopTranscription(); } catch {}
     }
     // Force release media from iframe
     try { if (meetingIframeRef.current) { meetingIframeRef.current.src = 'about:blank'; } } catch {}
+    // Clear meeting session and transcript buffers
+    try {
+      setMeetingSessionId(null);
+      meetingSessionIdRef.current = null;
+      setSessionTranscripts([]);
+      setLiveTranscript("");
+      transcriptBufferRef.current = "";
+      pendingInterimRef.current = "";
+      lastInterimSaveRef.current = 0;
+    } catch {}
     setShowMeeting(false);
     setMeetingMinimized(false);
     setSuppressMeetingBar(true);
