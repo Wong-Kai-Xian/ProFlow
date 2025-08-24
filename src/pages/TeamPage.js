@@ -21,6 +21,10 @@ export default function TeamPage() {
   const [inviteMessage, setInviteMessage] = useState('');
   const [showIncomingInvitationsModal, setShowIncomingInvitationsModal] = useState(false);
   const [incomingInvitationsCount, setIncomingInvitationsCount] = useState(0);
+  const [showDeleteMemberConfirm, setShowDeleteMemberConfirm] = useState(false);
+  const [deleteStep, setDeleteStep] = useState(1);
+  const [memberToDelete, setMemberToDelete] = useState(null);
+  const [isDeletingMember, setIsDeletingMember] = useState(false);
 
   useEffect(() => {
     if (!inviteMessage) return;
@@ -120,9 +124,21 @@ export default function TeamPage() {
         where("status", "==", "pending")
       );
       const invitationsSnapshot = await getDocs(invitationsQuery);
-      const fetchedPendingInvitations = invitationsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+      const basePending = invitationsSnapshot.docs.map(docu => ({ id: docu.id, ...docu.data() }));
+      // Enrich with toUser details when available to show real avatar and enable profile link
+      const fetchedPendingInvitations = await Promise.all(basePending.map(async (inv) => {
+        if (inv.toUserId) {
+          try {
+            const uref = doc(db, 'users', inv.toUserId);
+            const usnap = await getDoc(uref);
+            if (usnap.exists()) {
+              const u = usnap.data();
+              return { ...inv, toUser: { uid: inv.toUserId, name: u.name || u.displayName || u.email || 'Member', email: u.email || '' } };
+            }
+          } catch {}
+        }
+        // Fallback: if invite is by email only, still provide a minimal toUser stub to render avatar consistently
+        return { ...inv, toUser: { uid: inv.toUserId || '', name: inv.toUserEmail || 'Invitee', email: inv.toUserEmail || '' } };
       }));
       setPendingInvitations(fetchedPendingInvitations);
       
@@ -142,6 +158,38 @@ export default function TeamPage() {
   useEffect(() => {
     refreshTeamData();
   }, [currentUser]);
+
+  // Live pending invitations (outgoing) so they disappear immediately when accepted/removed
+  useEffect(() => {
+    if (!currentUser?.uid) { setPendingInvitations([]); return; }
+    const q = query(
+      collection(db, 'invitations'),
+      where('fromUserId', '==', currentUser.uid),
+      where('status', '==', 'pending')
+    );
+    const unsub = onSnapshot(q, async (snap) => {
+      try {
+        const base = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const enriched = await Promise.all(base.map(async (inv) => {
+          if (inv.toUserId) {
+            try {
+              const uref = doc(db, 'users', inv.toUserId);
+              const usnap = await getDoc(uref);
+              if (usnap.exists()) {
+                const u = usnap.data();
+                return { ...inv, toUser: { uid: inv.toUserId, name: u.name || u.displayName || u.email || 'Member', email: u.email || '' } };
+              }
+            } catch {}
+          }
+          return { ...inv, toUser: { uid: inv.toUserId || '', name: inv.toUserEmail || 'Invitee', email: inv.toUserEmail || '' } };
+        }));
+        setPendingInvitations(enriched);
+      } catch {
+        setPendingInvitations([]);
+      }
+    });
+    return () => unsub();
+  }, [currentUser?.uid]);
 
   useEffect(() => {
     if (!currentUser?.uid) { setConnectionMembers([]); return; }
@@ -214,7 +262,7 @@ export default function TeamPage() {
                 WebkitTextFillColor: "transparent",
                 letterSpacing: "-0.02em"
               }}>
-                🚀 Team Hub
+                Team Hub
               </h1>
               <p style={{
                 margin: 0,
@@ -391,7 +439,7 @@ export default function TeamPage() {
           }}>
             <input
               type="text"
-              placeholder="🔍 Search team members and invitations..."
+              placeholder="Search team members and invitations..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -469,11 +517,6 @@ export default function TeamPage() {
               border: "2px dashed #e2e8f0",
               background: "rgba(248, 250, 252, 0.5)"
             }}>
-              <div style={{
-                fontSize: "64px",
-                marginBottom: "20px",
-                opacity: 0.4
-              }}>📋</div>
               <p style={{
                 color: "#64748b",
                 fontSize: "18px",
@@ -512,29 +555,31 @@ export default function TeamPage() {
                   e.currentTarget.style.transform = "translateY(0)";
                   e.currentTarget.style.boxShadow = "0 12px 30px rgba(0, 0, 0, 0.08)";
                 }}>
-                  <div style={{
-                    width: "64px",
-                    height: "64px",
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "white",
-                    fontSize: "24px",
-                    fontWeight: "700",
-                    boxShadow: "0 8px 20px rgba(251, 191, 36, 0.3)"
-                  }}>
-                    {invitation.toUserEmail[0].toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "20px", fontWeight: "700", color: "#1e293b", marginBottom: "4px" }}>
-                      {invitation.toUserEmail}
-                    </div>
-                    <div style={{ fontSize: "14px", color: "#64748b", fontWeight: "500" }}>
-                      Invitation pending...
-                    </div>
-                  </div>
+                  {invitation.toUser?.uid ? (
+                    <Link to={`/profile/${invitation.toUser.uid}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 20, color: 'inherit' }}>
+                      <UserAvatar user={{ name: invitation.toUser.name, email: invitation.toUser.email }} size={64} showBorder={true} borderColor="rgba(102,126,234,0.35)" />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: "20px", fontWeight: "700", color: "#1e293b", marginBottom: "4px" }}>
+                          {invitation.toUser.name}
+                        </div>
+                        <div style={{ fontSize: "14px", color: "#64748b", fontWeight: "500" }}>
+                          Invitation pending...
+                        </div>
+                      </div>
+                    </Link>
+                  ) : (
+                    <>
+                      <UserAvatar user={{ name: invitation.toUser?.name || invitation.toUserEmail || 'Invitee', email: invitation.toUserEmail || '' }} size={64} showBorder={true} borderColor="rgba(102,126,234,0.35)" />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: "20px", fontWeight: "700", color: "#1e293b", marginBottom: "4px" }}>
+                          {invitation.toUserEmail}
+                        </div>
+                        <div style={{ fontSize: "14px", color: "#64748b", fontWeight: "500" }}>
+                          Invitation pending...
+                        </div>
+                      </div>
+                    </>
+                  )}
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={async () => { try { await deleteDoc(doc(db, 'invitations', invitation.id)); setPendingInvitations(prev => prev.filter(i => i.id !== invitation.id)); } catch (e) { console.error(e); alert('Failed to cancel'); } }} style={{ border: '1px solid #e2e8f0', background: '#fff', color: '#ef4444', padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
                   </div>
@@ -606,7 +651,7 @@ export default function TeamPage() {
                 fontSize: "80px",
                 marginBottom: "24px",
                 opacity: 0.3
-              }}>👥</div>
+              }}></div>
               <p style={{
                 color: "#64748b",
                 fontSize: "20px",
@@ -639,7 +684,7 @@ export default function TeamPage() {
                     cursor: member.uid ? "pointer" : "default"
                   }}
                   >
-                    <button onClick={async () => { try { if (!currentUser?.uid || !member.uid) return; const myCol = collection(db, 'users', currentUser.uid, 'connections'); const q1 = query(myCol, where('with', '==', member.uid)); const snap1 = await getDocs(q1); await Promise.all(snap1.docs.map(d => deleteDoc(d.ref))); const theirCol = collection(db, 'users', member.uid, 'connections'); const q2 = query(theirCol, where('with', '==', currentUser.uid)); const snap2 = await getDocs(q2); await Promise.all(snap2.docs.map(d => deleteDoc(d.ref))); const inv1 = query(collection(db, 'invitations'), where('fromUserId','==', currentUser.uid), where('toUserId','==', member.uid), where('status','==','accepted')); const inv2 = query(collection(db, 'invitations'), where('fromUserId','==', member.uid), where('toUserId','==', currentUser.uid), where('status','==','accepted')); const [s1, s2] = await Promise.all([getDocs(inv1), getDocs(inv2)]); await Promise.all([...s1.docs, ...s2.docs].map(d => updateDoc(d.ref, { status: 'removed', removedAt: serverTimestamp() }))); setConnectionMembers(prev => prev.filter(m => m.uid !== member.uid)); setInviteMessage(`Removed ${member.displayName}`); } catch (e) { console.error(e); alert('Failed to remove member'); } }} title="Remove connection" style={{ position: 'absolute', top: 8, right: 8, background: 'transparent', border: '1px solid #e5e7eb', color: '#ef4444', padding: '4px 8px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Remove</button>
+                    <button onClick={() => { setMemberToDelete(member); setDeleteStep(1); setShowDeleteMemberConfirm(true); }} title="Remove connection" style={{ position: 'absolute', top: 8, right: 8, background: 'transparent', border: '1px solid #e5e7eb', color: '#ef4444', padding: '4px 8px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Remove</button>
                     <div style={{ width: 72, height: 72, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {member.uid ? (
                         <a href={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
@@ -694,7 +739,7 @@ export default function TeamPage() {
                   gap: "12px",
                   fontWeight: "600"
                 }}>
-                  ✅ {inviteMessage}
+                  {inviteMessage}
                 </div>
               )}
             </>
@@ -712,6 +757,77 @@ export default function TeamPage() {
         onClose={() => setShowIncomingInvitationsModal(false)}
         onInvitationAction={refreshTeamData}
       />
+      {showDeleteMemberConfirm && memberToDelete && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: 420, maxWidth: '92vw', boxShadow: '0 20px 45px rgba(0,0,0,0.2)', border: '1px solid #e5e7eb' }}>
+            <div style={{ padding: 20, borderBottom: '1px solid #f1f5f9' }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#111827' }}>Remove team member</h3>
+            </div>
+            <div style={{ padding: 20 }}>
+              {deleteStep === 1 && (
+                <>
+                  <p style={{ margin: '0 0 12px 0', color: '#374151', lineHeight: 1.5 }}>Are you sure you want to remove <strong>{memberToDelete.displayName || 'this member'}</strong> from your team?</p>
+                  <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>You can re-invite them later if needed.</p>
+                </>
+              )}
+              {deleteStep === 2 && (
+                <>
+                  <p style={{ margin: '0 0 12px 0', color: '#374151', lineHeight: 1.5 }}>This will remove the connection on both sides and unlink any accepted invitation. This action cannot be undone.</p>
+                  <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>Click Remove to proceed.</p>
+                </>
+              )}
+            </div>
+            <div style={{ padding: 20, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              {deleteStep === 1 && (
+                <>
+                  <button disabled={isDeletingMember} onClick={() => { setShowDeleteMemberConfirm(false); setMemberToDelete(null); }} style={{ border: '1px solid #e5e7eb', background: '#fff', color: '#111827', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                  <button disabled={isDeletingMember} onClick={() => setDeleteStep(2)} style={{ border: '1px solid #e5e7eb', background: '#111827', color: '#fff', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>Continue</button>
+                </>
+              )}
+              {deleteStep === 2 && (
+                <>
+                  <button disabled={isDeletingMember} onClick={() => setDeleteStep(1)} style={{ border: '1px solid #e5e7eb', background: '#fff', color: '#111827', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Back</button>
+                  <button onClick={async () => {
+                    if (!currentUser?.uid || !memberToDelete?.uid) return;
+                    try {
+                      setIsDeletingMember(true);
+                      // Delete my connection -> their uid
+                      const myCol = collection(db, 'users', currentUser.uid, 'connections');
+                      const q1 = query(myCol, where('with', '==', memberToDelete.uid));
+                      const snap1 = await getDocs(q1);
+                      await Promise.all(snap1.docs.map(d => deleteDoc(d.ref)));
+                      // Delete their connection -> my uid
+                      const theirCol = collection(db, 'users', memberToDelete.uid, 'connections');
+                      const q2 = query(theirCol, where('with', '==', currentUser.uid));
+                      const snap2 = await getDocs(q2);
+                      await Promise.all(snap2.docs.map(d => deleteDoc(d.ref)));
+                      // Mark any accepted invitations as removed
+                      const inv1 = query(collection(db, 'invitations'), where('fromUserId','==', currentUser.uid), where('toUserId','==', memberToDelete.uid), where('status','==','accepted'));
+                      const inv2 = query(collection(db, 'invitations'), where('fromUserId','==', memberToDelete.uid), where('toUserId','==', currentUser.uid), where('status','==','accepted'));
+                      const [s1, s2] = await Promise.all([getDocs(inv1), getDocs(inv2)]);
+                      await Promise.all([...s1.docs, ...s2.docs].map(d => updateDoc(d.ref, { status: 'removed', removedAt: serverTimestamp() })));
+                      // Update local UI and notify
+                      setConnectionMembers(prev => prev.filter(m => m.uid !== memberToDelete.uid));
+                      setInviteMessage(`Removed ${memberToDelete.displayName || 'member'}`);
+                      setShowDeleteMemberConfirm(false);
+                      setMemberToDelete(null);
+                    } catch (e) {
+                      console.error(e);
+                      alert('Failed to remove member');
+                    } finally {
+                      setIsDeletingMember(false);
+                      setDeleteStep(1);
+                    }
+                  }} style={{ border: '1px solid #ef4444', background: '#ef4444', color: '#fff', padding: '8px 12px', borderRadius: 8, cursor: isDeletingMember ? 'wait' : 'pointer', fontWeight: 800, minWidth: 110, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    {isDeletingMember && (<span className="spinner" style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.45)', borderTopColor: '#fff', display: 'inline-block', animation: 'spin 0.9s linear infinite' }} />)}
+                    {isDeletingMember ? 'Removing…' : 'Remove'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

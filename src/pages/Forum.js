@@ -10,7 +10,7 @@ import FloatingCreateButton from "../components/forum-tabs/FloatingCreateButton"
 import CreatePostModal from "../components/forum-tabs/CreatePostModal";
 import InviteMemberModal from "../components/forum-component/InviteMemberModal";
 import { db } from "../firebase";
-import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc, arrayUnion, arrayRemove, addDoc, deleteDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc, arrayUnion, arrayRemove, addDoc, deleteDoc, query, where } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 
@@ -207,36 +207,67 @@ export default function Forum() {
     const fetchMemberDetails = async () => {
       const fetchedDetails = await Promise.all(
         forumMembers.map(async (memberUid) => {
-          const userRef = doc(db, "users", memberUid);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-            return { 
-              id: memberUid, 
-              name: userData.name || userData.email || 'Forum Member', 
-              email: userData.email || 'No email provided', 
-              status: 'online', 
-              role: 'Member', 
-              joinDate: 'Recently joined'
-            };
-          } else {
-            console.warn(`User document not found for member ID: ${memberUid}`);
-            return { 
-              id: memberUid, 
-              name: 'Forum Member', 
-              email: 'User not found', 
-              status: 'offline', 
-              role: 'Member', 
-              joinDate: 'Recently joined'
-            };
-          }
+          try {
+            // 1) Try doc by ID
+            const byIdRef = doc(db, 'users', memberUid);
+            const byIdSnap = await getDoc(byIdRef);
+            if (byIdSnap.exists()) {
+              const d = byIdSnap.data();
+              return {
+                id: memberUid,
+                name: d.name || d.displayName || d.email || 'Forum Member',
+                email: d.email || 'No email provided',
+                status: 'online',
+                role: 'Member',
+                joinDate: 'Recently joined'
+              };
+            }
+            // 2) Fallback: query by uid field (some datasets store UID in a field)
+            try {
+              const q = query(collection(db, 'users'), where('uid', '==', memberUid));
+              const snap = await getDocs(q);
+              if (!snap.empty) {
+                const docu = snap.docs[0];
+                const d = docu.data();
+                return {
+                  id: memberUid,
+                  name: d.name || d.displayName || d.email || 'Forum Member',
+                  email: d.email || 'No email provided',
+                  status: 'online',
+                  role: 'Member',
+                  joinDate: 'Recently joined'
+                };
+              }
+            } catch {}
+            // 3) Last resort: if it's the current user, use auth info
+            if (currentUser && memberUid === currentUser.uid) {
+              return {
+                id: memberUid,
+                name: currentUser.name || currentUser.displayName || currentUser.email || 'You',
+                email: currentUser.email || 'No email provided',
+                status: 'online',
+                role: 'Member',
+                joinDate: 'Recently joined'
+              };
+            }
+          } catch {}
+          // 4) Fallback generic
+          console.warn(`User record not found for forum member: ${memberUid}`);
+          return {
+            id: memberUid,
+            name: 'Forum Member',
+            email: 'User not found',
+            status: 'offline',
+            role: 'Member',
+            joinDate: 'Recently joined'
+          };
         })
       );
       setEnrichedForumMembersDetails(fetchedDetails);
     };
 
     fetchMemberDetails();
-  }, [forumMembers]);
+  }, [forumMembers, currentUser]);
 
   // Effect to listen to forum meeting transcripts collection
   useEffect(() => {
