@@ -7,6 +7,7 @@ import Contacts from "../components/Contacts";
 import UpcomingEvents from "../components/UpcomingEvents";
 import ProjectsTab from "../components/ProjectsTab";
 import HomeGroupForum from "../components/HomeGroupForum";
+import GlobalFinancePanel from "../components/GlobalFinancePanel";
 import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getPageHeaderStyle, getContentContainerStyle } from '../styles/designSystem';
 
@@ -275,6 +276,16 @@ export default function Home() {
                 <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
                   <HomeGroupForum />
                 </div>
+              </div>
+
+              {/* Finance Overview Section */}
+              <div style={{ 
+                ...getCardStyle('home'),
+                height: "340px",
+                display: "flex",
+                flexDirection: "column"
+              }}>
+                <GlobalFinancePanel />
               </div>
             </>
           )}

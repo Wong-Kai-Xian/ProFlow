@@ -12,6 +12,7 @@ import SendApprovalModal from '../components/project-component/SendApprovalModal
 import AdvancedApprovalRequestModal from '../components/project-component/AdvancedApprovalRequestModal';
 import AddTeamMemberModal from '../components/project-component/AddTeamMemberModal';
 import TeamMembersPanel from '../components/project-component/TeamMembersPanel';
+import FinancePanel from '../components/project-component/FinancePanel';
 import { db } from "../firebase";
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs, arrayUnion, arrayRemove, addDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext';
@@ -1023,8 +1024,16 @@ export default function ProjectDetail() {
               </h3>
             </div>
             <div style={{ padding: 0 }}>
-            <Reminders projectId={projectId} autoOpenReminderId={autoOpenReminderId} /> 
+              <Reminders projectId={projectId} autoOpenReminderId={autoOpenReminderId} /> 
+            </div>
           </div>
+
+          {/* Finance Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flexShrink: 0
+          }}>
+            <FinancePanel projectId={projectId} />
           </div>
           
           {/* Project Forum Section */}

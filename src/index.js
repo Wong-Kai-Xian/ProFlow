@@ -15,8 +15,8 @@ import Signup from "./pages/Signup"; // Import the new Signup component
 import VerifyEmail from "./pages/VerifyEmail"; // Import the VerifyEmail component
 import ForgotPassword from "./pages/ForgotPassword"; // Import the ForgotPassword component
 import UserProfile from "./pages/UserProfile"; // Import the new UserProfile component
-import Quote from "./pages/Quote"; // Import the new Quote component
 import TeamPage from "./pages/TeamPage"; // Import the new TeamPage component
+import FinancePage from "./pages/FinancePage";
 import { AuthProvider } from './contexts/AuthContext'; // Import AuthProvider
 import PrivateRoute from './components/PrivateRoute'; // Import PrivateRoute
 import PersonalAssistant from './components/PersonalAssistant';
@@ -114,18 +114,18 @@ root.render(
             }
           />
           <Route 
-            path="/quote" 
-            element={
-              <PrivateRoute>
-                <Quote />
-              </PrivateRoute>
-            }
-          />
-          <Route 
             path="/team" 
             element={
               <PrivateRoute>
                 <TeamPage />
+              </PrivateRoute>
+            }
+          />
+          <Route 
+            path="/finance" 
+            element={
+              <PrivateRoute>
+                <FinancePage />
               </PrivateRoute>
             }
           />

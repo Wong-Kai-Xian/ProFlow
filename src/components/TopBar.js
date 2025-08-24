@@ -130,6 +130,24 @@ export default function TopBar() {
             Home
           </Link>
           <Link 
+            to="/finance" 
+            style={getLinkStyle("/finance")}
+            onMouseEnter={(e) => {
+              if (location.pathname !== "/finance") {
+                e.target.style.background = 'rgba(255, 255, 255, 0.1)';
+                e.target.style.transform = 'translateY(-1px)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (location.pathname !== "/finance") {
+                e.target.style.background = 'transparent';
+                e.target.style.transform = 'translateY(0)';
+              }
+            }}
+          >
+            Finance
+          </Link>
+          <Link 
             to="/project" 
             style={getLinkStyle("/project")}
             onMouseEnter={(e) => {
@@ -201,24 +219,7 @@ export default function TopBar() {
           >
             Approval
           </Link>
-          <Link 
-            to="/quote" 
-            style={getLinkStyle("/quote")}
-            onMouseEnter={(e) => {
-              if (location.pathname !== "/quote") {
-                e.target.style.background = 'rgba(255, 255, 255, 0.1)';
-                e.target.style.transform = 'translateY(-1px)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (location.pathname !== "/quote") {
-                e.target.style.background = 'transparent';
-                e.target.style.transform = 'translateY(0)';
-              }
-            }}
-          >
-            Quote
-          </Link>
+          
           <Link 
             to="/team" 
             style={getLinkStyle("/team")}

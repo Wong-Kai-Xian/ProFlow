@@ -132,7 +132,8 @@ export default function NotificationCenter({ userId, isOpen, onClose }) {
                 { key: 'mentions', label: 'Mentions' },
                 { key: 'invites', label: 'Invites' },
                 { key: 'approvals', label: 'Approvals' },
-                { key: 'events', label: 'Events' }
+                { key: 'events', label: 'Events' },
+                { key: 'invoices', label: 'Invoices' }
               ].map(({ key, label }) => (
                 <button key={key} onClick={() => setFilterType(key)} style={{ padding: '6px 8px', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 6, background: filterType === key ? DESIGN_SYSTEM.colors.secondary[100] : DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>{label}</button>
               ))}
@@ -166,6 +167,7 @@ export default function NotificationCenter({ userId, isOpen, onClose }) {
                 if (filterType === 'events') return n.refType === 'upcomingEvent';
                 if (filterType === 'mentions') return n.refType === 'mention';
                 if (filterType === 'invites') return n.refType === 'invitation';
+                if (filterType === 'invoices') return n.refType === 'invoice';
                 return true;
               });
             if (list.length === 0) {

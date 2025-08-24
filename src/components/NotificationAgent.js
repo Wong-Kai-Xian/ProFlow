@@ -9,6 +9,7 @@ export default function NotificationAgent() {
 
   useEffect(() => {
     if (!currentUser?.uid) return;
+    const unsubs = [];
     // Invitations to me -> notify
     const qInvIncoming = query(collection(db, 'invitations'), where('toUserId', '==', currentUser.uid), where('status', '==', 'pending'));
     const unsubIncoming = onSnapshot(qInvIncoming, async (snap) => {
@@ -198,7 +199,84 @@ export default function NotificationAgent() {
       }
       if (changed) localStorage.setItem(seenKey, JSON.stringify(seen));
     });
-    return () => { unsub(); unsubIncoming(); unsubAccepted(); unsubAcceptedToMe(); };
+    // Invoice due soon / overdue across my projects
+    try {
+      const qp = query(collection(db, 'projects'), where('userId', '==', currentUser.uid));
+      const unsubProjects = onSnapshot(qp, (projSnap) => {
+        const seenKey = `proflow_invoices_${currentUser.uid}`;
+        const seenRaw = localStorage.getItem(seenKey);
+        const seen = seenRaw ? JSON.parse(seenRaw) : {};
+        const now = Date.now();
+        projSnap.docs.forEach(projectDoc => {
+          try {
+            const pid = projectDoc.id;
+            const unsubInv = onSnapshot(collection(db, 'projects', pid, 'invoices'), async (invSnap) => {
+              for (const d of invSnap.docs) {
+                const data = d.data();
+                if (data.status === 'paid') continue;
+                const dueStr = data.dueDate;
+                if (!dueStr) continue;
+                const due = new Date(`${dueStr}T09:00`).getTime();
+                if (!due) continue;
+                const delta = due - now;
+                // Load user settings for due soon
+                let dueSoonMs = 24 * 60 * 60 * 1000;
+                try {
+                  // lightweight cache per effect run via localStorage (already handled in NotificationCenter save)
+                  const notifSettingsRaw = localStorage.getItem(`proflow_notif_settings_${currentUser.uid}`);
+                  if (notifSettingsRaw) {
+                    const ns = JSON.parse(notifSettingsRaw);
+                    if (typeof ns.dueSoonHours === 'number') dueSoonMs = Math.max(1, Math.min(168, ns.dueSoonHours)) * 60 * 60 * 1000;
+                  }
+                } catch {}
+                if (delta <= dueSoonMs && delta >= 0) {
+                  const key = `inv_due:${pid}:${d.id}`;
+                  if (!seen[key]) {
+                    try {
+                      await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+                        unread: true,
+                        createdAt: serverTimestamp(),
+                        origin: 'invoice',
+                        title: 'Invoice due soon',
+                        message: `${data.client || 'Client'} • ${new Date(due).toLocaleDateString()}`,
+                        refType: 'invoice',
+                        sourceId: pid,
+                        invoiceId: d.id
+                      });
+                      seen[key] = now;
+                      localStorage.setItem(seenKey, JSON.stringify(seen));
+                    } catch {}
+                  }
+                }
+                if (delta < 0) {
+                  const keyOver = `inv_over:${pid}:${d.id}`;
+                  if (!seen[keyOver]) {
+                    try {
+                      await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+                        unread: true,
+                        createdAt: serverTimestamp(),
+                        origin: 'invoice',
+                        title: 'Invoice overdue',
+                        message: `${data.client || 'Client'} • was due ${new Date(due).toLocaleDateString()}`,
+                        refType: 'invoice',
+                        sourceId: pid,
+                        invoiceId: d.id
+                      });
+                      seen[keyOver] = now;
+                      localStorage.setItem(seenKey, JSON.stringify(seen));
+                    } catch {}
+                  }
+                }
+              }
+            });
+            unsubs.push(unsubInv);
+          } catch {}
+        });
+      });
+      unsubs.push(unsubProjects);
+    } catch {}
+
+    return () => { try { unsub(); unsubIncoming(); unsubAccepted(); unsubAcceptedToMe(); } catch {}; unsubs.forEach(u => { try { u(); } catch {} }); };
   }, [currentUser]);
 
   useEffect(() => {
