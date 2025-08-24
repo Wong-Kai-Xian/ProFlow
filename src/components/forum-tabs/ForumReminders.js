@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { COLORS } from '../profile-component/constants';
 import { db } from '../../firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import AddReminderModal from './AddReminderModal'; // Import the new modal
 
-export default function ForumReminders({ forumId }) {
+export default function ForumReminders({ forumId, autoOpenReminderId }) {
   console.log("ForumReminders: Initial forumId prop:", forumId);
   const [isExpanded, setIsExpanded] = useState(true);
   const [reminders, setReminders] = useState([]);
   const [showReminderModal, setShowReminderModal] = useState(false); // State for modal visibility
   const [editingReminder, setEditingReminder] = useState(null); // State to hold reminder being edited
+  const [openMenuId, setOpenMenuId] = useState(null); // track which action menu is open
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [viewReminder, setViewReminder] = useState(null); // details modal
 
   useEffect(() => {
     if (!forumId) return;
@@ -28,6 +32,27 @@ export default function ForumReminders({ forumId }) {
 
     return () => unsubscribe();
   }, [forumId]);
+
+  useEffect(() => {
+    if (!autoOpenReminderId || !reminders || reminders.length === 0) return;
+    const found = reminders.find(r => r.id === autoOpenReminderId);
+    if (found) setViewReminder(found);
+  }, [autoOpenReminderId, reminders]);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const close = () => setOpenMenuId(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close, true);
+    const onClick = () => setOpenMenuId(null);
+    // Use bubble phase so clicks on menu buttons fire first
+    window.addEventListener('click', onClick, false);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close, true);
+      window.removeEventListener('click', onClick, false);
+    };
+  }, [openMenuId]);
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -177,20 +202,21 @@ export default function ForumReminders({ forumId }) {
                 }}>
                   {getTypeIcon(reminder.type)}
                 </span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ 
-                    fontSize: '15px', 
-                    fontWeight: '600', 
-                    color: COLORS.dark,
-                    marginBottom: '3px'
-                  }}>
-                    {reminder.title}
+                <div onClick={() => setViewReminder(reminder)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                  <div style={{ fontSize: '15px', fontWeight: '600', color: COLORS.dark, marginBottom: '3px', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <span style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={reminder.title}>{reminder.title}</span>
+                    {reminder.title && reminder.title.length > 30 && (
+                      <span style={{ fontSize: 10, color: COLORS.lightText, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '2px 6px', cursor: 'default' }}>more</span>
+                    )}
                   </div>
+                  {reminder.description && (
+                    <div style={{ color: COLORS.lightText, fontSize: '12px', maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={reminder.description}>{reminder.description}</div>
+                  )}
                   <div style={{ 
                     fontSize: '13px', 
                     color: COLORS.lightText 
                   }}>
-                    {formatDate(reminder.date)} at {reminder.time}
+                    {formatDate(reminder.date)} {reminder.time && reminder.time.trim() ? `at ${reminder.time}` : ''}
                   </div>
                 </div>
                 <div style={{
@@ -200,52 +226,44 @@ export default function ForumReminders({ forumId }) {
                   backgroundColor: getPriorityColor(reminder.priority)
                 }} />
                 {/* Reminder actions */}
-                <div style={{ display: 'flex', gap: '5px', marginLeft: '10px' }}>
-                  <button
-                    onClick={() => {
-                      if (!reminder?.date) return;
-                      const time = (reminder.time && reminder.time.trim()) ? reminder.time : '09:00';
-                      const start = new Date(`${reminder.date}T${time}`);
-                      if (isNaN(start.getTime())) return;
-                      const dt = start.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-                      const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ProFlow//EN\nBEGIN:VEVENT\nUID:${(reminder.id || Math.random()) + '@proflow'}\nDTSTAMP:${dt}\nDTSTART:${dt}\nSUMMARY:${(reminder.title || '').replace(/\n/g,' ')}\nDESCRIPTION:${(reminder.note || '').replace(/\n/g,' ')}\nEND:VEVENT\nEND:VCALENDAR`;
-                      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `${(reminder.title || 'reminder').replace(/[^a-z0-9]+/gi,'-')}.ics`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 6px', cursor: 'pointer' }}
-                    title="Add to Calendar"
-                  >
-                    📅
+                <div style={{ position: 'relative', marginLeft: '10px' }}>
+                  <button onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const menuW = 200; const menuH = 124; const pad = 8;
+                    let left = rect.left - menuW - pad; // prefer left
+                    if (left < pad) left = Math.min(rect.right + pad, window.innerWidth - menuW - pad); // fallback right
+                    let top = rect.top - menuH - pad; // prefer above
+                    if (top < pad) top = Math.min(rect.bottom + pad, window.innerHeight - menuH - pad); // fallback below
+                    setMenuPos({ top, left });
+                    setOpenMenuId(prev => prev === reminder.id ? null : reminder.id);
+                  }} style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', fontSize: 14 }} title="Actions">
+                    ⚙️
                   </button>
-                  <button
-                    onClick={() => { setEditingReminder(reminder); setShowReminderModal(true); }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      color: COLORS.primary
-                    }}
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => handleDeleteReminder(reminder.id)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      color: COLORS.danger
-                    }}
-                  >
-                    🗑️
-                  </button>
+                  {openMenuId === reminder.id && ReactDOM.createPortal(
+                    (
+                      <div style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 16px 40px rgba(0,0,0,0.18)', minWidth: 180, zIndex: 4000 }} onClick={(ev) => ev.stopPropagation()}>
+                        <button onClick={() => {
+                          if (!reminder?.date) { setOpenMenuId(null); return; }
+                          const time = (reminder.time && reminder.time.trim()) ? reminder.time : '09:00';
+                          const start = new Date(`${reminder.date}T${time}`);
+                          if (isNaN(start.getTime())) { setOpenMenuId(null); return; }
+                          const dt = start.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+                          const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ProFlow//EN\nBEGIN:VEVENT\nUID:${(reminder.id || Math.random()) + '@proflow'}\nDTSTAMP:${dt}\nDTSTART:${dt}\nSUMMARY:${(reminder.title || '').replace(/\n/g,' ')}\nDESCRIPTION:${(reminder.note || '').replace(/\n/g,' ')}\nEND:VEVENT\nEND:VCALENDAR`;
+                          const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${(reminder.title || 'reminder').replace(/[^a-z0-9]+/gi,'-')}.ics`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          setOpenMenuId(null);
+                        }} style={{ background: 'none', border: 'none', padding: '8px 12px', width: '100%', textAlign: 'left', cursor: 'pointer', fontSize: 13 }}>Add to Calendar</button>
+                        <button onClick={() => { setEditingReminder(reminder); setShowReminderModal(true); setOpenMenuId(null); }} style={{ background: 'none', border: 'none', padding: '8px 12px', width: '100%', textAlign: 'left', cursor: 'pointer', fontSize: 13 }}>Edit</button>
+                        <button onClick={() => { handleDeleteReminder(reminder.id); setOpenMenuId(null); }} style={{ background: 'none', border: 'none', padding: '8px 12px', width: '100%', textAlign: 'left', cursor: 'pointer', color: '#E74C3C', fontSize: 13 }}>Delete</button>
+                      </div>
+                    ), document.body)
+                  }
                 </div>
               </div>
             ))
@@ -258,6 +276,48 @@ export default function ForumReminders({ forumId }) {
         onSave={editingReminder ? (data) => handleUpdateReminder(editingReminder.id, data) : handleAddReminder}
         editingReminder={editingReminder}
       />
+      {viewReminder && ReactDOM.createPortal((
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 3500, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setViewReminder(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '95%', maxWidth: 640, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{ fontSize: 20 }}>{getTypeIcon(viewReminder.type)}</span>
+              <h3 style={{ margin: 0, fontSize: 20, color: COLORS.dark, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{viewReminder.title}</h3>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 8, color: COLORS.lightText, fontSize: 13 }}>
+              <span>Date:</span>
+              <span style={{ color: COLORS.text }}>{viewReminder.date || '-'}</span>
+              {viewReminder.time && (
+                <>
+                  <span>at</span>
+                  <span style={{ color: COLORS.text }}>{viewReminder.time}</span>
+                </>
+              )}
+              <span style={{ marginLeft: 12 }}>Priority:</span>
+              <span style={{ fontSize: 12, color: '#fff', background: getPriorityColor(viewReminder.priority), padding: '2px 8px', borderRadius: 999 }}>{viewReminder.priority || 'medium'}</span>
+            </div>
+            {viewReminder.description && (
+              <div style={{ marginTop: 10, padding: 12, border: `1px solid ${COLORS.border}`, borderRadius: 8, whiteSpace: 'pre-wrap', color: COLORS.text, lineHeight: 1.5, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                {viewReminder.description}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+              <button onClick={() => setViewReminder(null)} style={{ background: 'transparent', border: `1px solid #e5e7eb`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>Close</button>
+              <button onClick={() => {
+                const r = viewReminder; if (!r?.date) { setViewReminder(null); return; }
+                const t = (r.time && r.time.trim()) ? r.time : '09:00';
+                const start = new Date(`${r.date}T${t}`);
+                if (isNaN(start.getTime())) { setViewReminder(null); return; }
+                const dt = start.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+                const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ProFlow//EN\nBEGIN:VEVENT\nUID:${(r.id || Math.random()) + '@proflow'}\nDTSTAMP:${dt}\nDTSTART:${dt}\nSUMMARY:${(r.title || '').replace(/\n/g,' ')}\nDESCRIPTION:${(r.description || '').replace(/\n/g,' ')}\nEND:VEVENT\nEND:VCALENDAR`;
+                const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `${(r.title || 'reminder').replace(/[^a-z0-9]+/gi,'-')}.ics`; a.click(); URL.revokeObjectURL(url);
+                setViewReminder(null);
+              }} style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>Add to Calendar</button>
+            </div>
+          </div>
+        </div>
+      ), document.body)}
     </div>
   );
 }

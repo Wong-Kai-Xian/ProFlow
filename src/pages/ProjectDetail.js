@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import ProjectDetails from '../components/project-component/ProjectDetails';
 import Reminders from '../components/project-component/Reminders';
@@ -21,6 +21,13 @@ const DEFAULT_STAGES = ["Planning", "Development", "Testing", "Completed"];
 
 export default function ProjectDetail() {
   const { projectId } = useParams(); // Changed from projectName to projectId
+  const location = useLocation();
+  const autoOpenReminderId = React.useMemo(() => {
+    try {
+      const sp = new URLSearchParams(location.search);
+      return sp.get('reminderId') || null;
+    } catch { return null; }
+  }, [location.search]);
   const [projectData, setProjectData] = useState(null);
   const [projectStages, setProjectStages] = useState(DEFAULT_STAGES);
   const [currentStage, setCurrentStage] = useState(DEFAULT_STAGES[0]);
@@ -1016,7 +1023,7 @@ export default function ProjectDetail() {
               </h3>
             </div>
             <div style={{ padding: 0 }}>
-            <Reminders projectId={projectId} /> 
+            <Reminders projectId={projectId} autoOpenReminderId={autoOpenReminderId} /> 
           </div>
           </div>
           

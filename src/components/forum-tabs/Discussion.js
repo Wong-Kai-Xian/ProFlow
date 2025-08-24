@@ -639,6 +639,10 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
 
 export default function Discussion({ forumData, posts, setPosts, forumId, updateForumLastActivity, updateForumPostCount, currentUser }) {
   const [newPostContent, setNewPostContent] = useState('');
+  const [mentionCandidates, setMentionCandidates] = useState([]); // forum members for @ suggest
+  const [postMentionOpen, setPostMentionOpen] = useState(false);
+  const [postMentionQuery, setPostMentionQuery] = useState('');
+  const [postMentionIndex, setPostMentionIndex] = useState(0);
   const [editingPost, setEditingPost] = useState(null); // New state to track which post is being edited
   const [showCreatePostModal, setShowCreatePostModal] = useState(false); // State to control CreatePostModal visibility
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false); // State for delete confirmation modal
@@ -668,6 +672,61 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
 
     return () => unsubscribe();
   }, [forumId, setPosts]); // Add setPosts to dependency array
+
+  // Load forum members for mention suggestions (limit to this forum only)
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        if (!forumId) { setMentionCandidates([]); return; }
+        const fref = doc(db, 'forums', forumId);
+        const fsnap = await getDoc(fref);
+        const members = fsnap.exists() ? (fsnap.data().members || []) : [];
+        if (!members.length) { setMentionCandidates([]); return; }
+        // Fetch user docs for these members in chunks
+        const chunkSize = 10;
+        const results = [];
+        for (let i = 0; i < members.length; i += chunkSize) {
+          const slice = members.slice(i, i + chunkSize);
+          try {
+            const q = query(collection(db, 'users'), where('uid', 'in', slice));
+            const snap = await getDocs(q);
+            snap.forEach(u => {
+              const d = u.data();
+              if (d.uid !== currentUser?.uid) results.push({ uid: d.uid || u.id, name: d.name || d.displayName || d.email || 'Member', email: d.email || '' });
+            });
+          } catch {}
+        }
+        if (active) setMentionCandidates(results);
+      } catch {
+        if (active) setMentionCandidates([]);
+      }
+    })();
+    return () => { active = false; };
+  }, [forumId, currentUser?.uid]);
+
+  const updatePostMentionState = (value) => {
+    setNewPostContent(value);
+    const m = value.match(/(^|\s)@([A-Za-z0-9._%+-]*)$/);
+    if (m) {
+      const q = (m[2] || '').toLowerCase();
+      const list = mentionCandidates.filter(u => (u.name || '').toLowerCase().startsWith(q) || (u.email || '').toLowerCase().startsWith(q)).slice(0, 6);
+      setPostMentionQuery(q);
+      setPostMentionIndex(0);
+      setPostMentionOpen(list.length > 0);
+    } else {
+      setPostMentionOpen(false);
+      setPostMentionQuery('');
+    }
+  };
+
+  const insertPostMention = (user) => {
+    // Replace the trailing @query with @email (our extractor expects email)
+    const replaced = newPostContent.replace(/(^|\s)@([A-Za-z0-9._%+-]*)$/, (m0, s1) => `${s1}@${user.email} `);
+    setNewPostContent(replaced);
+    setPostMentionOpen(false);
+    setPostMentionQuery('');
+  };
 
   const handleLike = async (postId, userId) => {
     if (!forumId || !postId || !userId) return;
@@ -798,10 +857,10 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
   return (
     <div style={{ padding: LAYOUT.gap, background: COLORS.background }}>
       {/* Post creation form */}
-      <form onSubmit={handlePostSubmit} style={{ marginBottom: LAYOUT.gap }}>
+      <form onSubmit={handlePostSubmit} style={{ marginBottom: LAYOUT.gap, position: 'relative' }}>
                     <textarea
           value={newPostContent}
-          onChange={(e) => setNewPostContent(e.target.value)}
+          onChange={(e) => updatePostMentionState(e.target.value)}
           placeholder="Write a new post..."
                       style={{
             ...INPUT_STYLES.textarea,
@@ -810,6 +869,20 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
             marginBottom: LAYOUT.smallGap,
                       }}
                     />
+                    {postMentionOpen && (
+                      <div style={{ position: 'absolute', left: 0, bottom: 0, transform: 'translateY(100%)', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 20px rgba(0,0,0,0.08)', padding: 6, zIndex: 20, minWidth: 280 }}>
+                        {mentionCandidates
+                          .filter(u => (u.name || '').toLowerCase().startsWith(postMentionQuery) || (u.email || '').toLowerCase().startsWith(postMentionQuery))
+                          .slice(0,6)
+                          .map((u, i) => (
+                            <div key={u.uid || u.email} onMouseDown={(e) => { e.preventDefault(); insertPostMention(u); }}
+                              style={{ padding: '6px 8px', borderRadius: 6, cursor: 'pointer', background: i === postMentionIndex ? '#f1f5f9' : 'transparent', display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontSize: 13, color: '#111827', fontWeight: 600 }}>{u.name}</span>
+                              <span style={{ fontSize: 11, color: '#6b7280' }}>{u.email}</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
                     <button
           type="submit" 
           style={{ ...BUTTON_STYLES.primary, width: "100%", padding: "10px" }}

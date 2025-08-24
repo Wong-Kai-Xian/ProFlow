@@ -1,13 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
-import { db } from "../../firebase"; // Import db
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, where, getDocs } from "firebase/firestore"; // Import Firestore functions
+import { db, storage } from "../../firebase"; // Import db and storage
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, where, getDocs, getDoc } from "firebase/firestore"; // Import Firestore functions
 import { useAuth } from '../../contexts/AuthContext'; // Import useAuth
 
 export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
   const { currentUser } = useAuth();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const fileInputRef = useRef(null);
+  const [mentionCandidates, setMentionCandidates] = useState([]); // project members only
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionIndex, setMentionIndex] = useState(0);
   const messagesEndRef = useRef(null);
 
   // Mention helpers
@@ -71,6 +78,68 @@ export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
     }
   }, [isOpen, taskId, projectId]);
 
+  // Load project team members for mention suggestions (support emails or uids in team)
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        if (!projectId) { setMentionCandidates([]); return; }
+        const pref = doc(db, 'projects', projectId);
+        const psnap = await getDoc(pref);
+        const team = psnap.exists() ? (psnap.data().team || []) : [];
+        if (!team.length) { setMentionCandidates([]); return; }
+        const emailList = team.filter(x => typeof x === 'string' && x.includes('@'));
+        const uidList = team.filter(x => typeof x === 'string' && !x.includes('@'));
+        const chunkSize = 10;
+        const results = [];
+        // Query by emails
+        for (let i = 0; i < emailList.length; i += chunkSize) {
+          const slice = emailList.slice(i, i + chunkSize);
+          try {
+            const q = query(collection(db, 'users'), where('email', 'in', slice));
+            const snap = await getDocs(q);
+            snap.forEach(u => { const d = u.data(); if (d.uid !== currentUser?.uid) results.push({ uid: d.uid || u.id, name: d.name || d.displayName || d.email || 'Member', email: d.email || '' }); });
+          } catch {}
+        }
+        // Query by uid field
+        for (let i = 0; i < uidList.length; i += chunkSize) {
+          const slice = uidList.slice(i, i + chunkSize);
+          try {
+            const q = query(collection(db, 'users'), where('uid', 'in', slice));
+            const snap = await getDocs(q);
+            snap.forEach(u => { const d = u.data(); if (d.uid !== currentUser?.uid) results.push({ uid: d.uid || u.id, name: d.name || d.displayName || d.email || 'Member', email: d.email || '' }); });
+          } catch {}
+        }
+        if (active) setMentionCandidates(results);
+      } catch {
+        if (active) setMentionCandidates([]);
+      }
+    })();
+    return () => { active = false; };
+  }, [projectId, currentUser?.uid]);
+
+  const updateMentionState = (value) => {
+    setNewMessage(value);
+    const m = value.match(/(^|\s)@([A-Za-z0-9._%+-]*)$/);
+    if (m) {
+      const q = (m[2] || '').toLowerCase();
+      const list = mentionCandidates.filter(u => (u.name || '').toLowerCase().startsWith(q) || (u.email || '').toLowerCase().startsWith(q)).slice(0, 6);
+      setMentionQuery(q);
+      setMentionIndex(0);
+      setMentionOpen(list.length > 0);
+    } else {
+      setMentionOpen(false);
+      setMentionQuery('');
+    }
+  };
+
+  const insertMention = (user) => {
+    const replaced = newMessage.replace(/(^|\s)@([A-Za-z0-9._%+-]*)$/, (m0, s1) => `${s1}@${user.email} `);
+    setNewMessage(replaced);
+    setMentionOpen(false);
+    setMentionQuery('');
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -80,20 +149,31 @@ export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
   }, [messages]);
 
   const handleSendMessage = async () => {
-    if (newMessage.trim() && taskId && projectId && currentUser) {
+    if ((newMessage.trim() || selectedFile) && taskId && projectId && currentUser) {
       try {
         // Use the same flat collection structure
         const messagesRef = collection(db, "taskMessages", `${projectId}_${taskId}`, "messages");
+        let fileUrl = '';
+        let fileName = '';
+        if (selectedFile) {
+          const fref = ref(storage, `taskMessages/${projectId}_${taskId}/${Date.now()}_${selectedFile.name}`);
+          await uploadBytes(fref, selectedFile);
+          fileUrl = await getDownloadURL(fref);
+          fileName = selectedFile.name;
+        }
         await addDoc(messagesRef, {
           text: newMessage.trim(),
           sender: currentUser.name || currentUser.email || "User",
           senderId: currentUser.uid,
           timestamp: serverTimestamp(),
           projectId: projectId,
-          taskId: taskId
+          taskId: taskId,
+          fileUrl,
+          fileName
         });
         await notifyMentions(newMessage.trim());
         setNewMessage('');
+        setSelectedFile(null);
       } catch (error) {
         console.error("Error sending message: ", error);
         alert("Failed to send message. Please try again.");
@@ -177,6 +257,11 @@ export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
                   <div style={{ fontSize: "14px", lineHeight: "1.4" }}>
                     {msg.text}
                   </div>
+                  {msg.fileUrl && (
+                    <div style={{ marginTop: 6, background: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: '6px 8px' }}>
+                      <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#fff', textDecoration: 'underline' }}>{msg.fileName || 'Attachment'}</a>
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -184,11 +269,11 @@ export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
           <div ref={messagesEndRef} />
         </div>
 
-        <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
+        <div style={{ display: "flex", gap: LAYOUT.smallGap, position: 'relative', alignItems: 'flex-end' }}>
           <textarea
             placeholder="Type your message..."
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={(e) => updateMentionState(e.target.value)}
             onKeyPress={handleKeyPress}
             style={{
               ...INPUT_STYLES.base,
@@ -198,6 +283,29 @@ export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
               resize: "vertical",
             }}
           />
+          {/* Selected file preview below input */}
+          {selectedFile && (
+            <div style={{ position: 'absolute', left: 20, bottom: 50, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: `1px solid ${COLORS.lightBorder}`, background: '#f3f4f6', color: COLORS.text, borderRadius: 999, padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }} title={selectedFile.name}>
+              <span>{selectedFile.name}</span>
+              <button onClick={() => setSelectedFile(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.lightText, fontSize: 14, lineHeight: 1 }}>×</button>
+            </div>
+          )}
+          {mentionOpen && (
+            <div style={{ position: 'absolute', bottom: 62, left: 20, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 20px rgba(0,0,0,0.18)', padding: 6, zIndex: 2000, minWidth: 280 }}>
+              {mentionCandidates
+                .filter(u => (u.name || '').toLowerCase().startsWith(mentionQuery) || (u.email || '').toLowerCase().startsWith(mentionQuery))
+                .slice(0,6)
+                .map((u, i) => (
+                  <div key={u.uid || u.email} onMouseDown={(e) => { e.preventDefault(); insertMention(u); }}
+                    style={{ padding: '6px 8px', borderRadius: 6, cursor: 'pointer', background: i === mentionIndex ? '#f1f5f9' : 'transparent', display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: 13, color: '#111827', fontWeight: 600 }}>{u.name}</span>
+                    <span style={{ fontSize: 11, color: '#6b7280' }}>{u.email}</span>
+                  </div>
+                ))}
+            </div>
+          )}
+          <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={(e) => setSelectedFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
+          <button onClick={() => fileInputRef.current && fileInputRef.current.click()} style={{ ...BUTTON_STYLES.secondary, padding: '10px 12px' }}>Attach</button>
           <button onClick={handleSendMessage} style={{ ...BUTTON_STYLES.primary, padding: "10px 15px" }}>
             Send
           </button>

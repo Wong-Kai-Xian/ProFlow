@@ -1,13 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
 import { db } from "../../firebase"; // Import db
 import { collection, addDoc, deleteDoc, onSnapshot, query, orderBy, doc, updateDoc, serverTimestamp } from "firebase/firestore"; // Import Firestore functions and serverTimestamp, updateDoc
 import AddProjectReminderModal from "./AddProjectReminderModal"; // Import AddProjectReminderModal
 
-export default function Reminders({ projectId }) {
+export default function Reminders({ projectId, autoOpenReminderId }) {
   const [reminders, setReminders] = useState([]);
   const [showModal, setShowModal] = useState(false); // State for AddReminderModal
   const [editingReminder, setEditingReminder] = useState(null); // State for editing reminder
+  const [openActionsId, setOpenActionsId] = useState(null); // Which reminder's actions menu is open
+  const [actionsPos, setActionsPos] = useState({ top: 0, left: 0 });
+  const [viewReminder, setViewReminder] = useState(null);
+
+  const closeActions = useCallback(() => setOpenActionsId(null), []);
+
+  useEffect(() => {
+    if (!openActionsId) return;
+    const onWin = () => closeActions();
+    window.addEventListener('scroll', onWin, true);
+    window.addEventListener('resize', onWin, true);
+    const onClick = () => closeActions();
+    // Use bubble phase so clicks on menu items trigger before close
+    window.addEventListener('click', onClick, false);
+    return () => {
+      window.removeEventListener('scroll', onWin, true);
+      window.removeEventListener('resize', onWin, true);
+      window.removeEventListener('click', onClick, false);
+    };
+  }, [openActionsId, closeActions]);
 
   useEffect(() => {
     if (projectId) {
@@ -25,6 +46,12 @@ export default function Reminders({ projectId }) {
       return () => unsubscribe(); // Cleanup on unmount
     }
   }, [projectId]);
+
+  useEffect(() => {
+    if (!autoOpenReminderId || !reminders || reminders.length === 0) return;
+    const found = reminders.find(r => r.id === autoOpenReminderId);
+    if (found) setViewReminder(found);
+  }, [autoOpenReminderId, reminders]);
 
   const handleAddReminder = async (newReminderData) => {
     if (!projectId) return;
@@ -59,6 +86,38 @@ export default function Reminders({ projectId }) {
     } catch (error) {
       console.error("Error removing reminder: ", error);
     }
+  };
+
+  const downloadReminderIcs = (r) => {
+    try {
+      if (!r || !r.date) return;
+      const time = (r.time && r.time.trim()) ? r.time : '09:00';
+      const start = new Date(`${r.date}T${time}`);
+      if (isNaN(start.getTime())) return;
+      const dt = start.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      const summary = (r.title || '').replace(/\n/g, ' ');
+      const description = (r.description || '').replace(/\n/g, ' ');
+      const ics = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//ProFlow//EN',
+        'BEGIN:VEVENT',
+        `UID:${(r.id || Math.random()) + '@proflow'}`,
+        `DTSTAMP:${dt}`,
+        `DTSTART:${dt}`,
+        `SUMMARY:${summary}`,
+        `DESCRIPTION:${description}`,
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\n');
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(r.title || 'reminder').replace(/[^a-z0-9]+/gi,'-')}.ics`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {}
   };
 
   return (
@@ -99,64 +158,58 @@ export default function Reminders({ projectId }) {
               marginBottom: LAYOUT.smallGap,
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "center",
+              alignItems: "flex-start",
+              gap: '8px'
             }}>
-              <div>
-                <p style={{ margin: 0, color: COLORS.text, fontSize: "14px", fontWeight: "bold" }}>{reminder.title}</p>
+              <div onClick={() => setViewReminder(reminder)} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                  <span style={{ margin: 0, color: COLORS.text, fontSize: "14px", fontWeight: "bold", maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={reminder.title}>{reminder.title}</span>
+                  {reminder.title && reminder.title.length > 30 && (
+                    <span style={{ fontSize: 10, color: COLORS.lightText, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '2px 6px' }}>more</span>
+                  )}
+                </div>
+                {reminder.description && (
+                  <div style={{ color: COLORS.lightText, fontSize: "12px", maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={reminder.description}>{reminder.description}</div>
+                )}
                 <small style={{ color: COLORS.lightText, fontSize: "12px" }}>{reminder.date} {reminder.time ? `at ${reminder.time}` : ''}</small>
               </div>
-              <div style={{ display: 'flex', gap: '5px' }}>
-                <button
-                  onClick={() => {
-                    if (!reminder?.date) return;
-                    const time = (reminder.time && reminder.time.trim()) ? reminder.time : '09:00';
-                    const start = new Date(`${reminder.date}T${time}`);
-                    if (isNaN(start.getTime())) return;
-                    const dt = start.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-                    const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ProFlow//EN\nBEGIN:VEVENT\nUID:${(reminder.id || Math.random()) + '@proflow'}\nDTSTAMP:${dt}\nDTSTART:${dt}\nSUMMARY:${(reminder.title || '').replace(/\n/g,' ')}\nDESCRIPTION:${(reminder.description || '').replace(/\n/g,' ')}\nEND:VEVENT\nEND:VCALENDAR`;
-                    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${(reminder.title || 'reminder').replace(/[^a-z0-9]+/gi,'-')}.ics`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: COLORS.primary,
-                    fontSize: "16px",
-                    cursor: "pointer",
-                  }}
-                  title="Add to Calendar"
-                >
-                  📅
-                </button>
-                <button
-                  onClick={() => { setEditingReminder(reminder); setShowModal(true); }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: COLORS.primary,
-                    fontSize: "16px",
-                    cursor: "pointer",
-                  }}
-                >
-                  ✏️
-                </button>
-                <button
-                  onClick={() => handleRemoveReminder(reminder.id)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: COLORS.danger,
-                    fontSize: "16px",
-                    cursor: "pointer",
-                  }}
-                >
-                  🗑️
-                </button>
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'inline-block' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const menuW = 200; const menuH = 124; const pad = 8;
+                      let left = rect.right + pad; // prefer right
+                      if (left + menuW > window.innerWidth - pad) left = rect.left - menuW - pad; // flip left
+                      let top = rect.top - menuH - pad; // prefer above
+                      if (top < pad) top = Math.min(rect.bottom + pad, window.innerHeight - menuH - pad); // fallback below
+                      setActionsPos({ top, left });
+                      setOpenActionsId(prev => prev === reminder.id ? null : reminder.id);
+                    }}
+                    style={{ background: 'none', border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: '2px 6px', cursor: 'pointer', fontSize: 14, color: COLORS.text }}
+                    title="Actions"
+                  >
+                    ⚙️
+                  </button>
+                  {openActionsId === reminder.id && ReactDOM.createPortal(
+                    (<div style={{ position: 'fixed', top: actionsPos.top, left: actionsPos.left, background: '#fff', border: `1px solid ${COLORS.border}`, borderRadius: 8, boxShadow: '0 16px 40px rgba(0,0,0,0.18)', minWidth: 180, zIndex: 4000 }} onClick={(ev) => ev.stopPropagation()}>
+                      <button onClick={() => { setEditingReminder(reminder); setShowModal(true); closeActions(); }} style={{ background: 'none', border: 'none', padding: '8px 12px', width: '100%', textAlign: 'left', cursor: 'pointer', fontSize: 13 }}>Edit</button>
+                      <button onClick={() => { if (reminder?.date) {
+                        const time = (reminder.time && reminder.time.trim()) ? reminder.time : '09:00';
+                        const start = new Date(`${reminder.date}T${time}`);
+                        if (!isNaN(start.getTime())) {
+                          const dt = start.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+                          const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ProFlow//EN\nBEGIN:VEVENT\nUID:${(reminder.id || Math.random()) + '@proflow'}\nDTSTAMP:${dt}\nDTSTART:${dt}\nSUMMARY:${(reminder.title || '').replace(/\n/g,' ')}\nDESCRIPTION:${(reminder.description || '').replace(/\n/g,' ')}\nEND:VEVENT\nEND:VCALENDAR`;
+                          const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a'); a.href = url; a.download = `${(reminder.title || 'reminder').replace(/[^a-z0-9]+/gi,'-')}.ics`; a.click(); URL.revokeObjectURL(url);
+                        }
+                      } closeActions(); }} style={{ background: 'none', border: 'none', padding: '8px 12px', width: '100%', textAlign: 'left', cursor: 'pointer', fontSize: 13 }}>Add to Calendar</button>
+                      <button onClick={() => { handleRemoveReminder(reminder.id); closeActions(); }} style={{ background: 'none', border: 'none', padding: '8px 12px', width: '100%', textAlign: 'left', cursor: 'pointer', color: COLORS.danger, fontSize: 13 }}>Delete</button>
+                    </div>), document.body)
+                  }
+                </div>
               </div>
             </li>
           ))
@@ -164,10 +217,36 @@ export default function Reminders({ projectId }) {
       </ul>
       <AddProjectReminderModal
         isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={() => { setShowModal(false); setEditingReminder(null); }}
         onSave={editingReminder ? (data) => handleUpdateReminder(editingReminder.id, data) : handleAddReminder}
         editingReminder={editingReminder}
       />
+      {viewReminder && ReactDOM.createPortal((
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 3500, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setViewReminder(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '95%', maxWidth: 640, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', padding: 20 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, color: COLORS.dark, fontSize: 20, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{viewReminder.title}</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 8, color: COLORS.lightText, fontSize: 13 }}>
+              <span>Date:</span>
+              <span style={{ color: COLORS.text }}>{viewReminder.date || '-'}</span>
+              {viewReminder.time && (
+                <>
+                  <span>at</span>
+                  <span style={{ color: COLORS.text }}>{viewReminder.time}</span>
+                </>
+              )}
+            </div>
+            {viewReminder.description && (
+              <div style={{ marginTop: 10, padding: 12, border: `1px solid ${COLORS.border}`, borderRadius: 8, whiteSpace: 'pre-wrap', color: COLORS.text, lineHeight: 1.5, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                {viewReminder.description}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+              <button onClick={() => setViewReminder(null)} style={{ background: 'transparent', border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>Close</button>
+              <button onClick={() => { downloadReminderIcs(viewReminder); setViewReminder(null); }} style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>Add to Calendar</button>
+            </div>
+          </div>
+        </div>
+      ), document.body)}
     </div>
   );
 }

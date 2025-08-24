@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom"; // Import useNavigate
+import { useNavigate } from "react-router-dom";
 import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT } from "./profile-component/constants"; // Import constants
 import { db } from "../firebase"; // Import db
@@ -7,9 +7,9 @@ import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp,
 import { FaFolder, FaUser, FaComments } from 'react-icons/fa'; // Import icons for origin
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
-export default function UpcomingEvents() {
+export default function UpcomingEvents({ embedded = false }) {
   const [events, setEvents] = useState([]);
-  const navigate = useNavigate(); // Initialize useNavigate
+  const navigate = useNavigate();
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
 
   useEffect(() => {
@@ -57,6 +57,8 @@ export default function UpcomingEvents() {
                 origin: "project",
                 sourceId: projectId,
                 sourceName: projectName,
+                description: reminderData.description || '',
+                reminderId: reminderDoc.id
               });
             } else {
               console.warn(`Project reminder missing date or time for project ${projectId}:`, reminderData);
@@ -95,6 +97,7 @@ export default function UpcomingEvents() {
                 origin: "customer",
                 sourceId: customerId,
                 sourceName: customerData.customerProfile?.name,
+                description: reminder.description || ''
               });
             } else {
               console.warn(`Customer reminder missing date or time for customer ${customerId}:`, reminder);
@@ -140,6 +143,8 @@ export default function UpcomingEvents() {
                 origin: "forum",
                 sourceId: forumId,
                 sourceName: forumName,
+                description: reminderData.description || '',
+                reminderId: reminderDoc.id
               });
             } else {
               console.warn(`Forum reminder missing date or time for forum ${forumId}:`, reminderData);
@@ -292,40 +297,52 @@ export default function UpcomingEvents() {
     }
   };
 
-  const handleEventClick = (event) => {
-    switch (event.origin) {
-      case "project":
-        navigate(`/project/${event.sourceId}`);
-        break;
-      case "customer":
-        navigate(`/customer/${event.sourceId}`);
-        break;
-      case "forum":
-        navigate(`/forum/${event.sourceId}`);
-        break;
-      default:
-        break;
-    }
+  const downloadEventIcs = (ev) => {
+    try {
+      if (!ev || !ev.date) return;
+      const dt = ev.date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      const summary = (ev.name || '').replace(/\n/g, ' ');
+      const description = (ev.description || '').replace(/\n/g, ' ');
+      const ics = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//ProFlow//EN',
+        'BEGIN:VEVENT',
+        `UID:${(ev.id || Math.random()) + '@proflow'}`,
+        `DTSTAMP:${dt}`,
+        `DTSTART:${dt}`,
+        `SUMMARY:${summary}`,
+        `DESCRIPTION:${description}`,
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\n');
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(ev.name || 'reminder').replace(/[^a-z0-9]+/gi,'-')}.ics`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {}
   };
 
-  return (
-    <Card style={{
-      height: "350px",
-      display: "flex",
-      flexDirection: "column",
-      minHeight: 0,
-      position: 'relative',
-      zIndex: 0
-    }}>
-      <h3 style={{ marginTop: 0, color: COLORS.text, fontSize: "18px" }}>Upcoming Events</h3>
-      <ul style={{ listStyle: 'none', padding: 0, overflowY: "auto", flexGrow: 1 }}>
+  const List = (
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, overflowY: "auto", flexGrow: 1, minHeight: 0 }}>
         {events.length === 0 ? (
           <li style={{ padding: LAYOUT.smallGap, color: COLORS.lightText, textAlign: "center" }}>No upcoming events.</li>
         ) : (
           events.map((event, index) => (
             <li 
               key={event.id || index} // Use a stable key
-              onClick={() => handleEventClick(event)} // Make event clickable
+              onClick={() => {
+                if (event.origin === 'project' && event.reminderId) {
+                  navigate(`/project/${event.sourceId}?reminderId=${encodeURIComponent(event.reminderId)}`);
+                } else if (event.origin === 'forum' && event.reminderId) {
+                  navigate(`/forum/${event.sourceId}?reminderId=${encodeURIComponent(event.reminderId)}`);
+                } else if (event.origin === 'customer') {
+                  navigate(`/customer/${event.sourceId}`);
+                }
+              }}
               style={{
                 background: COLORS.cardBackground,
                 margin: LAYOUT.smallGap + " 0",
@@ -340,15 +357,15 @@ export default function UpcomingEvents() {
                 }
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: LAYOUT.smallGap, marginBottom: '4px' }}>
-                <strong style={{ color: COLORS.text }}>{event.name}</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: LAYOUT.smallGap, marginBottom: '4px', minWidth: 0 }}>
+                <strong title={event.name} style={{ color: COLORS.text, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{event.name}</strong>
                 <small style={{ color: COLORS.lightText, fontSize: "12px", flexShrink: 0 }}>
                   {getDaysLeft(event.date)}
                 </small>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: "12px", color: COLORS.lightText }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: "12px", color: COLORS.lightText, minWidth: 0 }}>
                 {getOriginIcon(event.origin)} {/* Display origin icon */}
-                <span>
+                <span title={event.sourceName} style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {event.origin === "project" ? `Project: ${event.sourceName}` :
                    event.origin === "customer" ? `Client: ${event.sourceName}` :
                    event.origin === "forum" ? `Forum: ${event.sourceName}` : ''}
@@ -361,6 +378,27 @@ export default function UpcomingEvents() {
           ))
         )}
       </ul>
+  );
+
+  if (embedded) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {List}
+      </div>
+    );
+  }
+
+  return (
+    <Card style={{
+      height: "350px",
+      display: "flex",
+      flexDirection: "column",
+      minHeight: 0,
+      position: 'relative',
+      zIndex: 0
+    }}>
+      <h3 style={{ marginTop: 0, color: COLORS.text, fontSize: "18px" }}>Upcoming Events</h3>
+      {List}
     </Card>
   );
 }

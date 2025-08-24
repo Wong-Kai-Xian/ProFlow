@@ -23,8 +23,8 @@ export default function AddProjectReminderModal({ isOpen, onClose, onSave, editi
   }, [isOpen, editingReminder]);
 
   const handleSubmit = () => {
-    if (!title || !date || !time) {
-      alert('Please fill in all required fields: Title, Date, and Time.');
+    if (!title || !date) {
+      alert('Please fill in required fields: Title and Date.');
       return;
     }
 
@@ -41,35 +41,9 @@ export default function AddProjectReminderModal({ isOpen, onClose, onSave, editi
   if (!isOpen) return null;
 
   return (
-    <div style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(0, 0, 0, 0.5)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 1000
-    }}>
-      <div style={{
-        backgroundColor: COLORS.white,
-        borderRadius: '10px',
-        padding: '25px',
-        width: '90%',
-        maxWidth: '500px',
-        maxHeight: '90vh',
-        overflowY: 'auto',
-        boxShadow: '0 5px 15px rgba(0,0,0,0.3)'
-      }}>
-        <h3 style={{
-          marginTop: 0,
-          marginBottom: '20px',
-          color: COLORS.dark,
-          fontSize: '20px',
-          textAlign: 'center'
-        }}>
+    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0, 0, 0, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1200 }}>
+      <div style={{ backgroundColor: COLORS.white, borderRadius: LAYOUT.borderRadius, padding: LAYOUT.gap, width: '92%', maxWidth: 600, maxHeight: '85vh', overflowY: 'auto', boxShadow: CARD_STYLES.base.boxShadow }}>
+        <h3 style={{ marginTop: 0, marginBottom: LAYOUT.gap, color: COLORS.dark, fontSize: '20px', textAlign: 'center' }}>
           {editingReminder ? 'Edit Project Reminder' : 'Add New Project Reminder'}
         </h3>
 
@@ -79,7 +53,7 @@ export default function AddProjectReminderModal({ isOpen, onClose, onSave, editi
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            style={INPUT_STYLES.input}
+            style={{ ...INPUT_STYLES.base, width: '100%', boxSizing: 'border-box' }}
             placeholder="Reminder title"
             required
           />
@@ -114,7 +88,6 @@ export default function AddProjectReminderModal({ isOpen, onClose, onSave, editi
               value={time}
               onChange={(e) => setTime(e.target.value)}
               style={{ ...INPUT_STYLES.base, width: '100%', boxSizing: 'border-box' }}
-              required
             />
           </div>
         </div>

@@ -90,9 +90,9 @@ export default function Home() {
                     Manage and track your projects
                   </p>
                 </div>
-                <div style={{ flex: 1, overflow: "hidden" }}>
-                <ProjectsTab />
-              </div>
+                <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+                  <ProjectsTab />
+                </div>
               </div>
 
               {/* Contacts Section */}
@@ -122,8 +122,8 @@ export default function Home() {
                     Connect with your customers
                   </p>
                 </div>
-                <div style={{ flex: 1, overflow: "hidden" }}>
-                <Contacts onSelectCustomer={goToCustomerProfile} />
+                <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+                  <Contacts onSelectCustomer={goToCustomerProfile} />
                 </div>
               </div>
             </>
@@ -191,8 +191,8 @@ export default function Home() {
               Overview of your work and progress
             </p>
           </div>
-          <div style={{ flex: 1, overflow: "hidden" }}>
-          <Dashboard />
+          <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+            <Dashboard />
           </div>
         </div>
 
@@ -240,8 +240,8 @@ export default function Home() {
                     Stay on top of your schedule
                   </p>
                 </div>
-                <div style={{ flex: 1, overflow: "hidden" }}>
-                <UpcomingEvents />
+                <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+                  <UpcomingEvents embedded />
                 </div>
               </div>
 
@@ -272,8 +272,8 @@ export default function Home() {
                     Community discussions and updates
                   </p>
                 </div>
-                <div style={{ flex: 1, overflow: "hidden" }}>
-                <HomeGroupForum />
+                <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+                  <HomeGroupForum />
                 </div>
               </div>
             </>

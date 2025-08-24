@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import ForumTabs from "../components/ForumTabs";
 import ProjectDetails from "../components/project-component/ProjectDetails";
@@ -49,6 +49,13 @@ const safeParseJson = (text) => {
 
 export default function Forum() {
   const { id: forumId } = useParams(); // Rename `id` to `forumId` for clarity
+  const location = useLocation();
+  const autoOpenReminderId = React.useMemo(() => {
+    try {
+      const sp = new URLSearchParams(location.search);
+      return sp.get('reminderId') || null;
+    } catch { return null; }
+  }, [location.search]);
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
   console.log("Forum.js: forumId from useParams:", forumId);
   const [forumData, setForumData] = useState(null);
@@ -719,7 +726,7 @@ export default function Forum() {
               overflow: "auto",
               padding: 0
             }}>
-              <ForumReminders forumId={forumId} />
+              <ForumReminders forumId={forumId} autoOpenReminderId={autoOpenReminderId} />
             </div>
           </div>
         </div>
