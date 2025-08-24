@@ -7,6 +7,7 @@ import UserAvatar from '../components/shared/UserAvatar';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useLocation } from 'react-router-dom';
 import InviteMemberModal from '../components/team-component/InviteMemberModal';
+import DeleteConfirmationModal from '../components/common/DeleteConfirmationModal';
 import { FaSync, FaUsers, FaClock, FaUserPlus } from 'react-icons/fa';
 import IncomingInvitationsModal from '../components/team-component/IncomingInvitationsModal';
 
@@ -21,6 +22,12 @@ export default function TeamPage() {
   const [inviteMessage, setInviteMessage] = useState('');
   const [showIncomingInvitationsModal, setShowIncomingInvitationsModal] = useState(false);
   const [incomingInvitationsCount, setIncomingInvitationsCount] = useState(0);
+  const [showCancelInviteModal, setShowCancelInviteModal] = useState(false);
+  const [inviteToCancel, setInviteToCancel] = useState(null);
+  const [isCancellingInvite, setIsCancellingInvite] = useState(false);
+  const [showRemoveMemberModal, setShowRemoveMemberModal] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState(null);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   useEffect(() => {
     if (!inviteMessage) return;
@@ -536,7 +543,7 @@ export default function TeamPage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={async () => { try { await deleteDoc(doc(db, 'invitations', invitation.id)); setPendingInvitations(prev => prev.filter(i => i.id !== invitation.id)); } catch (e) { console.error(e); alert('Failed to cancel'); } }} style={{ border: '1px solid #e2e8f0', background: '#fff', color: '#ef4444', padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                    <button onClick={() => { setInviteToCancel(invitation); setShowCancelInviteModal(true); }} style={{ border: '1px solid #e2e8f0', background: '#fff', color: '#ef4444', padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
                   </div>
                   <div style={{
                     position: "absolute",
@@ -639,7 +646,7 @@ export default function TeamPage() {
                     cursor: member.uid ? "pointer" : "default"
                   }}
                   >
-                    <button onClick={async () => { try { if (!currentUser?.uid || !member.uid) return; const myCol = collection(db, 'users', currentUser.uid, 'connections'); const q1 = query(myCol, where('with', '==', member.uid)); const snap1 = await getDocs(q1); await Promise.all(snap1.docs.map(d => deleteDoc(d.ref))); const theirCol = collection(db, 'users', member.uid, 'connections'); const q2 = query(theirCol, where('with', '==', currentUser.uid)); const snap2 = await getDocs(q2); await Promise.all(snap2.docs.map(d => deleteDoc(d.ref))); const inv1 = query(collection(db, 'invitations'), where('fromUserId','==', currentUser.uid), where('toUserId','==', member.uid), where('status','==','accepted')); const inv2 = query(collection(db, 'invitations'), where('fromUserId','==', member.uid), where('toUserId','==', currentUser.uid), where('status','==','accepted')); const [s1, s2] = await Promise.all([getDocs(inv1), getDocs(inv2)]); await Promise.all([...s1.docs, ...s2.docs].map(d => updateDoc(d.ref, { status: 'removed', removedAt: serverTimestamp() }))); setConnectionMembers(prev => prev.filter(m => m.uid !== member.uid)); setInviteMessage(`Removed ${member.displayName}`); } catch (e) { console.error(e); alert('Failed to remove member'); } }} title="Remove connection" style={{ position: 'absolute', top: 8, right: 8, background: 'transparent', border: '1px solid #e5e7eb', color: '#ef4444', padding: '4px 8px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Remove</button>
+                    <button onClick={() => { setMemberToRemove(member); setShowRemoveMemberModal(true); }} title="Remove connection" style={{ position: 'absolute', top: 8, right: 8, background: 'transparent', border: '1px solid #e5e7eb', color: '#ef4444', padding: '4px 8px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Remove</button>
                     <div style={{ width: 72, height: 72, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {member.uid ? (
                         <a href={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
@@ -711,6 +718,63 @@ export default function TeamPage() {
         isOpen={showIncomingInvitationsModal}
         onClose={() => setShowIncomingInvitationsModal(false)}
         onInvitationAction={refreshTeamData}
+      />
+
+      {/* Cancel Pending Invitation Confirmation */}
+      <DeleteConfirmationModal
+        isOpen={showCancelInviteModal}
+        onClose={() => { if (!isCancellingInvite) { setShowCancelInviteModal(false); setInviteToCancel(null); } }}
+        onConfirm={async () => {
+          if (!inviteToCancel) return;
+          setIsCancellingInvite(true);
+          try {
+            await deleteDoc(doc(db, 'invitations', inviteToCancel.id));
+            setPendingInvitations(prev => prev.filter(i => i.id !== inviteToCancel.id));
+          } catch (e) { console.error(e); alert('Failed to cancel invitation'); }
+          finally {
+            setIsCancellingInvite(false);
+            setShowCancelInviteModal(false);
+            setInviteToCancel(null);
+          }
+        }}
+        itemName={inviteToCancel?.toUserEmail || ''}
+        itemType="invitation"
+        isLoading={isCancellingInvite}
+      />
+
+      {/* Remove Team Member Confirmation */}
+      <DeleteConfirmationModal
+        isOpen={showRemoveMemberModal}
+        onClose={() => { if (!isRemovingMember) { setShowRemoveMemberModal(false); setMemberToRemove(null); } }}
+        onConfirm={async () => {
+          if (!memberToRemove || !currentUser?.uid) return;
+          setIsRemovingMember(true);
+          try {
+            const member = memberToRemove;
+            const myCol = collection(db, 'users', currentUser.uid, 'connections');
+            const q1 = query(myCol, where('with', '==', member.uid));
+            const snap1 = await getDocs(q1);
+            await Promise.all(snap1.docs.map(d => deleteDoc(d.ref)));
+            const theirCol = collection(db, 'users', member.uid, 'connections');
+            const q2 = query(theirCol, where('with', '==', currentUser.uid));
+            const snap2 = await getDocs(q2);
+            await Promise.all(snap2.docs.map(d => deleteDoc(d.ref)));
+            const inv1 = query(collection(db, 'invitations'), where('fromUserId','==', currentUser.uid), where('toUserId','==', member.uid), where('status','==','accepted'));
+            const inv2 = query(collection(db, 'invitations'), where('fromUserId','==', member.uid), where('toUserId','==', currentUser.uid), where('status','==','accepted'));
+            const [s1, s2] = await Promise.all([getDocs(inv1), getDocs(inv2)]);
+            await Promise.all([...s1.docs, ...s2.docs].map(d => updateDoc(d.ref, { status: 'removed', removedAt: serverTimestamp() })));
+            setConnectionMembers(prev => prev.filter(m => m.uid !== member.uid));
+            setInviteMessage(`Removed ${member.displayName}`);
+          } catch (e) { console.error(e); alert('Failed to remove member'); }
+          finally {
+            setIsRemovingMember(false);
+            setShowRemoveMemberModal(false);
+            setMemberToRemove(null);
+          }
+        }}
+        itemName={memberToRemove?.displayName || ''}
+        itemType="team member"
+        isLoading={isRemovingMember}
       />
     </div>
   );
