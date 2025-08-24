@@ -5,6 +5,7 @@ import { DESIGN_SYSTEM, getCardStyle, getButtonStyle } from '../../styles/design
 
 export default function ProjectQuotesPanel({ projectId }) {
   const [quotes, setQuotes] = useState([]);
+  const [toasts, setToasts] = useState([]);
 
   useEffect(() => {
     if (!projectId) { setQuotes([]); return; }
@@ -85,9 +86,14 @@ export default function ProjectQuotesPanel({ projectId }) {
         createdAt: serverTimestamp()
       });
       try { await updateDoc(doc(db, 'projects', projectId, 'quotes', q.id), { status: 'converted', convertedAt: serverTimestamp(), convertedToInvoiceId: invRef.id }); } catch {}
-      alert('Invoice created from quote. Check Finance > Invoices.');
+      // Pop-out toast notification
+      const id = Date.now() + Math.random();
+      setToasts(prev => [...prev, { id, message: 'Invoice created from quote.', tone: 'success' }]);
+      setTimeout(() => { setToasts(prev => prev.filter(t => t.id !== id)); }, 3000);
     } catch {
-      alert('Failed to convert to invoice.');
+      const id = Date.now() + Math.random();
+      setToasts(prev => [...prev, { id, message: 'Failed to convert to invoice.', tone: 'error' }]);
+      setTimeout(() => { setToasts(prev => prev.filter(t => t.id !== id)); }, 3500);
     }
   };
 
@@ -128,6 +134,26 @@ export default function ProjectQuotesPanel({ projectId }) {
           )}
         </div>
       </div>
+      {/* Toasts */}
+      {toasts.length > 0 && (
+        <div style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 3500, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {toasts.map(t => (
+            <div key={t.id} style={{
+              minWidth: 220,
+              maxWidth: 360,
+              padding: '10px 12px',
+              borderRadius: 8,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+              background: t.tone === 'success' ? '#ECFDF5' : '#FEF2F2',
+              color: t.tone === 'success' ? '#065F46' : '#991B1B',
+              border: `1px solid ${t.tone === 'success' ? '#A7F3D0' : '#FECACA'}`,
+              fontSize: 13
+            }}>
+              {t.message}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

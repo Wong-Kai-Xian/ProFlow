@@ -7,8 +7,7 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
   const [quotes, setQuotes] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ client: '', validUntil: '', items: [] });
-  const [projectForMove, setProjectForMove] = useState('');
-  const hasProjects = Array.isArray(projects) && projects.length > 0;
+  
 
   useEffect(() => {
     if (!customerId) { setQuotes([]); return; }
@@ -43,25 +42,7 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
     try { await deleteDoc(doc(db, 'customerProfiles', customerId, 'quotesDrafts', q.id)); } catch {}
   };
 
-  const moveToProject = async (q) => {
-    try {
-      if (!hasProjects) { alert('Convert to Project first in Quick Actions.'); return; }
-      const target = projectForMove || projects[0];
-      const projCol = collection(db, 'projects', target, 'quotes');
-      await addDoc(projCol, {
-        client: q.client || '',
-        validUntil: q.validUntil || '',
-        items: Array.isArray(q.items) ? q.items : [],
-        total: Number(q.total||0),
-        status: 'draft',
-        createdAt: serverTimestamp()
-      });
-      await removeDraft(q);
-      alert('Quote moved to project. You can convert it to an invoice there.');
-    } catch {
-      alert('Failed to move quote to project.');
-    }
-  };
+  
 
   const printDraft = (q) => {
     try {
@@ -141,20 +122,7 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button onClick={() => printDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Print</button>
                   {!readOnly && (
-                    <>
-                      <button onClick={() => removeDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Delete</button>
-                      {hasProjects ? (
-                        <>
-                          <select value={projectForMove} onChange={(e) => setProjectForMove(e.target.value)} style={{ padding: '4px 6px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-                            <option value="">Select project</option>
-                            {projects.map(pid => (<option key={pid} value={pid}>{pid.slice(0,8)}</option>))}
-                          </select>
-                          <button onClick={() => moveToProject(q)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Move to Project</button>
-                        </>
-                      ) : (
-                        <button onClick={() => alert('Convert to Project first in Quick Actions.')} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Convert to Project</button>
-                      )}
-                    </>
+                    <button onClick={() => removeDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Delete</button>
                   )}
                 </div>
               </div>

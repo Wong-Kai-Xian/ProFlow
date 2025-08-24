@@ -137,8 +137,8 @@ export default function CustomerProfile() {
   };
 
   const handleConvertToProject = () => {
-    // First show approval request modal for project conversion
-    setShowProjectConversionApprovalModal(true);
+    // Open the standard Create Project form directly (prefilled from customer/company)
+    setShowCreateProjectModal(true);
   };
 
   const handleProjectConversionApprovalSuccess = (result) => {
