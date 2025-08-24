@@ -609,9 +609,8 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
                   </span>
                   </div>
                 )}
-                {/* Stage label and Add Task Button - Inside each subtitle */}
+                {/* Add Task Button - Inside each subtitle (stage label removed) */}
                 <div style={{ display: "flex", gap: LAYOUT.smallGap, alignItems: "center" }}>
-                <span title="Stage" style={{ fontSize: '12px', background: 'rgba(255,255,255,0.2)', padding: '4px 8px', borderRadius: '6px' }}>{subtitle.stage}</span>
                 <button 
                   onClick={() => handleShowTaskFormModal(subtitleIndex)} 
                     style={{

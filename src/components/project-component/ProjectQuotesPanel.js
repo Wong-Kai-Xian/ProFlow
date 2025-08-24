@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../firebase';
-import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
 import { DESIGN_SYSTEM, getCardStyle, getButtonStyle } from '../../styles/designSystem';
 
 export default function ProjectQuotesPanel({ projectId }) {
@@ -60,14 +60,31 @@ export default function ProjectQuotesPanel({ projectId }) {
 
   const convertToInvoice = async (q) => {
     try {
-      // Placeholder: create an invoice record under project invoices
-      await addDoc(collection(db, 'projects', projectId, 'invoices'), {
+      const items = Array.isArray(q.items) ? q.items.map(it => ({
+        description: it.description || '',
+        qty: Number(it.qty || 0),
+        unitPrice: Number(it.unitPrice || 0)
+      })) : [];
+      const subtotal = items.reduce((a, it) => a + (it.qty * it.unitPrice), 0);
+      const taxRate = Number(q.taxRate || 0);
+      const taxAmount = subtotal * (taxRate / 100);
+      const discount = Number(q.discount || 0);
+      const total = subtotal + taxAmount - discount;
+
+      const invRef = await addDoc(collection(db, 'projects', projectId, 'invoices'), {
         client: q.client || '',
-        total: Number(q.total||0),
+        dueDate: q.validUntil || '',
+        items,
+        subtotal,
+        taxRate,
+        taxAmount,
+        discount,
+        total: Number((q.total ?? total) || 0),
         status: 'unpaid',
         notes: 'Created from quote',
         createdAt: serverTimestamp()
       });
+      try { await updateDoc(doc(db, 'projects', projectId, 'quotes', q.id), { status: 'converted', convertedAt: serverTimestamp(), convertedToInvoiceId: invRef.id }); } catch {}
       alert('Invoice created from quote. Check Finance > Invoices.');
     } catch {
       alert('Failed to convert to invoice.');

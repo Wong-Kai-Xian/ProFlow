@@ -678,8 +678,8 @@ export function QuoteModal({ isOpen, onClose, projects, value, onChange, onSave 
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <Field label="Valid Until"><input type="date" value={value.validUntil || ''} onChange={(e) => onChange(v => ({ ...v, validUntil: e.target.value }))} /></Field>
-        <Field label="Tax Rate %"><input type="number" step="0.01" value={value.taxRate ?? 0} onChange={(e) => onChange(v => ({ ...v, taxRate: Number(e.target.value || 0) }))} /></Field>
-        <Field label="Discount"><input type="number" step="0.01" value={value.discount ?? 0} onChange={(e) => onChange(v => ({ ...v, discount: Number(e.target.value || 0) }))} /></Field>
+        <Field label="Tax Rate %"><input type="number" step="0.01" value={value.taxRate ?? ''} onChange={(e) => onChange(v => ({ ...v, taxRate: e.target.value }))} /></Field>
+        <Field label="Discount"><input type="number" step="0.01" value={value.discount ?? ''} onChange={(e) => onChange(v => ({ ...v, discount: e.target.value }))} /></Field>
       </div>
       <div>
         <div style={{ fontWeight: 600, margin: '8px 0' }}>Items</div>
@@ -693,8 +693,8 @@ export function QuoteModal({ isOpen, onClose, projects, value, onChange, onSave 
           {(value.items || []).map((it, idx) => (
             <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 140px 80px', gap: 8, padding: '4px 0' }}>
               <input value={it.description || ''} onChange={(e) => onChange(v => { const items = [...(v.items||[])]; items[idx] = { ...items[idx], description: e.target.value }; return { ...v, items }; })} />
-              <input type="number" step="1" value={it.qty ?? 0} onChange={(e) => onChange(v => { const items = [...(v.items||[])]; items[idx] = { ...items[idx], qty: Number(e.target.value || 0) }; return { ...v, items }; })} />
-              <input type="number" step="0.01" value={it.unitPrice ?? 0} onChange={(e) => onChange(v => { const items = [...(v.items||[])]; items[idx] = { ...items[idx], unitPrice: Number(e.target.value || 0) }; return { ...v, items }; })} />
+              <input type="number" step="1" value={it.qty ?? ''} onChange={(e) => onChange(v => { const items = [...(v.items||[])]; items[idx] = { ...items[idx], qty: e.target.value }; return { ...v, items }; })} />
+              <input type="number" step="0.01" value={it.unitPrice ?? ''} onChange={(e) => onChange(v => { const items = [...(v.items||[])]; items[idx] = { ...items[idx], unitPrice: e.target.value }; return { ...v, items }; })} />
               <button onClick={() => onChange(v => { const items = [...(v.items||[])]; items.splice(idx,1); return { ...v, items }; })} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Remove</button>
             </div>
           ))}
@@ -807,8 +807,8 @@ function InvoiceModal({ isOpen, onClose, invoice, onSave }) {
         <Field label="Due Date"><input type="date" value={form.dueDate} onChange={(e) => setForm(f => ({ ...f, dueDate: e.target.value }))} /></Field>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <Field label="Tax Rate %"><input type="number" step="0.01" value={form.taxRate} onChange={(e) => setForm(f => ({ ...f, taxRate: Number(e.target.value||0) }))} /></Field>
-        <Field label="Discount"><input type="number" step="0.01" value={form.discount} onChange={(e) => setForm(f => ({ ...f, discount: Number(e.target.value||0) }))} /></Field>
+        <Field label="Tax Rate %"><input type="number" step="0.01" value={form.taxRate} onChange={(e) => setForm(f => ({ ...f, taxRate: e.target.value }))} /></Field>
+        <Field label="Discount"><input type="number" step="0.01" value={form.discount} onChange={(e) => setForm(f => ({ ...f, discount: e.target.value }))} /></Field>
       </div>
       <div>
         <div style={{ fontWeight: 600, margin: '8px 0' }}>Items</div>
@@ -822,8 +822,8 @@ function InvoiceModal({ isOpen, onClose, invoice, onSave }) {
           {(form.items || []).map((it, idx) => (
             <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 140px 80px', gap: 8, padding: '4px 0' }}>
               <input value={it.description || ''} onChange={(e) => setForm(f => { const items = [...(f.items||[])]; items[idx] = { ...items[idx], description: e.target.value }; return { ...f, items }; })} />
-              <input type="number" step="1" value={it.qty ?? 0} onChange={(e) => setForm(f => { const items = [...(f.items||[])]; items[idx] = { ...items[idx], qty: Number(e.target.value || 0) }; return { ...f, items }; })} />
-              <input type="number" step="0.01" value={it.unitPrice ?? 0} onChange={(e) => setForm(f => { const items = [...(f.items||[])]; items[idx] = { ...items[idx], unitPrice: Number(e.target.value || 0) }; return { ...f, items }; })} />
+              <input type="number" step="1" value={it.qty ?? ''} onChange={(e) => setForm(f => { const items = [...(f.items||[])]; items[idx] = { ...items[idx], qty: e.target.value }; return { ...f, items }; })} />
+              <input type="number" step="0.01" value={it.unitPrice ?? ''} onChange={(e) => setForm(f => { const items = [...(f.items||[])]; items[idx] = { ...items[idx], unitPrice: e.target.value }; return { ...f, items }; })} />
               <button onClick={() => setForm(f => { const items = [...(f.items||[])]; items.splice(idx,1); return { ...f, items }; })} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Remove</button>
             </div>
           ))}

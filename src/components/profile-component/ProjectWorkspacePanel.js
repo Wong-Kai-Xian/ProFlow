@@ -186,6 +186,19 @@ export default function ProjectWorkspacePanel({
                       <div style={{ fontWeight: 600 }}>{file.name}</div>
                       <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((file.createdAt?.seconds||0)*1000).toLocaleString()}</div>
                     </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => {
+                        const blob = new Blob([file.content || ''], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.name || 'transcript.txt';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fff', color: '#111827', border: '1px solid #e5e7eb' }}>⬇️ Download</button>
+                      <button onClick={() => { /* AI modal handled at page level; emit event */ try { const ev = new CustomEvent('proflow-ai-actions', { detail: { scope: 'project', transcript: file } }); window.dispatchEvent(ev); } catch {} }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#111827', color: '#fff', border: '1px solid #111827' }}>🤖 AI Actions</button>
+                      <button onClick={async () => { try { const { deleteDoc, doc } = await import('firebase/firestore'); const { db } = await import('../../firebase'); await deleteDoc(doc(db, 'projects', selectedProjectId, 'meetingTranscripts', file.id)); } catch { alert('Failed to delete'); } }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fee2e2', border: '1px solid #fecaca', color: '#b91c1c' }}>🗑️ Delete</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -200,6 +213,19 @@ export default function ProjectWorkspacePanel({
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <div style={{ fontWeight: 600 }}>{file.name}</div>
                       <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((file.createdAt?.seconds||0)*1000).toLocaleString()}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => {
+                        const blob = new Blob([file.content || ''], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.name || 'transcript.txt';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fff', color: '#111827', border: '1px solid #e5e7eb' }}>⬇️ Download</button>
+                      <button onClick={() => { try { const ev = new CustomEvent('proflow-ai-actions', { detail: { scope: 'customer', transcript: file } }); window.dispatchEvent(ev); } catch {} }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#111827', color: '#fff', border: '1px solid #111827' }}>🤖 AI Actions</button>
+                      <button onClick={async () => { try { const { deleteDoc, doc } = await import('firebase/firestore'); const { db } = await import('../../firebase'); await deleteDoc(doc(db, 'customerProfiles', customerId, 'meetingTranscripts', file.id)); } catch { alert('Failed to delete'); } }} style={{ padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fee2e2', border: '1px solid #fecaca', color: '#b91c1c' }}>🗑️ Delete</button>
                     </div>
                   </div>
                 ))}

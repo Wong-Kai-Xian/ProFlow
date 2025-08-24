@@ -191,8 +191,8 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
               {(form.items || []).map((it, idx) => (
                 <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 140px 80px', gap: 8, padding: '4px 0' }}>
                   <input value={it.description || ''} onChange={(e)=> setForm(f=>{ const items=[...(f.items||[])]; items[idx]={ ...items[idx], description: e.target.value }; return { ...f, items }; })} />
-                  <input type="number" step="1" value={it.qty ?? 0} onChange={(e)=> setForm(f=>{ const items=[...(f.items||[])]; items[idx]={ ...items[idx], qty: Number(e.target.value||0) }; return { ...f, items }; })} />
-                  <input type="number" step="0.01" value={it.unitPrice ?? 0} onChange={(e)=> setForm(f=>{ const items=[...(f.items||[])]; items[idx]={ ...items[idx], unitPrice: Number(e.target.value||0) }; return { ...f, items }; })} />
+                  <input type="number" step="1" value={it.qty ?? ''} onChange={(e)=> setForm(f=>{ const items=[...(f.items||[])]; items[idx]={ ...items[idx], qty: e.target.value }; return { ...f, items }; })} />
+                  <input type="number" step="0.01" value={it.unitPrice ?? ''} onChange={(e)=> setForm(f=>{ const items=[...(f.items||[])]; items[idx]={ ...items[idx], unitPrice: e.target.value }; return { ...f, items }; })} />
                   <button onClick={()=> setForm(f=>{ const items=[...(f.items||[])]; items.splice(idx,1); return { ...f, items }; })} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Remove</button>
                 </div>
               ))}
