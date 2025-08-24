@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import TopBar from '../components/TopBar';
-import { COLORS, BUTTON_STYLES, INPUT_STYLES, LAYOUT } from '../components/profile-component/constants';
+import { DESIGN_SYSTEM, getButtonStyle, getPageContainerStyle, getContentContainerStyle } from '../styles/designSystem';
 import SignaturePad from '../components/SignaturePad'; // Import SignaturePad
 import { db, storage } from '../firebase'; // Import db and storage
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, where } from "firebase/firestore"; // Import Firestore functions
@@ -96,10 +96,10 @@ export default function ApprovalList() {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Pending': return COLORS.warning;
-      case 'Approved': return COLORS.success;
-      case 'Rejected': return COLORS.danger;
-      default: return COLORS.lightText;
+      case 'Pending': return DESIGN_SYSTEM.colors.warning;
+      case 'Approved': return DESIGN_SYSTEM.colors.success;
+      case 'Rejected': return DESIGN_SYSTEM.colors.error;
+      default: return DESIGN_SYSTEM.colors.text.secondary;
     }
   };
 
@@ -126,66 +126,67 @@ export default function ApprovalList() {
   };
 
   return (
-    <div style={{ 
-      fontFamily: "Arial, sans-serif", 
-      background: COLORS.background, 
-      minHeight: "100vh" 
-    }}>
+    <div style={getPageContainerStyle()}>
       <TopBar />
-      <div style={{
-        padding: "30px",
-        maxWidth: "1200px",
-        margin: "0 auto",
-      }}>
-        <h1 style={{ color: COLORS.dark, marginBottom: "30px" }}>Approval Requests</h1>
+      <div style={{ ...getContentContainerStyle(), paddingTop: DESIGN_SYSTEM.spacing['2xl'], maxWidth: '1200px' }}>
+        <div style={{
+          background: DESIGN_SYSTEM.colors.background.primary,
+          borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+          padding: DESIGN_SYSTEM.spacing.lg,
+          boxShadow: DESIGN_SYSTEM.shadows.sm,
+          marginBottom: DESIGN_SYSTEM.spacing.lg
+        }}>
+          <h1 style={{ color: DESIGN_SYSTEM.colors.text.primary, margin: 0, fontSize: DESIGN_SYSTEM.typography.fontSize["2xl"], fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold }}>Approval Requests</h1>
+          <p style={{ margin: `${DESIGN_SYSTEM.spacing.xs} 0 0 0`, color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.base }}>Your created approvals with e-signature capability</p>
+        </div>
         
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "25px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: DESIGN_SYSTEM.spacing.lg }}>
           {!currentUser ? (
-            <p style={{ color: COLORS.danger, fontSize: "18px", gridColumn: "1 / -1", textAlign: "center" }}>Please log in to view and manage approval requests.</p>
+            <p style={{ color: DESIGN_SYSTEM.colors.error, fontSize: DESIGN_SYSTEM.typography.fontSize.base, gridColumn: "1 / -1", textAlign: "center" }}>Please log in to view and manage approval requests.</p>
           ) : approvals.length === 0 ? (
-            <p style={{ color: COLORS.text, fontSize: "16px", gridColumn: "1 / -1", textAlign: "center" }}>No approval requests found.</p>
+            <p style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.base, gridColumn: "1 / -1", textAlign: "center" }}>No approval requests found.</p>
           ) : (
             approvals.map(approval => (
               <div key={approval.id} style={{
-                backgroundColor: COLORS.white,
-                borderRadius: "12px",
-                padding: "25px",
-                boxShadow: "0 4px 15px rgba(0, 0, 0, 0.08)",
-                border: `1px solid ${COLORS.border}`,
+                backgroundColor: DESIGN_SYSTEM.colors.background.primary,
+                borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                padding: DESIGN_SYSTEM.spacing.lg,
+                boxShadow: DESIGN_SYSTEM.shadows.sm,
+                border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
                 display: "flex",
                 flexDirection: "column",
-                gap: "15px",
+                gap: DESIGN_SYSTEM.spacing.base,
                 position: "relative",
               }}>
                 <div style={{
                   position: "absolute",
-                  top: "15px",
-                  right: "15px",
-                  padding: "5px 10px",
-                  borderRadius: "8px",
+                  top: DESIGN_SYSTEM.spacing.base,
+                  right: DESIGN_SYSTEM.spacing.base,
+                  padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.base,
                   backgroundColor: `${getStatusColor(approval.status)}20`,
                   color: getStatusColor(approval.status),
-                  fontSize: "12px",
-                  fontWeight: "600",
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
                 }}>
                   {approval.status}
                 </div>
                 
-                <h3 style={{ margin: "0", color: COLORS.dark, fontSize: "18px", fontWeight: "700" }}>
+                <h3 style={{ margin: 0, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>
                   Project: {approval.projectName} - Stage: {approval.status}
                 </h3>
-                <p style={{ margin: "0", color: COLORS.text, fontSize: "15px" }}><strong>Requested By:</strong> {approval.requestedByName}</p>
-                <p style={{ margin: "0", color: COLORS.lightText, fontSize: "13px" }}>
+                <p style={{ margin: 0, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}><strong>Requested By:</strong> {approval.requestedByName}</p>
+                <p style={{ margin: 0, color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.xs }}>
                   <strong>Date:</strong> {approval.date} at {approval.time}
                 </p>
-                <p style={{ margin: "0", color: COLORS.text, fontSize: "14px", flexGrow: 1 }}><strong>Message:</strong> {approval.message}</p>
+                <p style={{ margin: 0, color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, flexGrow: 1 }}><strong>Message:</strong> {approval.message}</p>
 
                 {approval.fileUrl && (
-                  <div style={{ fontSize: "13px", color: COLORS.primary, display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.primary[600], display: "flex", alignItems: "center", gap: DESIGN_SYSTEM.spacing.xs }}>
                     <strong>Attachment:</strong> {approval.fileName}
                     <button 
                       onClick={() => handleDownloadAttachment(approval.fileUrl, approval.fileName)}
-                      style={{ ...BUTTON_STYLES.secondary, padding: "5px 10px", fontSize: "12px" }}
+                      style={{ ...getButtonStyle('secondary','approvals'), padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`, fontSize: DESIGN_SYSTEM.typography.fontSize.xs }}
                     >
                       Download
                     </button>
@@ -193,28 +194,23 @@ export default function ApprovalList() {
                 )}
 
                 {approval.status === 'Pending' && (
-                  <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexDirection: "column" }}>
+                  <div style={{ display: "flex", gap: DESIGN_SYSTEM.spacing.sm, marginTop: DESIGN_SYSTEM.spacing.sm, flexDirection: "column" }}>
                     <textarea 
                       placeholder="Add message for approval/rejection..." 
-                      style={{ ...INPUT_STYLES.base, flexGrow: 1, minHeight: "60px", fontSize: "14px" }} 
+                      style={{ flexGrow: 1, minHeight: "60px", fontSize: DESIGN_SYSTEM.typography.fontSize.sm, padding: DESIGN_SYSTEM.spacing.sm, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: DESIGN_SYSTEM.borderRadius.base, outline: 'none' }} 
                       id={`message-${approval.id}`}
                     />
                     
                     <button 
                       onClick={() => setShowSignaturePadFor(showSignaturePadFor === approval.id ? null : approval.id)} // Toggle signature pad visibility
-                      style={{ 
-                        ...BUTTON_STYLES.secondary, 
-                        padding: "8px 15px", 
-                        fontSize: "13px", 
-                        marginTop: "10px" 
-                      }}
+                      style={{ ...getButtonStyle('secondary','approvals'), padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, marginTop: DESIGN_SYSTEM.spacing.xs }}
                     >
                       {showSignaturePadFor === approval.id ? "Hide E-Signature" : "Add E-Signature"}
                     </button>
 
                     {showSignaturePadFor === approval.id && (
                       <div style={{ marginTop: "10px" }}>
-                        <p style={{ margin: "0 0 5px 0", fontSize: "14px", color: COLORS.dark }}>Draw E-Signature:</p>
+                        <p style={{ margin: 0, marginBottom: DESIGN_SYSTEM.spacing.xs, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>Draw E-Signature:</p>
                         <SignaturePad
                           onSave={(dataURL) => handleSaveSignature(approval.id, dataURL)}
                           width={280}
@@ -225,17 +221,17 @@ export default function ApprovalList() {
                       </div>
                     )}
 
-                    <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "10px" }}>
+                    <div style={{ display: "flex", gap: DESIGN_SYSTEM.spacing.sm, justifyContent: "flex-end", marginTop: DESIGN_SYSTEM.spacing.sm }}>
                       <button 
                         onClick={() => handleApprove(approval.id, document.getElementById(`message-${approval.id}`).value)}
-                        style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "8px 15px", fontSize: "13px" }}
+                        style={{ ...getButtonStyle('secondary','approvals'), background: DESIGN_SYSTEM.colors.success, color: DESIGN_SYSTEM.colors.text.inverse, border: 'none', padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}
                         disabled={loadingSignatures[approval.id]} // Disable during signature upload
                       >
                         {loadingSignatures[approval.id] ? 'Approving...' : 'Approve'}
                       </button>
                       <button 
                         onClick={() => handleReject(approval.id, document.getElementById(`message-${approval.id}`).value)}
-                        style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "8px 15px", fontSize: "13px" }}
+                        style={{ ...getButtonStyle('secondary','approvals'), background: DESIGN_SYSTEM.colors.error, color: DESIGN_SYSTEM.colors.text.inverse, border: 'none', padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}
                         disabled={loadingSignatures[approval.id]} // Disable during signature upload
                       >
                         {loadingSignatures[approval.id] ? 'Rejecting...' : 'Reject'}
@@ -244,16 +240,16 @@ export default function ApprovalList() {
                   </div>
                 )}
                  {approval.adminMessage && (
-                  <p style={{ margin: "0", color: COLORS.text, fontSize: "13px", fontStyle: "italic", borderLeft: `3px solid ${COLORS.lightBorder}`, paddingLeft: "10px" }}>
+                  <p style={{ margin: 0, color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, fontStyle: "italic", borderLeft: `3px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, paddingLeft: DESIGN_SYSTEM.spacing.sm }}>
                     <strong>Admin Message:</strong> {approval.adminMessage}
                   </p>
                 )}
                  {approval.eSignature && (
-                  <div style={{ marginTop: "10px", borderLeft: `3px solid ${COLORS.lightBorder}`, paddingLeft: "10px" }}>
-                    <p style={{ margin: "0 0 5px 0", color: COLORS.text, fontSize: "13px", fontStyle: "italic" }}>
+                  <div style={{ marginTop: DESIGN_SYSTEM.spacing.sm, borderLeft: `3px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, paddingLeft: DESIGN_SYSTEM.spacing.sm }}>
+                    <p style={{ margin: 0, marginBottom: DESIGN_SYSTEM.spacing.xs, color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, fontStyle: "italic" }}>
                       <strong>E-Signature:</strong>
                     </p>
-                    <img src={approval.eSignature} alt="e-signature" style={{ maxWidth: "100%", height: "auto", border: `1px dashed ${COLORS.border}` }} />
+                    <img src={approval.eSignature} alt="e-signature" style={{ maxWidth: "100%", height: "auto", border: `1px dashed ${DESIGN_SYSTEM.colors.secondary[300]}` }} />
                   </div>
                 )}
               </div>
