@@ -21,6 +21,13 @@ import { AuthProvider } from './contexts/AuthContext'; // Import AuthProvider
 import PrivateRoute from './components/PrivateRoute'; // Import PrivateRoute
 import PersonalAssistant from './components/PersonalAssistant';
 
+// Initialize optional API keys in localStorage (idempotent, won't overwrite if already set)
+try {
+  if (!localStorage.getItem('gemini_api_key')) localStorage.setItem('gemini_api_key', 'AIzaSyD9N4nAeSwJUOgaG5RGrLQ8y_YGpr4yhz0');
+  if (!localStorage.getItem('serp_api_key')) localStorage.setItem('serp_api_key', '4839a34efb07e55efb63734f2024be43ca37a307ba1cdb6437a50d87ccc59cf9');
+  if (!localStorage.getItem('news_api_key')) localStorage.setItem('news_api_key', '7c735c9ec34b40909ba52317409fe094');
+} catch {}
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>

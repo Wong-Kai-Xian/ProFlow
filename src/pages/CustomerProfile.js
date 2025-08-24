@@ -4,6 +4,7 @@ import TopBar from "../components/TopBar";
 import CustomerInfo from "../components/profile-component/CustomerInfo";
 import CompanyInfo from "../components/profile-component/CompanyInfo";
 import CompanyReputation from "../components/profile-component/CompanyReputation";
+import CompanyNewsPanel from "../components/profile-component/CompanyNewsPanel";
 import ConvertedProjectRow from "../components/profile-component/ConvertedProjectRow";
 import StatusPanel from "../components/profile-component/StatusPanel";
 import Reminders from "../components/profile-component/Reminders";
@@ -984,6 +985,29 @@ export default function CustomerProfile() {
                   } catch {}
                 }}
               />
+            </div>
+          </div>
+
+          {/* Company News Panel */}
+          <div style={getCardStyle('customers')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+              }}>
+                Latest News
+              </h2>
+            </div>
+            <div style={{ padding: 0 }}>
+              <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                <CompanyNewsPanel companyName={companyProfile.company || companyProfile.companyName || ''} />
+              </div>
             </div>
           </div>
 
