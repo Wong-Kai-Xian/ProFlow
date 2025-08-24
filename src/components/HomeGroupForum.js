@@ -2,13 +2,13 @@ import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "./profile-component/Card";
 import { COLORS, LAYOUT } from "./profile-component/constants";
-import Switch from "./Switch";
+
 import { db } from "../firebase";
 import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
 export default function HomeGroupForum() {
-  const [sortBy, setSortBy] = useState("recent");
+
   const [forums, setForums] = useState([]);
   const postsUnsubsRef = useRef([]);
   const navigate = useNavigate();
@@ -48,18 +48,35 @@ export default function HomeGroupForum() {
     };
   }, [currentUser]); // Add currentUser to dependency array
 
+  const getActivityDate = (forum) => {
+    const postCount = typeof forum.actualPostCount === 'number' ? forum.actualPostCount : (forum.posts || 0);
+    
+    if (postCount > 0) {
+      // Show last activity if there are posts
+      if (forum.lastActivity && typeof forum.lastActivity.toDate === 'function') {
+        return forum.lastActivity.toDate().toLocaleString();
+      }
+    }
+    
+    // Show creation date if no posts or no lastActivity
+    if (forum.createdAt && typeof forum.createdAt.toDate === 'function') {
+      return forum.createdAt.toDate().toLocaleString();
+    } else if (forum.timestamp && typeof forum.timestamp.toDate === 'function') {
+      return forum.timestamp.toDate().toLocaleString();
+    }
+    
+    return 'N/A';
+  };
+
   const sortForums = () => {
     if (!Array.isArray(forums)) return [];
     let sorted = [...forums];
-    if (sortBy === "recent") {
-      sorted.sort((a, b) => {
-        const dateA = a.lastActivity && typeof a.lastActivity.toDate === 'function' ? a.lastActivity.toDate() : new Date(0);
-        const dateB = b.lastActivity && typeof b.lastActivity.toDate === 'function' ? b.lastActivity.toDate() : new Date(0);
-        return dateB - dateA;
-      });
-    } else if (sortBy === "notifications") {
-      sorted.sort((a, b) => b.notifications - a.notifications);
-    }
+    // Sort by recent activity by default
+    sorted.sort((a, b) => {
+      const dateA = a.lastActivity && typeof a.lastActivity.toDate === 'function' ? a.lastActivity.toDate() : new Date(0);
+      const dateB = b.lastActivity && typeof b.lastActivity.toDate === 'function' ? b.lastActivity.toDate() : new Date(0);
+      return dateB - dateA;
+    });
     return sorted;
   };
 
@@ -71,19 +88,9 @@ export default function HomeGroupForum() {
       flexDirection: "column",
       minHeight: 0,
     }}>
-      {/* Header with top-right button */}
+      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
         <h3 style={{ margin: 0, color: COLORS.dark, fontSize: "18px", fontWeight: "700", whiteSpace: "nowrap" }}>General Forum</h3>
-        <div style={{ display: "flex", gap: LAYOUT.smallGap, alignItems: "center" }}>
-          <Switch
-            isOn={sortBy === "notifications"}
-            handleToggle={() => setSortBy(sortBy === "recent" ? "notifications" : "recent")}
-            onColor={COLORS.primary}
-            offColor={COLORS.lightText}
-            labelText=""
-            title={`Sort by: ${sortBy === "recent" ? "Notifications" : "Recent"}`}
-          />
-        </div>
       </div>
 
       {/* Forum List */}
@@ -118,7 +125,7 @@ export default function HomeGroupForum() {
               <small style={{ color: COLORS.lightText, fontSize: "12px" }}>
                 {(typeof forum.actualPostCount === 'number' ? forum.actualPostCount : (forum.posts || 0))} posts
                 <br />
-                Last activity: {forum.lastActivity && typeof forum.lastActivity.toDate === 'function' ? forum.lastActivity.toDate().toLocaleString() : 'N/A'}
+                {(typeof forum.actualPostCount === 'number' ? forum.actualPostCount : (forum.posts || 0)) > 0 ? 'Last activity: ' : 'Created: '}{getActivityDate(forum)}
               </small>
             </div>
             {forum.notifications > 0 && (
