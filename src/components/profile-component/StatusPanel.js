@@ -22,7 +22,8 @@ export default function StatusPanel({
   hasApprovedConversion, // New prop to check if conversion was approved
   onRequestApproval, // New prop to request approval for stage advancement
   customerId, // Customer ID for approval requests
-  customerName // Customer name for approval requests
+  customerName, // Customer name for approval requests
+  readOnly = false
 }) {
   const { currentUser } = useAuth();
   // Mention helpers
@@ -116,6 +117,7 @@ export default function StatusPanel({
   };
 
   const handleAddNote = async () => {
+    if (readOnly) return;
     if (newNote.trim()) {
       const noteToAdd = { type: newNoteType, text: newNote.trim(), createdAt: Date.now() };
       const existingNotes = stageData[currentStage]?.notes || [];
@@ -136,6 +138,7 @@ export default function StatusPanel({
   };
 
   const openNewNoteModal = () => {
+    if (readOnly) return;
     setEditingNoteIndex(null);
     setNewNote("");
     setNewNoteType("Other");
@@ -143,6 +146,7 @@ export default function StatusPanel({
   };
 
   const openEditNoteModal = (index, note) => {
+    if (readOnly) return;
     setEditingNoteIndex(index);
     if (typeof note === "string") {
       setNewNote(note);
@@ -155,6 +159,7 @@ export default function StatusPanel({
   };
 
   const handleUpdateNote = async () => {
+    if (readOnly) { setShowNoteModal(false); return; }
     if (editingNoteIndex === null || newNote.trim() === "") {
       setShowNoteModal(false);
       return;
@@ -179,6 +184,7 @@ export default function StatusPanel({
   };
 
   const handleDeleteNote = (indexToDelete) => {
+    if (readOnly) return;
     setStageData(prevStageData => {
       const updatedNotes = prevStageData[currentStage].notes.filter((_, index) => index !== indexToDelete);
       return {
@@ -192,6 +198,7 @@ export default function StatusPanel({
   };
 
   const handleMarkComplete = () => {
+    if (readOnly) return;
     const baseCurrentStage = stageData[currentStage] || { notes: [], tasks: [], completed: false };
     const updatedStageData = {
       ...stageData,
@@ -215,6 +222,7 @@ export default function StatusPanel({
   };
 
   const handleUncomplete = () => {
+    if (readOnly) return;
     const baseCurrentStage = stageData[currentStage] || { notes: [], tasks: [], completed: false };
     const updatedStageData = {
       ...stageData,
@@ -234,6 +242,7 @@ export default function StatusPanel({
   };
 
   const handleStageNameDoubleClick = (index, stage) => {
+    if (readOnly) return;
     if (!isEditingStages) return;
     setEditingStageIndex(index);
     setNewStageName(stage);
@@ -244,6 +253,7 @@ export default function StatusPanel({
   };
 
   const handleStageNameSave = (index, oldStageName) => {
+    if (readOnly) return;
     if (newStageName.trim()) {
       const newName = newStageName.trim();
       
@@ -284,6 +294,7 @@ export default function StatusPanel({
   };
 
   const enterEditStages = () => {
+    if (readOnly) return;
     setOriginalStagesSnapshot(stages);
     setWorkingStages(stages);
     setIsEditingStages(true);
@@ -297,11 +308,13 @@ export default function StatusPanel({
   };
 
   const handleAddStageEditing = () => {
+    if (readOnly) return;
     const newStage = `Stage ${workingStages.length + 1}`;
     setWorkingStages([...workingStages, newStage]);
   };
 
   const handleDeleteStageAtEditing = (index) => {
+    if (readOnly) return;
     if (workingStages.length <= 1) return;
     const stageName = workingStages[index];
     const stageContent = stageData[stageName] || {};
@@ -316,6 +329,7 @@ export default function StatusPanel({
   };
 
   const handleRenameStageAtEditing = (index, newName) => {
+    if (readOnly) return;
     if (!newName || !newName.trim()) return;
     const trimmed = newName.trim();
     const duplicate = workingStages.some((s, i) => i !== index && s === trimmed);
@@ -324,6 +338,7 @@ export default function StatusPanel({
   };
 
   const handleMoveStageLeftEditing = (index) => {
+    if (readOnly) return;
     if (index <= 0) return;
     const next = [...workingStages];
     [next[index - 1], next[index]] = [next[index], next[index - 1]];
@@ -331,6 +346,7 @@ export default function StatusPanel({
   };
 
   const handleMoveStageRightEditing = (index) => {
+    if (readOnly) return;
     if (index >= workingStages.length - 1) return;
     const next = [...workingStages];
     [next[index + 1], next[index]] = [next[index], next[index + 1]];
@@ -338,6 +354,7 @@ export default function StatusPanel({
   };
 
   const handleSaveStages = () => {
+    if (readOnly) return;
     const newStages = [...workingStages];
     // Build new stageData based on original indices to carry notes/tasks when renamed
     const newStageData = {};
@@ -361,6 +378,7 @@ export default function StatusPanel({
   };
 
   const handleStageClick = (stage, clickedIndex) => {
+    if (readOnly) return;
     const currentIndex = stages.indexOf(currentStage);
 
     if (clickedIndex < currentIndex) {
@@ -408,38 +426,40 @@ export default function StatusPanel({
       <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
         <h3 style={{ margin: "0", color: COLORS.text }}>Stage</h3>
-        <div>
-          {!isEditingStages ? (
+        {!readOnly && (
+          <div>
+            {!isEditingStages ? (
+              <button
+                onClick={enterEditStages}
+                style={{
+                  ...BUTTON_STYLES.primary
+                }}
+              >
+                Edit
+              </button>
+            ) : (
+              <>
             <button
-              onClick={enterEditStages}
+                  onClick={cancelEditStages}
               style={{
-                ...BUTTON_STYLES.primary
+                    ...BUTTON_STYLES.secondary,
+                marginRight: "10px"
               }}
             >
-              Edit
+                  Cancel
             </button>
-          ) : (
-            <>
-          <button
-                onClick={cancelEditStages}
-            style={{
-                  ...BUTTON_STYLES.secondary,
-              marginRight: "10px"
-            }}
-          >
-                Cancel
-          </button>
-          <button
-                onClick={handleSaveStages}
-            style={{
-                  ...BUTTON_STYLES.primary
-            }}
-          >
-                Save
-          </button>
-            </>
-          )}
-        </div>
+            <button
+                  onClick={handleSaveStages}
+              style={{
+                    ...BUTTON_STYLES.primary
+              }}
+            >
+                  Save
+            </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
       
             {/* Stage Navigation */}
@@ -463,7 +483,7 @@ export default function StatusPanel({
               textAlign: "center", 
               flex: 1,
               transition: "all 0.2s ease",
-              opacity: isStageClickable(index) ? 1 : 0.5
+              opacity: (readOnly ? 1 : (isStageClickable(index) ? 1 : 0.5))
             }}
           >
             <div
@@ -525,8 +545,8 @@ export default function StatusPanel({
         background: "#f8f9fa",
         borderRadius: "8px",
         border: `1px solid ${COLORS.lightBorder}`,
-        maxHeight: "350px", // Added to constrain height
-        overflowY: "auto"   // Added for vertical scrolling
+        minHeight: "560px",
+        overflowY: "auto"
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
           <h4 style={{ 
@@ -605,18 +625,20 @@ export default function StatusPanel({
               Notes
             </h4>
             
-            <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-              <button
-                onClick={openNewNoteModal}
-                style={{
-                  ...BUTTON_STYLES.primary,
-                  padding: "8px 12px",
-                  fontSize: "12px"
-                }}
-              >
-                Add Note
-              </button>
-            </div>
+            {!readOnly && (
+              <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                <button
+                  onClick={openNewNoteModal}
+                  style={{
+                    ...BUTTON_STYLES.primary,
+                    padding: "8px 12px",
+                    fontSize: "12px"
+                  }}
+                >
+                  Add Note
+                </button>
+              </div>
+            )}
 
             <div style={{ 
               maxHeight: "400px", 
@@ -716,37 +738,41 @@ export default function StatusPanel({
                           </>
                         )}
                       </div>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); openEditNoteModal(index, note); }}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: COLORS.primary,
-                          padding: "2px",
-                          fontSize: "12px",
-                          borderRadius: "3px",
-                          cursor: "pointer",
-                          flexShrink: 0
-                        }}
-                        title="View / Edit"
-                      >
-                        ✏️
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleDeleteNote(index); }}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: COLORS.danger,
-                          padding: "2px",
-                          fontSize: "12px",
-                          borderRadius: "3px",
-                          cursor: "pointer",
-                          flexShrink: 0
-                        }}
-                      >
-                        ×
-                      </button>
+                      {!readOnly && (
+                        <>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); openEditNoteModal(index, note); }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: COLORS.primary,
+                              padding: "2px",
+                              fontSize: "12px",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              flexShrink: 0
+                            }}
+                            title="View / Edit"
+                          >
+                            ✏️
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleDeleteNote(index); }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: COLORS.danger,
+                              padding: "2px",
+                              fontSize: "12px",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              flexShrink: 0
+                            }}
+                          >
+                            ×
+                          </button>
+                        </>
+                      )}
                     </li>
                   ))}
                 </ul>

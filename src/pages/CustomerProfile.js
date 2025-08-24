@@ -4,6 +4,7 @@ import TopBar from "../components/TopBar";
 import CustomerInfo from "../components/profile-component/CustomerInfo";
 import CompanyInfo from "../components/profile-component/CompanyInfo";
 import CompanyReputation from "../components/profile-component/CompanyReputation";
+import ConvertedProjectRow from "../components/profile-component/ConvertedProjectRow";
 import StatusPanel from "../components/profile-component/StatusPanel";
 import Reminders from "../components/profile-component/Reminders";
 import AttachedFiles from "../components/profile-component/AttachedFiles";
@@ -42,6 +43,8 @@ export default function CustomerProfile() {
   const [stageData, setStageData] = useState({});
   const [stages, setStages] = useState(STAGES);
   const [projects, setProjects] = useState([]); // To store associated projects
+  const [projectSnapshots, setProjectSnapshots] = useState({}); // Per-project saved data snapshots
+  const [activeStageTab, setActiveStageTab] = useState('current');
   const [lastContact, setLastContact] = useState("N/A"); // Default last contact
   const [customerTeamMembersDetails, setCustomerTeamMembersDetails] = useState([]); // State for enriched team member details
 
@@ -169,6 +172,7 @@ export default function CustomerProfile() {
           setStageData(data.stageData || {});
           setStages(data.stages || STAGES);
           setProjects(data.projects || []);
+          setProjectSnapshots(data.projectSnapshots || {});
           setLastContact(data.lastContact || "N/A");
         } else {
           console.log("No such customer document!");
@@ -667,11 +671,31 @@ export default function CustomerProfile() {
 
       // Update the customer's projects array with the new project ID
       const customerRef = doc(db, "customerProfiles", id);
+      // Save a snapshot of current pipeline data for this project tab
+      const snapshot = {
+        stages,
+        stageData,
+        currentStage,
+        reminders,
+        files,
+        activities
+      };
       await updateDoc(customerRef, {
         projects: [...projects, newProjectRef.id],
+        projectSnapshots: { ...(projectSnapshots || {}), [newProjectRef.id]: snapshot }
       });
+      setProjectSnapshots(prev => ({ ...(prev || {}), [newProjectRef.id]: snapshot }));
 
       console.log("Project created from conversion with ID:", newProjectRef.id);
+      // Reset non-core panels for a clean state per requirement
+      setActivities([]);
+      setReminders([]);
+      setFiles([]);
+      // Reset stage content but keep structure
+      const resetStageData = Object.fromEntries((stages || []).map(s => [s, { notes: [], tasks: [], completed: false }]));
+      setStageData(resetStageData);
+      await updateDoc(doc(db, 'customerProfiles', id), { activities: [], reminders: [], files: [], stageData: resetStageData });
+
       setShowCreateProjectModal(false);
       navigate(`/project/${newProjectRef.id}`);
     } catch (error) {
@@ -859,7 +883,7 @@ export default function CustomerProfile() {
         )}
         <div style={{ 
           display: "grid", 
-          gridTemplateColumns: "350px 1fr 320px", 
+          gridTemplateColumns: "350px 1fr 350px", 
           gap: DESIGN_SYSTEM.spacing.xl,
           width: "100%",
           maxWidth: "100%",
@@ -887,7 +911,7 @@ export default function CustomerProfile() {
               <CustomerInfo data={customerProfile} setCustomerProfile={setCustomerProfile} />
             </div>
           </div>
-          
+
           <div style={getCardStyle('customers')}>
             <div style={{
               background: DESIGN_SYSTEM.pageThemes.customers.gradient,
@@ -934,10 +958,66 @@ export default function CustomerProfile() {
               <CompanyReputation data={reputation} />
             </div>
           </div>
+
+          {/* Converted Projects Panel */}
+          <div style={getCardStyle('customers')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+              }}>
+                Converted Projects
+              </h2>
+            </div>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
+              {(!projects || projects.length === 0) ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No projects created from this customer yet.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {projects.map(pid => (
+                    <ConvertedProjectRow
+                      key={pid}
+                      projectId={pid}
+                      customerId={id}
+                      onDeleted={(removedId) => setProjects((prev) => prev.filter((p) => p !== removedId))}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
+        {/* Spanning View Panel over Middle and Right Columns */}
+        <div style={{ gridColumn: "2 / span 2", marginBottom: 0 }}>
+          <div style={getCardStyle('customers')}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h2 style={{ margin: 0, fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>View</h2>
+            </div>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => setActiveStageTab('current')} style={{ border: '1px solid #e5e7eb', background: activeStageTab === 'current' ? '#111827' : '#fff', color: activeStageTab === 'current' ? '#fff' : '#111827', padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>Current</button>
+              {projects.map(pid => (
+                <button key={pid} onClick={() => setActiveStageTab(pid)} style={{ border: '1px solid #e5e7eb', background: activeStageTab === pid ? '#111827' : '#fff', color: activeStageTab === pid ? '#fff' : '#111827', padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>Project {pid.slice(0,6)}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ gridColumn: "2 / span 2", display: "grid", gridTemplateColumns: "1fr 350px", gap: DESIGN_SYSTEM.spacing.lg, alignItems: "start" }}>
+
         {/* Middle Column - Main Workflow */}
-        <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg, minWidth: 0, overflowX: "hidden" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg, minWidth: 0, overflowX: "hidden", gridColumn: "2" }}>
           <div style={{
             ...getCardStyle('customers'),
             minHeight: "800px",
@@ -950,44 +1030,61 @@ export default function CustomerProfile() {
               padding: DESIGN_SYSTEM.spacing.lg,
               borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
             }}>
-              <h2 style={{ 
-                margin: 0, 
-                fontSize: DESIGN_SYSTEM.typography.fontSize.xl, 
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
-              }}>
-                Stage Management
-              </h2>
-              <p style={{ 
-                margin: "8px 0 0 0", 
-                fontSize: DESIGN_SYSTEM.typography.fontSize.sm, 
-                opacity: 0.9 
-              }}>
-                Track customer journey through customizable stages
-              </p>
+              <h2 style={{ margin: 0, fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>Stage Management Panel</h2>
             </div>
             <div style={{ flex: 1, padding: "0", minWidth: 0, overflowX: "hidden" }}>
-              <StatusPanel
-                stages={stages}
-                currentStage={currentStage}
-                setCurrentStage={setCurrentStage}
-                stageData={stageData}
-                setStageData={setStageData}
-                setStages={setStages}
-                onStagesUpdate={handleStagesUpdate}
-                onConvertToProject={handleConvertToProject}
-                onCreateProjectAfterApproval={handleCreateProjectAfterApproval}
-                hasApprovedConversion={hasApprovedConversion}
-                onRequestApproval={handleRequestApproval}
-                customerId={id}
-                customerName={getCustomerName()}
-                renderStageContent={(stage, currentStageData, setCurrentStageData) => (
-                  <TaskManager 
-                    stage={stage}
-                    stageData={currentStageData}
-                    setStageData={setCurrentStageData}
-                  />
-                )}
-              />
+              {activeStageTab === 'current' ? (
+                <StatusPanel
+                  stages={stages}
+                  currentStage={currentStage}
+                  setCurrentStage={setCurrentStage}
+                  stageData={stageData}
+                  setStageData={setStageData}
+                  setStages={setStages}
+                  onStagesUpdate={handleStagesUpdate}
+                  onConvertToProject={handleConvertToProject}
+                  onCreateProjectAfterApproval={handleCreateProjectAfterApproval}
+                  hasApprovedConversion={hasApprovedConversion}
+                  onRequestApproval={handleRequestApproval}
+                  customerId={id}
+                  customerName={getCustomerName()}
+                  renderStageContent={(stage, currentStageData, setCurrentStageData) => (
+                    <TaskManager 
+                      stage={stage}
+                      stageData={currentStageData}
+                      setStageData={setCurrentStageData}
+                    />
+                  )}
+                />
+              ) : (
+                (() => {
+                  const snap = (projectSnapshots && projectSnapshots[activeStageTab]) || null;
+                  const snapStages = snap?.stages || stages;
+                  const snapStageData = snap?.stageData || stageData;
+                  const snapCurrent = snap?.currentStage || currentStage;
+                  return (
+                    <StatusPanel
+                      stages={snapStages}
+                      currentStage={snapCurrent}
+                      setCurrentStage={() => {}}
+                      stageData={snapStageData}
+                      setStageData={() => {}}
+                      setStages={() => {}}
+                      onStagesUpdate={() => {}}
+                      readOnly={true}
+                      customerId={id}
+                      customerName={getCustomerName()}
+                      renderStageContent={(stage, currentStageData) => (
+                        <TaskManager 
+                          stage={stage}
+                          stageData={currentStageData}
+                          setStageData={() => {}}
+                        />
+                      )}
+                    />
+                  );
+                })()
+              )}
             </div>
           </div>
         </div>
@@ -1011,23 +1108,44 @@ export default function CustomerProfile() {
               </h2>
             </div>
             <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
-              {meetingTranscriptsList.length === 0 ? (
-                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No transcripts yet.</div>
+              {activeStageTab === 'current' ? (
+                meetingTranscriptsList.length === 0 ? (
+                  <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No transcripts yet.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {meetingTranscriptsList.map(file => (
+                      <div key={file.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, padding: 8, background: '#fff' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <div style={{ fontWeight: 600 }}>{file.name}</div>
+                          <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((file.createdAt?.seconds||0)*1000).toLocaleString()}</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={() => { setAiModalTranscriptDoc(file); setAiModalOpen(true); setAiModalSelection({}); setAiModalItems([]); }} style={{ ...getButtonStyle('secondary', 'customers') }}>AI Actions</button>
+                          <button onClick={async () => { await deleteDoc(doc(db, 'customerProfiles', id, 'meetingTranscripts', file.id)); }} style={{ ...getButtonStyle('secondary', 'customers') }}>Delete</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {meetingTranscriptsList.map(file => (
-                    <div key={file.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, padding: 8, background: '#fff' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ fontWeight: 600 }}>{file.name}</div>
-                        <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((file.createdAt?.seconds||0)*1000).toLocaleString()}</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => { setAiModalTranscriptDoc(file); setAiModalOpen(true); setAiModalSelection({}); setAiModalItems([]); }} style={{ ...getButtonStyle('secondary', 'customers') }}>AI Actions</button>
-                        <button onClick={async () => { await deleteDoc(doc(db, 'customerProfiles', id, 'meetingTranscripts', file.id)); }} style={{ ...getButtonStyle('secondary', 'customers') }}>Delete</button>
-                      </div>
+                (() => {
+                  const snap = (projectSnapshots && projectSnapshots[activeStageTab]) || {};
+                  const list = Array.isArray(snap.transcripts) ? snap.transcripts : [];
+                  return list.length === 0 ? (
+                    <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No transcripts in snapshot.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {list.map((file, i) => (
+                        <div key={file.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, padding: 8, background: '#fff' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ fontWeight: 600 }}>{file.name || 'Transcript'}</div>
+                            <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{file.createdAt ? new Date((file.createdAt?.seconds||0)*1000).toLocaleString() : ''}</div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()
               )}
             </div>
           </div>
@@ -1048,11 +1166,35 @@ export default function CustomerProfile() {
               </h2>
             </div>
             <div style={{ padding: "0" }}>
-              <Reminders 
-                reminders={reminders}
-                onAddReminder={handleAddReminder}
-                onReminderRemove={handleReminderRemove}
-              />
+              {activeStageTab === 'current' ? (
+                <Reminders 
+                  reminders={reminders}
+                  onAddReminder={handleAddReminder}
+                  onReminderRemove={handleReminderRemove}
+                />
+              ) : (
+                (() => {
+                  const snap = (projectSnapshots && projectSnapshots[activeStageTab]) || {};
+                  const list = Array.isArray(snap.reminders) ? snap.reminders : [];
+                  return (
+                    <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
+                      {list.length === 0 ? (
+                        <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No reminders in snapshot.</div>
+                      ) : (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {list.map((r, i) => (
+                            <li key={i} style={{ border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, padding: 8, background: '#fff' }}>
+                              <div style={{ fontWeight: 600 }}>{r.title}</div>
+                              {(r.date || r.time) && <div style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary }}>{[r.date, r.time].filter(Boolean).join(' ')}</div>}
+                              {r.description && <div style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary }}>{r.description}</div>}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
             </div>
           </div>
           
@@ -1072,12 +1214,35 @@ export default function CustomerProfile() {
               </h2>
             </div>
             <div style={{ padding: "0" }}>
-              <AttachedFiles 
-                files={files} 
-                onFileAdd={handleFileAdd} 
-                onFileRemove={handleFileRemove} 
-                onFileRename={handleFileRename} 
-              />
+              {activeStageTab === 'current' ? (
+                <AttachedFiles 
+                  files={files} 
+                  onFileAdd={handleFileAdd} 
+                  onFileRemove={handleFileRemove} 
+                  onFileRename={handleFileRename} 
+                />
+              ) : (
+                (() => {
+                  const snap = (projectSnapshots && projectSnapshots[activeStageTab]) || {};
+                  const list = Array.isArray(snap.files) ? snap.files : [];
+                  return (
+                    <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
+                      {list.length === 0 ? (
+                        <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No files in snapshot.</div>
+                      ) : (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {list.map((f, i) => (
+                            <li key={i} style={{ border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, padding: 8, background: '#fff' }}>
+                              <div style={{ fontWeight: 600 }}>{f.name || 'File'}</div>
+                              {f.createdAt && <div style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((f.createdAt?.seconds||0)*1000).toLocaleString()}</div>}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
             </div>
           </div>
           
@@ -1154,6 +1319,7 @@ export default function CustomerProfile() {
               </button>
             </div>
           </div>
+        </div>
         </div>
       </div>
       </div>
