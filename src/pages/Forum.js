@@ -238,8 +238,7 @@ export default function Forum() {
                 name: d.name || d.displayName || d.email || 'Forum Member',
                 email: d.email || 'No email provided',
                 status: 'online',
-                role: 'Member',
-                joinDate: 'Recently joined'
+                role: 'Member'
               };
             }
             // 2) Fallback: query by uid field (some datasets store UID in a field)
@@ -254,8 +253,7 @@ export default function Forum() {
                   name: d.name || d.displayName || d.email || 'Forum Member',
                   email: d.email || 'No email provided',
                   status: 'online',
-                  role: 'Member',
-                  joinDate: 'Recently joined'
+                  role: 'Member'
                 };
               }
             } catch {}
@@ -266,8 +264,7 @@ export default function Forum() {
                 name: currentUser.name || currentUser.displayName || currentUser.email || 'You',
                 email: currentUser.email || 'No email provided',
                 status: 'online',
-                role: 'Member',
-                joinDate: 'Recently joined'
+                role: 'Member'
               };
             }
           } catch {}
@@ -278,8 +275,7 @@ export default function Forum() {
             name: 'Forum Member',
             email: 'User not found',
             status: 'offline',
-            role: 'Member',
-            joinDate: 'Recently joined'
+            role: 'Member'
           };
         })
       );
@@ -603,58 +599,9 @@ export default function Forum() {
           display: "flex", 
           flexDirection: "column", 
           gap: DESIGN_SYSTEM.spacing.base,
-          height: "calc(150vh - 320px)", // 50% longer
-          overflowY: "hidden"
+          height: "calc(180vh - 320px)", // 50% longer
+          overflowY: "auto"
         }}>
-          {/* Meeting Transcripts Section */}
-          <div style={{
-            ...getCardStyle('forums'),
-            display: "flex",
-            flexDirection: "column"
-          }}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.forums.accent,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
-              flexShrink: 0
-            }}>
-              <h3 style={{
-                margin: 0,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-              }}>
-                Meeting Transcripts
-              </h3>
-            </div>
-            <div style={{ padding: DESIGN_SYSTEM.spacing.base, maxHeight: 260, overflowY: 'auto' }}>
-              {meetingTranscriptsList.length === 0 ? (
-                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>No transcripts yet. Use Generate Transcript above.</div>
-              ) : (
-                meetingTranscriptsList.map(file => (
-                  <div key={file.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, marginBottom: 8, background: '#fff' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 600 }}>{file.name}</span>
-                      <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((file.createdAt?.seconds||0)*1000).toLocaleString()}</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => {
-                        const blob = new Blob([file.content || ''], { type: 'text/plain' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = file.name || 'transcript.txt';
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      }} style={{ ...getButtonStyle('secondary', 'forums'), padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fff', color: '#111827', border: '1px solid #e5e7eb' }}>⬇️ Download</button>
-                      <button onClick={() => { setAiModalTranscriptDoc(file); setAiModalOpen(true); setAiModalItems([]); setAiModalSelection({}); setAiModalTarget('tasks'); setAiModalError(''); }} style={{ ...getButtonStyle('secondary', 'forums'), padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#111827', color: '#fff', border: '1px solid #111827' }}>🤖 AI Actions</button>
-                      <button onClick={async () => { try { await deleteDoc(doc(db, 'forums', forumId, 'meetingTranscripts', file.id)); setMeetingTranscriptsList(prev => prev.filter(f => f.id !== file.id)); } catch { alert('Failed to delete'); } }} style={{ ...getButtonStyle('secondary', 'forums'), padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fee2e2', border: '1px solid #fecaca', color: '#b91c1c' }}>🗑️ Delete</button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
 
           {/* Project Details Section - 50% height */}
           <div style={{
@@ -740,6 +687,56 @@ export default function Forum() {
               padding: 0
             }}>
               <ForumReminders forumId={forumId} autoOpenReminderId={autoOpenReminderId} />
+            </div>
+          </div>
+
+          {/* Meeting Transcripts Section (below Reminders, taller) */}
+          <div style={{
+            ...getCardStyle('forums'),
+            display: "flex",
+            flexDirection: "column"
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.forums.accent,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
+              flexShrink: 0
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Meeting Transcripts
+              </h3>
+            </div>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base, minHeight: 280, maxHeight: 520, overflowY: 'auto' }}>
+              {meetingTranscriptsList.length === 0 ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>No transcripts yet. Use Generate Transcript above.</div>
+              ) : (
+                meetingTranscriptsList.map(file => (
+                  <div key={file.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, marginBottom: 8, background: '#fff' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontWeight: 600 }}>{file.name}</span>
+                      <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((file.createdAt?.seconds||0)*1000).toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => {
+                        const blob = new Blob([file.content || ''], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.name || 'transcript.txt';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }} style={{ ...getButtonStyle('secondary', 'forums'), padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fff', color: '#111827', border: '1px solid #e5e7eb' }}>⬇️ Download</button>
+                      <button onClick={() => { setAiModalTranscriptDoc(file); setAiModalOpen(true); setAiModalItems([]); setAiModalSelection({}); setAiModalTarget('tasks'); setAiModalError(''); }} style={{ ...getButtonStyle('secondary', 'forums'), padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#111827', color: '#fff', border: '1px solid #111827' }}>🤖 AI Actions</button>
+                      <button onClick={async () => { try { await deleteDoc(doc(db, 'forums', forumId, 'meetingTranscripts', file.id)); setMeetingTranscriptsList(prev => prev.filter(f => f.id !== file.id)); } catch { alert('Failed to delete'); } }} style={{ ...getButtonStyle('secondary', 'forums'), padding: '4px 8px', borderRadius: 9999, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, background: '#fee2e2', border: '1px solid #fecaca', color: '#b91c1c' }}>🗑️ Delete</button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 

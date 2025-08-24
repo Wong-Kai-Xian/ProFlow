@@ -69,9 +69,7 @@ export default function Members({ forumData }) {
               </span>
             </div>
             
-            <div style={{ fontSize: '13px', color: COLORS.lightText }}>
-              Joined {member && member.joinDate ? member.joinDate : 'N/A'}
-            </div>
+            {/* Removed joined date display */}
           </div>
         ))}
       </div>
