@@ -32,12 +32,14 @@ export default function Members({ forumData }) {
             textAlign: 'center'
           }}>
             <div style={{ margin: '0 auto 18px', display: 'flex', justifyContent: 'center' }}>
-              <UserAvatar 
-                user={member} 
-                size={70}
-                showBorder={true}
-                borderColor={COLORS.primary}
-              />
+              <a href={member?.id ? `/profile/${member.id}` : undefined} style={{ textDecoration: 'none' }}>
+                <UserAvatar 
+                  user={member} 
+                  size={70}
+                  showBorder={true}
+                  borderColor={COLORS.primary}
+                />
+              </a>
             </div>
             
             <strong style={{ color: COLORS.dark, fontSize: '18px', fontWeight: '600' }}>{member && member.name ? member.name : member || 'Unknown Member'}</strong>

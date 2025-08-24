@@ -474,7 +474,13 @@ export default function Contacts() {
                   boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
                 }}>
                   <div style={{ marginBottom: "8px", width: "100%", display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <UserAvatar user={{ name: member.displayName, photoURL: member.photoURL }} size={28} showBorder={false} />
+                    {member.uid ? (
+                      <a href={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
+                        <UserAvatar user={{ name: member.displayName, photoURL: member.photoURL }} size={28} showBorder={false} />
+                      </a>
+                    ) : (
+                      <UserAvatar user={{ name: member.displayName, photoURL: member.photoURL }} size={28} showBorder={false} />
+                    )}
                     {member.uid ? (
                       <Link to={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
                         <strong style={{ color: COLORS.primary, wordBreak: "break-word", cursor: "pointer" }}>{member.displayName}</strong>

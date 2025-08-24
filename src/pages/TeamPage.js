@@ -638,7 +638,13 @@ export default function TeamPage() {
                   >
                     <button onClick={async () => { try { if (!currentUser?.uid || !member.uid) return; const myCol = collection(db, 'users', currentUser.uid, 'connections'); const q1 = query(myCol, where('with', '==', member.uid)); const snap1 = await getDocs(q1); await Promise.all(snap1.docs.map(d => deleteDoc(d.ref))); const theirCol = collection(db, 'users', member.uid, 'connections'); const q2 = query(theirCol, where('with', '==', currentUser.uid)); const snap2 = await getDocs(q2); await Promise.all(snap2.docs.map(d => deleteDoc(d.ref))); const inv1 = query(collection(db, 'invitations'), where('fromUserId','==', currentUser.uid), where('toUserId','==', member.uid), where('status','==','accepted')); const inv2 = query(collection(db, 'invitations'), where('fromUserId','==', member.uid), where('toUserId','==', currentUser.uid), where('status','==','accepted')); const [s1, s2] = await Promise.all([getDocs(inv1), getDocs(inv2)]); await Promise.all([...s1.docs, ...s2.docs].map(d => updateDoc(d.ref, { status: 'removed', removedAt: serverTimestamp() }))); setConnectionMembers(prev => prev.filter(m => m.uid !== member.uid)); setInviteMessage(`Removed ${member.displayName}`); } catch (e) { console.error(e); alert('Failed to remove member'); } }} title="Remove connection" style={{ position: 'absolute', top: 8, right: 8, background: 'transparent', border: '1px solid #e5e7eb', color: '#ef4444', padding: '4px 8px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Remove</button>
                     <div style={{ width: 72, height: 72, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <UserAvatar user={{ name: member.displayName, photoURL: member.photoURL }} size={64} showBorder={true} borderColor="rgba(102,126,234,0.35)" />
+                      {member.uid ? (
+                        <a href={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
+                          <UserAvatar user={{ name: member.displayName, photoURL: member.photoURL }} size={64} showBorder={true} borderColor="rgba(102,126,234,0.35)" />
+                        </a>
+                      ) : (
+                        <UserAvatar user={{ name: member.displayName, photoURL: member.photoURL }} size={64} showBorder={true} borderColor="rgba(102,126,234,0.35)" />
+                      )}
                     </div>
                     <div style={{ flex: 1 }}>
                       {member.uid ? (

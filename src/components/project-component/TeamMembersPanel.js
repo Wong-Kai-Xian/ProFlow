@@ -269,12 +269,14 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
                 </button>
               )}
               <div style={{ marginBottom: "8px" }}>
-                <UserAvatar 
-                  user={member} 
-                  size={40}
-                  showBorder={true}
-                  borderColor={DESIGN_SYSTEM.colors.primary[500]}
-                />
+                <a href={member?.id ? `/profile/${member.id}` : undefined} style={{ textDecoration: 'none' }}>
+                  <UserAvatar 
+                    user={member} 
+                    size={40}
+                    showBorder={true}
+                    borderColor={DESIGN_SYSTEM.colors.primary[500]}
+                  />
+                </a>
               </div>
               <Link to={`/profile/${member.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                 <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: DESIGN_SYSTEM.colors.text.primary, cursor: "pointer" }}>

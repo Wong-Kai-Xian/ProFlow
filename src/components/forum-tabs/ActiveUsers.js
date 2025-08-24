@@ -192,28 +192,30 @@ export default function ActiveUsers({ members }) {
               borderBottom: '1px solid #F8F9FA'
             }}>
               <a href={`/profile/${user.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-              <div style={{
-                position: 'relative',
-                marginRight: '8px'
-              }}>
-                <UserAvatar 
-                  user={user} 
-                  size={36}
-                  showBorder={false}
-                />
-                {user.isOnline && (
-                  <div style={{
-                    position: 'absolute',
-                    bottom: '-2px',
-                    right: '-2px',
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    backgroundColor: '#27AE60',
-                    border: '2px solid white'
-                  }} />
-                )}
-              </div>
+              <a href={`/profile/${user.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <div style={{
+                  position: 'relative',
+                  marginRight: '8px'
+                }}>
+                  <UserAvatar 
+                    user={user} 
+                    size={36}
+                    showBorder={false}
+                  />
+                  {user.isOnline && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '-2px',
+                      right: '-2px',
+                      width: '12px',
+                      height: '12px',
+                      borderRadius: '50%',
+                      backgroundColor: '#27AE60',
+                      border: '2px solid white'
+                    }} />
+                  )}
+                </div>
+              </a>
               </a>
               <div style={{ flex: 1 }}>
                 <div style={{ 
@@ -304,17 +306,19 @@ export default function ActiveUsers({ members }) {
                   padding: '4px 0',
                   opacity: 0.7
                 }}>
-                  <div style={{
-                    position: 'relative',
-                    marginRight: '8px'
-                  }}>
-                    <UserAvatar 
-                      user={user} 
-                      size={32}
-                      showBorder={false}
-                      style={{ opacity: 0.8 }}
-                    />
-                  </div>
+                  <a href={`/profile/${user.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <div style={{
+                      position: 'relative',
+                      marginRight: '8px'
+                    }}>
+                      <UserAvatar 
+                        user={user} 
+                        size={32}
+                        showBorder={false}
+                        style={{ opacity: 0.8 }}
+                      />
+                    </div>
+                  </a>
                   <div style={{ flex: 1 }}>
                     <a href={`/profile/${user.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ 
