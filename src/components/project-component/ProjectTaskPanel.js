@@ -7,6 +7,7 @@ import AddSubtitleModal from './AddSubtitleModal';
 import UserAvatar from '../shared/UserAvatar';
 import { db } from "../../firebase"; // Import db
 import { doc, updateDoc } from "firebase/firestore"; // Import Firestore functions
+import ConfirmationModal from '../common/ConfirmationModal';
 
 
 
@@ -246,6 +247,16 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
   const [showAddSubtitleModal, setShowAddSubtitleModal] = useState(false);
   const [currentEditTask, setCurrentEditTask] = useState(null); // Fix: Added missing useState declaration
   const [collapsedSubtitles, setCollapsedSubtitles] = useState(new Set()); // Track which subtitles are collapsed
+  
+  // Confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState({
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    confirmText: 'Confirm',
+    confirmButtonType: 'primary'
+  });
 
   const updateProjectTasksInFirestore = async (updatedTasks) => {
     if (projectId) {
@@ -383,23 +394,50 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
   };
 
   const handleRemoveTask = (subtitleIndex, taskId) => {
-    const updatedTasks = projectTasks.map((subtitle, sIdx) => {
-      if (sIdx === subtitleIndex) {
-        return {
-          ...subtitle,
-          tasks: subtitle.tasks.filter(task => task.id !== taskId),
-        };
+    const subtitle = projectTasks[subtitleIndex];
+    const task = subtitle?.tasks?.find(t => t.id === taskId);
+    const taskName = task?.name || 'this task';
+    
+    setConfirmModalConfig({
+      title: 'Remove Task',
+      message: `Remove ${taskName}?`,
+      confirmText: 'Remove',
+      confirmButtonType: 'danger',
+      onConfirm: () => {
+        setShowConfirmModal(false);
+        const updatedTasks = projectTasks.map((s, sIdx) => {
+          if (sIdx === subtitleIndex) {
+            return {
+              ...s,
+              tasks: s.tasks.filter(t => t.id !== taskId),
+            };
+          }
+          return s;
+        });
+        setProjectTasks(updatedTasks);
+        updateProjectTasksInFirestore(updatedTasks);
       }
-      return subtitle;
     });
-    setProjectTasks(updatedTasks);
-    updateProjectTasksInFirestore(updatedTasks);
+    setShowConfirmModal(true);
   };
 
   const handleRemoveSubtitle = (subtitleIndex) => {
-    const updatedSections = projectTasks.filter((_, index) => index !== subtitleIndex);
-    setProjectTasks(updatedSections);
-    updateProjectTasksInFirestore(updatedSections);
+    const section = projectTasks[subtitleIndex];
+    const sectionName = section?.name || 'this section';
+    
+    setConfirmModalConfig({
+      title: 'Remove Section',
+      message: `Remove section "${sectionName}" and all its tasks?`,
+      confirmText: 'Remove',
+      confirmButtonType: 'danger',
+      onConfirm: () => {
+        setShowConfirmModal(false);
+        const updatedSections = projectTasks.filter((_, index) => index !== subtitleIndex);
+        setProjectTasks(updatedSections);
+        updateProjectTasksInFirestore(updatedSections);
+      }
+    });
+    setShowConfirmModal(true);
   };
 
   const handleEditSubtitleDoubleClick = (index, currentName) => {
@@ -492,7 +530,7 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
               e.target.style.boxShadow = "0 3px 12px rgba(52, 152, 219, 0.3)";
             }}
           >
-            Add Subtitle
+            Add Section
           </button>
         </div>
       </div>
@@ -724,6 +762,17 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
         isOpen={showAddSubtitleModal}
         onClose={() => setShowAddSubtitleModal(false)}
         onAddSubtitle={handleAddSubtitle}
+      />
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={confirmModalConfig.onConfirm}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        confirmText={confirmModalConfig.confirmText}
+        confirmButtonType={confirmModalConfig.confirmButtonType}
       />
     </Card>
   );

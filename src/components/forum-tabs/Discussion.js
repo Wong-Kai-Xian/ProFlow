@@ -3,7 +3,7 @@ import { COLORS, LAYOUT, INPUT_STYLES, BUTTON_STYLES } from "../profile-componen
 import { db } from "../../firebase"; // Import db
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, arrayUnion, arrayRemove, getDoc, deleteDoc, where, getDocs } from "firebase/firestore"; // Import Firestore functions
 import { storage } from "../../firebase";
-import { ref, deleteObject } from "firebase/storage";
+import { ref, deleteObject, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import CreatePostModal from "./CreatePostModal"; // Import CreatePostModal
 import ConfirmationModal from "./ConfirmationModal"; // Import ConfirmationModal
 import UserAvatar from "../shared/UserAvatar";
@@ -65,6 +65,7 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
   const [newCommentText, setNewCommentText] = useState(''); // State for new comment input
   const [editingCommentId, setEditingCommentId] = useState(null); // State for ID of comment being edited
   const [editedCommentText, setEditedCommentText] = useState(''); // State for text of comment being edited
+  const [commentFiles, setCommentFiles] = useState([]); // Files attached to new comment
   const [showCommentDeleteConfirmModal, setShowCommentDeleteConfirmModal] = useState(false); // State for comment delete confirmation modal
   const [commentToDelete, setCommentToDelete] = useState(null); // State to hold the comment to be deleted
   const hasStarred = post.starredBy?.includes(currentUserId); // New state to check if current user has starred
@@ -141,7 +142,7 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
   };
 
   const handleAddComment = async () => {
-    if (newCommentText.trim() === '') return;
+    if (newCommentText.trim() === '' && commentFiles.length === 0) return;
     if (!post?.forumId || !post?.id || !currentUserId) {
       console.error("Missing required data for comment:", { forumId: post?.forumId, postId: post?.id, userId: currentUserId });
       return;
@@ -159,12 +160,36 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
 
       const postData = postSnap.data();
       const currentComments = postData.comments || [];
+      let uploadedFileMetadata = [];
+      if (commentFiles.length > 0) {
+        const uploadPromises = commentFiles.map((file) => {
+          return new Promise((resolve, reject) => {
+            try {
+              const storageRef = ref(storage, `forum_comments/${post.forumId}/${post.id}/${file.name}`);
+              const task = uploadBytesResumable(storageRef, file);
+              task.on('state_changed', () => {}, reject, async () => {
+                try {
+                  const url = await getDownloadURL(task.snapshot.ref);
+                  uploadedFileMetadata.push({ name: file.name, url, type: file.type, size: file.size });
+                  resolve();
+                } catch (e) {
+                  reject(e);
+                }
+              });
+            } catch (e) {
+              reject(e);
+            }
+          });
+        });
+        await Promise.all(uploadPromises);
+      }
       
       const newComment = {
         author: currentUser?.name || currentUser?.displayName || currentUser?.email || "Anonymous",
         authorId: currentUserId,
         content: newCommentText.trim(),
         timestamp: new Date(),
+        files: uploadedFileMetadata,
       };
 
       // Update with the new comments array
@@ -174,6 +199,7 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
       await notifyMentions({ text: newCommentText.trim(), forumId: post.forumId, postId: post.id, db, currentUser });
       
       setNewCommentText(''); // Clear input after commenting
+      setCommentFiles([]);
       setShowComments(true);
       setNumVisibleComments(prev => Math.max(prev, currentComments.length + 1));
     } catch (error) {
@@ -515,6 +541,7 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
 
       {/* New Comment Input */}
       {showComments && (
+        <>
         <div style={{ marginTop: LAYOUT.smallGap, display: 'flex', gap: LAYOUT.tinyGap, alignItems: 'center' }}>
           <textarea
             value={newCommentText}
@@ -530,21 +557,35 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
               marginBottom: '0'
             }}
           />
+          <input 
+            type="file" 
+            multiple 
+            onChange={(e) => setCommentFiles(Array.from(e.target.files || []))}
+            style={{ display: 'none' }} 
+            id={`comment-file-input-${post.id}`}
+          />
+          <label htmlFor={`comment-file-input-${post.id}`} style={{ ...BUTTON_STYLES.secondary, padding: '8px 12px', cursor: 'pointer' }}>Attach</label>
           <button
             onClick={handleAddComment}
-            disabled={newCommentText.trim() === ''}
+            disabled={newCommentText.trim() === '' && commentFiles.length === 0}
             style={{
               ...BUTTON_STYLES.primary,
               padding: '8px 15px',
               fontSize: '13px',
               whiteSpace: 'nowrap',
-              opacity: newCommentText.trim() === '' ? 0.6 : 1,
-              cursor: newCommentText.trim() === '' ? 'not-allowed' : 'pointer',
+              opacity: (newCommentText.trim() === '' && commentFiles.length === 0) ? 0.6 : 1,
+              cursor: (newCommentText.trim() === '' && commentFiles.length === 0) ? 'not-allowed' : 'pointer',
             }}
           >
             Comment
           </button>
         </div>
+        {commentFiles.length > 0 && (
+          <div style={{ marginTop: LAYOUT.tinyGap, fontSize: '12px', color: COLORS.lightText }}>
+            {commentFiles.length} file(s) selected
+          </div>
+        )}
+        </>
       )}
 
       {/* Comments Section */}
@@ -591,7 +632,18 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
                   }}
                 />
               ) : (
-                <p style={{ margin: '0', fontSize: '13px', color: COLORS.text, paddingLeft: '20px' }}>{comment.content}</p>
+                <div style={{ paddingLeft: '20px' }}>
+                  <p style={{ margin: '0', fontSize: '13px', color: COLORS.text }}>{comment.content}</p>
+                  {Array.isArray(comment.files) && comment.files.length > 0 && (
+                    <div style={{ marginTop: 6, display: 'grid', gap: 6 }}>
+                      {comment.files.map((file, i) => (
+                        <a key={i} href={file.url} target="_blank" rel="noopener noreferrer" style={{ color: COLORS.primary, fontSize: '12px' }}>
+                          📎 {file.name}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           ))}

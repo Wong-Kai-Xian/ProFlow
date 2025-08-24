@@ -13,6 +13,8 @@ import { db } from "../firebase";
 import { doc, onSnapshot, updateDoc, serverTimestamp, collection, getDocs, getDoc, arrayUnion, arrayRemove, addDoc, deleteDoc, query, where } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
+import { useNavigate } from 'react-router-dom';
+import ConfirmationModal from '../components/common/ConfirmationModal';
 
 // Gemini helpers for AI analysis
 const callGeminiForSummary = async (promptText) => {
@@ -50,6 +52,7 @@ const safeParseJson = (text) => {
 export default function Forum() {
   const { id: forumId } = useParams(); // Rename `id` to `forumId` for clarity
   const location = useLocation();
+  const navigate = useNavigate();
   const autoOpenReminderId = React.useMemo(() => {
     try {
       const sp = new URLSearchParams(location.search);
@@ -89,6 +92,16 @@ export default function Forum() {
   const [aiModalTarget, setAiModalTarget] = useState('tasks');
   const [aiModalSelection, setAiModalSelection] = useState({});
   const [aiModalTranscriptDoc, setAiModalTranscriptDoc] = useState(null);
+  
+  // Confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState({
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    confirmText: 'Confirm',
+    confirmButtonType: 'primary'
+  });
 
   // Simple local buffering for forum transcription
   const lastInterimSaveRef = React.useRef(0);
@@ -729,6 +742,48 @@ export default function Forum() {
               <ForumReminders forumId={forumId} autoOpenReminderId={autoOpenReminderId} />
             </div>
           </div>
+
+          {/* Leave Forum Button at bottom of left panel */}
+          <div style={{
+            marginTop: 'auto',
+            padding: DESIGN_SYSTEM.spacing.base
+          }}>
+            <button
+              onClick={() => {
+                if (!currentUser || !forumData?.id) return;
+                setConfirmModalConfig({
+                  title: 'Leave Forum',
+                  message: 'Leave this forum? You will no longer see it in your list.',
+                  confirmText: 'Leave',
+                  confirmButtonType: 'danger',
+                  onConfirm: async () => {
+                    setShowConfirmModal(false);
+                    try {
+                      await updateDoc(doc(db, 'forums', forumData.id), {
+                        members: (forumData.members || []).filter(uid => uid !== currentUser.uid)
+                      });
+                      navigate('/forum');
+                    } catch (e) {
+                      alert('Failed to leave forum.');
+                    }
+                  }
+                });
+                setShowConfirmModal(true);
+              }}
+              style={{
+                ...getButtonStyle('secondary', 'forums'),
+                background: '#fee2e2',
+                color: '#b91c1c',
+                border: '1px solid #fecaca',
+                width: '100%',
+                padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}
+            >
+              Leave Forum
+            </button>
+          </div>
         </div>
 
         {/* Middle Column - Main Forum Content */}
@@ -1013,6 +1068,17 @@ export default function Forum() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={confirmModalConfig.onConfirm}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        confirmText={confirmModalConfig.confirmText}
+        confirmButtonType={confirmModalConfig.confirmButtonType}
+      />
     </div>
   );
 }

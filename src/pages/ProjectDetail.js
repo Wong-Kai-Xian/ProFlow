@@ -17,11 +17,14 @@ import { db } from "../firebase";
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs, arrayUnion, arrayRemove, addDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
+import { useNavigate } from 'react-router-dom';
+import ConfirmationModal from '../components/common/ConfirmationModal';
 
 const DEFAULT_STAGES = ["Planning", "Development", "Testing", "Completed"];
 
 export default function ProjectDetail() {
   const { projectId } = useParams(); // Changed from projectName to projectId
+  const navigate = useNavigate();
   const location = useLocation();
   const autoOpenReminderId = React.useMemo(() => {
     try {
@@ -106,6 +109,16 @@ export default function ProjectDetail() {
   const [aiModalTarget, setAiModalTarget] = useState('tasks'); // 'tasks' | 'reminders'
   const [aiModalSelection, setAiModalSelection] = useState({});
   const [aiModalTranscriptDoc, setAiModalTranscriptDoc] = useState(null);
+  
+  // Confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState({
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    confirmText: 'Confirm',
+    confirmButtonType: 'primary'
+  });
 
   useEffect(() => {
     meetingSessionIdRef.current = meetingSessionId;
@@ -592,24 +605,40 @@ export default function ProjectDetail() {
 
   const handleSaveEditedProjectDetails = async (updatedDetails) => {
     if (projectData && projectData.id) {
-      const projectRef = doc(db, "projects", projectData.id);
-      // Ensure that only fields expected by Firestore are passed
-      const { id, ...dataToUpdate } = updatedDetails; // Exclude 'id' if it's already part of the doc reference
-      await updateDoc(projectRef, dataToUpdate);
-      // Re-fetch the project to ensure we have canonical values from Firestore
-      try {
-        const snap = await getDoc(projectRef);
-        if (snap.exists()) {
-          setProjectData({ id: snap.id, ...snap.data() });
-          setProjectDetails({ id: snap.id, ...snap.data() });
-        } else {
-          setProjectData(prev => prev ? { ...prev, ...updatedDetails } : prev);
-          setProjectDetails(prev => prev ? { ...prev, ...updatedDetails } : prev);
+      // Ask for confirmation before saving edits
+      setConfirmModalConfig({
+        title: 'Save Changes',
+        message: 'Save changes to project details?',
+        confirmText: 'Save',
+        confirmButtonType: 'primary',
+        onConfirm: async () => {
+          setShowConfirmModal(false);
+          try {
+            const projectRef = doc(db, "projects", projectData.id);
+            // Ensure that only fields expected by Firestore are passed
+            const { id, ...dataToUpdate } = updatedDetails; // Exclude 'id' if it's already part of the doc reference
+            await updateDoc(projectRef, dataToUpdate);
+            // Re-fetch the project to ensure we have canonical values from Firestore
+            try {
+              const snap = await getDoc(projectRef);
+              if (snap.exists()) {
+                setProjectData({ id: snap.id, ...snap.data() });
+                setProjectDetails({ id: snap.id, ...snap.data() });
+              } else {
+                setProjectData(prev => prev ? { ...prev, ...updatedDetails } : prev);
+                setProjectDetails(prev => prev ? { ...prev, ...updatedDetails } : prev);
+              }
+            } catch {
+              setProjectData(prevData => ({ ...prevData, ...updatedDetails }));
+              setProjectDetails(prevData => ({ ...prevData, ...updatedDetails }));
+            }
+          } catch (error) {
+            console.error('Error saving project details:', error);
+            alert('Failed to save project details.');
+          }
         }
-      } catch {
-        setProjectData(prevData => ({ ...prevData, ...updatedDetails }));
-        setProjectDetails(prevData => ({ ...prevData, ...updatedDetails }));
-      }
+      });
+      setShowConfirmModal(true);
     }
   };
 
@@ -970,7 +999,6 @@ export default function ProjectDetail() {
             )}
           </div>
         )}
-
       <div style={{
         display: "grid",
           gridTemplateColumns: "380px 1fr",
@@ -1189,6 +1217,48 @@ export default function ProjectDetail() {
                   ))
                 )}
               </div>
+            </div>
+
+            {/* Leave Project Button at bottom of left panel */}
+            <div style={{
+              marginTop: 'auto',
+              padding: DESIGN_SYSTEM.spacing.base
+            }}>
+              <button
+                onClick={() => {
+                  if (!currentUser || !projectData?.id) return;
+                  setConfirmModalConfig({
+                    title: 'Leave Project',
+                    message: 'Leave this project? You will be removed from the team.',
+                    confirmText: 'Leave',
+                    confirmButtonType: 'danger',
+                    onConfirm: async () => {
+                      setShowConfirmModal(false);
+                      try {
+                        await updateDoc(doc(db, 'projects', projectData.id), {
+                          team: (projectData.team || []).filter(uid => uid !== currentUser.uid)
+                        });
+                        navigate('/project');
+                      } catch (e) {
+                        alert('Failed to leave project.');
+                      }
+                    }
+                  });
+                  setShowConfirmModal(true);
+                }}
+                style={{
+                  ...getButtonStyle('secondary', 'projects'),
+                  background: '#fee2e2',
+                  color: '#b91c1c',
+                  border: '1px solid #fecaca',
+                  width: '100%',
+                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                }}
+              >
+                Leave Project
+              </button>
             </div>
         </div>
 
@@ -1596,6 +1666,17 @@ export default function ProjectDetail() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={confirmModalConfig.onConfirm}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        confirmText={confirmModalConfig.confirmText}
+        confirmButtonType={confirmModalConfig.confirmButtonType}
+      />
     </div>
   );
 }
