@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Card from '../profile-component/Card';
 import { DESIGN_SYSTEM, getCardStyle, getButtonStyle } from '../../styles/designSystem';
 import { db } from "../../firebase";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { getAcceptedTeamMembers } from '../../services/teamService';
 import { FaUserPlus, FaUserMinus } from 'react-icons/fa'; // Import icons
 import { Link } from 'react-router-dom'; // Import Link
 import UserAvatar from '../shared/UserAvatar';
@@ -11,6 +12,8 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
   const [membersData, setMembersData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sendingId, setSendingId] = useState(null);
+  const [invitedMap, setInvitedMap] = useState({});
 
   useEffect(() => {
     const fetchMemberDetails = async () => {
@@ -179,6 +182,33 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
     fetchMemberDetails();
   }, [teamMembers, projectCreatorId, currentUser]);
 
+  // Prefetch accepted teammates to disable Add
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!currentUser) return;
+        const accepted = await getAcceptedTeamMembers(currentUser);
+        const setMap = {};
+        accepted.forEach(u => { if (u.id) setMap[u.id] = true; });
+        if (!cancelled) setInvitedMap(m => ({ ...setMap, ...m }));
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser, teamMembers]);
+
+  // Live connections to update Add visibility in real-time
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    const ref = collection(db, 'users', currentUser.uid, 'connections');
+    const unsub = onSnapshot(ref, (snap) => {
+      const m = {};
+      snap.forEach(d => { const data = d.data(); if (data.with) m[data.with] = data.status === 'accepted' || data.status === 'pending'; });
+      setInvitedMap(prev => ({ ...prev, ...m }));
+    });
+    return () => unsub();
+  }, [currentUser?.uid]);
+
   const isProjectCreator = currentUserUid === projectCreatorId;
 
   return (
@@ -280,6 +310,45 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
                   {member.email}
                 </p>
               </Link>
+              {currentUser && member.id !== currentUser.uid && !invitedMap[member.id] && (
+                <button
+                  onClick={async () => {
+                    if (invitedMap[member.id]) return;
+                    setSendingId(member.id);
+                    try {
+                      // Prevent duplicates: outgoing or incoming pending/accepted
+                      const invRef = collection(db, 'invitations');
+                      const qOut = query(invRef, where('fromUserId', '==', currentUser.uid), where('toUserId', '==', member.id), where('status', 'in', ['pending','accepted']));
+                      const qIn = query(invRef, where('fromUserId', '==', member.id), where('toUserId', '==', currentUser.uid), where('status', 'in', ['pending','accepted']));
+                      const [outSnap, inSnap] = await Promise.all([getDocs(qOut), getDocs(qIn)]);
+                      if (!outSnap.empty || !inSnap.empty) { setInvitedMap(m => ({ ...m, [member.id]: true })); const p = document.createElement('div'); p.textContent = 'Already invited or connected'; Object.assign(p.style, { position: 'fixed', bottom: '20px', right: '20px', background: '#374151', color: '#fff', padding: '10px 12px', borderRadius: '8px', zIndex: 4000 }); document.body.appendChild(p); setTimeout(() => document.body.removeChild(p), 1200); return; }
+                      await addDoc(collection(db, 'invitations'), {
+                        fromUserId: currentUser.uid,
+                        toUserId: member.id,
+                        toUserEmail: member.email || '',
+                        status: 'pending',
+                        timestamp: new Date()
+                      });
+                      setInvitedMap(m => ({ ...m, [member.id]: true }));
+                      const popup = document.createElement('div');
+                      popup.textContent = 'Invitation sent';
+                      Object.assign(popup.style, { position: 'fixed', bottom: '20px', right: '20px', background: '#111827', color: '#fff', padding: '10px 12px', borderRadius: '8px', zIndex: 4000 });
+                      document.body.appendChild(popup); setTimeout(() => document.body.removeChild(popup), 1200);
+                    } catch (e) { alert('Failed to send invitation'); }
+                    finally { setSendingId(null); }
+                  }}
+                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.97)'; }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  disabled={!!invitedMap[member.id] || sendingId === member.id}
+                  style={{ ...getButtonStyle('secondary', 'projects'), marginTop: 6, padding: '4px 8px', fontSize: 12, opacity: invitedMap[member.id] ? 0.6 : 1, cursor: invitedMap[member.id] ? 'default' : 'pointer', transition: 'transform 120ms ease' }}
+                >
+                  {sendingId === member.id ? 'Adding…' : 'Add'}
+                </button>
+              )}
+              {invitedMap[member.id] && (
+                <span style={{ marginTop: 6, padding: '2px 8px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 999, color: '#6b7280' }}>Added</span>
+              )}
             </div>
           ))}
         </div>

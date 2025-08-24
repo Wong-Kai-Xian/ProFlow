@@ -68,6 +68,42 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
   const [showCommentDeleteConfirmModal, setShowCommentDeleteConfirmModal] = useState(false); // State for comment delete confirmation modal
   const [commentToDelete, setCommentToDelete] = useState(null); // State to hold the comment to be deleted
   const hasStarred = post.starredBy?.includes(currentUserId); // New state to check if current user has starred
+  const [authorName, setAuthorName] = useState(post.author || 'Anonymous');
+  const [authorPhotoURL, setAuthorPhotoURL] = useState(post.authorPhotoURL || undefined);
+  const [commentAuthorMap, setCommentAuthorMap] = useState({}); // authorId -> displayName
+
+  // Fetch live author display for post and comments
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (post.authorId) {
+          const u = await getDoc(doc(db, 'users', post.authorId));
+          if (!cancelled && u.exists()) {
+            const d = u.data();
+            setAuthorName(d.name || d.displayName || d.email || post.author || 'Anonymous');
+            setAuthorPhotoURL(d.photoURL || post.authorPhotoURL);
+          }
+        }
+      } catch {}
+      try {
+        const ids = Array.from(new Set((post.comments || []).map(c => c.authorId).filter(Boolean)));
+        if (ids.length === 0) { if (!cancelled) setCommentAuthorMap({}); return; }
+        const map = {};
+        const chunk = 10;
+        for (let i = 0; i < ids.length; i += chunk) {
+          const slice = ids.slice(i, i + chunk);
+          try {
+            const q = query(collection(db, 'users'), where('uid', 'in', slice));
+            const snap = await getDocs(q);
+            snap.forEach(docu => { const d = docu.data(); map[d.uid || docu.id] = d.name || d.displayName || d.email || 'Member'; });
+          } catch {}
+        }
+        if (!cancelled) setCommentAuthorMap(map);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [post.authorId, (post.comments || []).length]);
 
   const renderFilePreview = (file) => {
     const mediaStyle = {
@@ -252,24 +288,28 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
         <div style={{ display: "flex", alignItems: "center" }}>
           {/* User Avatar */}
           <div style={{ marginRight: '12px' }}>
-            <UserAvatar 
-              user={{ 
-                name: post.author,
-                photoURL: post.authorPhotoURL 
-              }} 
-              size={48}
-              showBorder={true}
-              borderColor="rgba(102, 126, 234, 0.3)"
-            />
+            <a href={post.authorId ? `/profile/${post.authorId}` : undefined} style={{ textDecoration: 'none' }}>
+              <UserAvatar 
+                user={{ 
+                  name: authorName,
+                  photoURL: authorPhotoURL 
+                }} 
+                size={48}
+                showBorder={true}
+                borderColor="rgba(102, 126, 234, 0.3)"
+              />
+            </a>
           </div>
           <div style={{ flexGrow: 1 }}>
+            <a href={post.authorId ? `/profile/${post.authorId}` : undefined} style={{ textDecoration: 'none' }}>
             <strong style={{ 
               color: "#1f2937", 
               fontSize: "16px", 
               fontWeight: "600" 
             }}>
-              {post.author || 'Anonymous'}
+              {authorName}
             </strong>
+            </a>
             <div style={{ 
               fontSize: "14px", 
               color: "#6b7280", 
@@ -518,7 +558,7 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
             <div key={index} style={{ marginBottom: LAYOUT.tinyGap, padding: '5px 0', borderBottom: `1px dashed ${COLORS.border}` }}>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '3px' }}>
                 <span style={{ fontSize: '14px', marginRight: '5px', color: COLORS.dark }}>🗣️</span>
-                <strong style={{ fontSize: '13px', color: COLORS.dark }}>{comment.author || 'Anonymous'}:</strong>
+                <strong style={{ fontSize: '13px', color: COLORS.dark }}>{commentAuthorMap[comment.authorId] || comment.author || 'Anonymous'}:</strong>
                 <span style={{ fontSize: '11px', color: COLORS.lightText, marginLeft: '8px' }}>{formatTimestamp(comment.timestamp)}</span>
                 {/* Comment Actions */}
                 {comment.authorId === currentUserId && (

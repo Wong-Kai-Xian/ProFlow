@@ -59,6 +59,15 @@ export default function NotificationCenter({ userId, isOpen, onClose }) {
         if (n.origin === 'project' && n.sourceId) navigate(`/project/${n.sourceId}`);
         else if (n.origin === 'customer' && n.sourceId) navigate(`/customer/${n.sourceId}`);
         else if (n.origin === 'forum' && n.sourceId) navigate(`/forum/${n.sourceId}`);
+      } else if (n.refType === 'mention') {
+        if (n.origin === 'forum' && n.forumId) {
+          if (n.postId) navigate(`/forum/${n.forumId}#post-${n.postId}`);
+          else navigate(`/forum/${n.forumId}`);
+        } else if (n.origin === 'customer' && n.customerId) {
+          navigate(`/customer/${n.customerId}`);
+        } else if (n.origin === 'task' && n.projectId) {
+          navigate(`/project/${n.projectId}`);
+        }
       } else if (n.refType === 'approval') {
         navigate('/approvals');
       }

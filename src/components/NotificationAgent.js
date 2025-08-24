@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
 
 // Invisible agent that triggers approval reminders/escalations via notifications
 export default function NotificationAgent() {
@@ -9,6 +9,97 @@ export default function NotificationAgent() {
 
   useEffect(() => {
     if (!currentUser?.uid) return;
+    // Invitations to me -> notify
+    const qInvIncoming = query(collection(db, 'invitations'), where('toUserId', '==', currentUser.uid), where('status', '==', 'pending'));
+    const unsubIncoming = onSnapshot(qInvIncoming, async (snap) => {
+      for (const d of snap.docs) {
+        const key = `inv_in:${d.id}`;
+        const seenKey = `proflow_inv_${currentUser.uid}`;
+        const seen = JSON.parse(localStorage.getItem(seenKey) || '{}');
+        if (!seen[key]) {
+          try {
+            await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+              unread: true,
+              createdAt: serverTimestamp(),
+              origin: 'team',
+              title: 'New team invitation',
+              message: 'You received a team invitation',
+              refType: 'invitation',
+              invitationId: d.id,
+            });
+            seen[key] = Date.now();
+            localStorage.setItem(seenKey, JSON.stringify(seen));
+          } catch {}
+        }
+      }
+    });
+
+    // Invitations I sent accepted -> notify me and auto-link
+    const qInvAccepted = query(collection(db, 'invitations'), where('fromUserId', '==', currentUser.uid), where('status', 'in', ['accepted']));
+    const unsubAccepted = onSnapshot(qInvAccepted, async (snap) => {
+      for (const d of snap.docs) {
+        const data = d.data();
+        const key = `inv_acc:${d.id}`;
+        const seenKey = `proflow_inv_${currentUser.uid}`;
+        const seen = JSON.parse(localStorage.getItem(seenKey) || '{}');
+        if (!seen[key]) {
+          try {
+            await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+              unread: true,
+              createdAt: serverTimestamp(),
+              origin: 'team',
+              title: 'Invitation accepted',
+              message: `${data.toUserEmail || 'Someone'} accepted your invitation`,
+              refType: 'invitation',
+              invitationId: d.id,
+            });
+            seen[key] = Date.now();
+            localStorage.setItem(seenKey, JSON.stringify(seen));
+          } catch {}
+        }
+        // Auto-link team membership bidirectionally once (idempotent via 'linked' flag)
+        try {
+          if (!data.linked && data.toUserId) {
+            await addDoc(collection(db, 'users', currentUser.uid, 'connections'), { with: data.toUserId, status: 'accepted', createdAt: serverTimestamp() });
+            await addDoc(collection(db, 'users', data.toUserId, 'connections'), { with: currentUser.uid, status: 'accepted', createdAt: serverTimestamp() });
+            await updateDoc(doc(db, 'invitations', d.id), { linked: true, linkedAt: serverTimestamp() });
+          }
+        } catch {}
+      }
+    });
+
+    // Invitations I received and accepted -> auto-link and notify me
+    const qInvAcceptedToMe = query(collection(db, 'invitations'), where('toUserId', '==', currentUser.uid), where('status', 'in', ['accepted']))
+    const unsubAcceptedToMe = onSnapshot(qInvAcceptedToMe, async (snap) => {
+      for (const d of snap.docs) {
+        const data = d.data();
+        const key = `inv_acc_me:${d.id}`;
+        const seenKey = `proflow_inv_${currentUser.uid}`;
+        const seen = JSON.parse(localStorage.getItem(seenKey) || '{}');
+        if (!seen[key]) {
+          try {
+            await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+              unread: true,
+              createdAt: serverTimestamp(),
+              origin: 'team',
+              title: 'Connection added',
+              message: `You are now connected with ${data.fromUserEmail || 'a teammate'}`,
+              refType: 'invitation',
+              invitationId: d.id,
+            });
+            seen[key] = Date.now();
+            localStorage.setItem(seenKey, JSON.stringify(seen));
+          } catch {}
+        }
+        try {
+          if (!data.linked && data.fromUserId) {
+            await addDoc(collection(db, 'users', currentUser.uid, 'connections'), { with: data.fromUserId, status: 'accepted', createdAt: serverTimestamp() });
+            await addDoc(collection(db, 'users', data.fromUserId, 'connections'), { with: currentUser.uid, status: 'accepted', createdAt: serverTimestamp() });
+            await updateDoc(doc(db, 'invitations', d.id), { linked: true, linkedAt: serverTimestamp() });
+          }
+        } catch {}
+      }
+    });
     const q = query(collection(db, 'approvalRequests'), where('requestedTo', '==', currentUser.uid), where('status', '==', 'pending'));
     const unsub = onSnapshot(q, async (snap) => {
       const now = Date.now();
@@ -107,7 +198,7 @@ export default function NotificationAgent() {
       }
       if (changed) localStorage.setItem(seenKey, JSON.stringify(seen));
     });
-    return () => unsub();
+    return () => { unsub(); unsubIncoming(); unsubAccepted(); unsubAcceptedToMe(); };
   }, [currentUser]);
 
   useEffect(() => {

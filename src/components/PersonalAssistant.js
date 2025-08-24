@@ -55,7 +55,14 @@ export default function PersonalAssistant() {
     if (savedKey) { setApiKey(savedKey); setShowKeyEditor(false); }
     const savedPos = localStorage.getItem('pa_pos');
     if (savedPos) {
-      try { setPos(JSON.parse(savedPos)); } catch {}
+      try {
+        const parsed = JSON.parse(savedPos);
+        const nx = Number(parsed?.x);
+        const ny = Number(parsed?.y);
+        if (Number.isFinite(nx) && Number.isFinite(ny)) {
+          setPos({ x: nx, y: ny });
+        }
+      } catch {}
     }
     const savedOpen = localStorage.getItem('pa_is_open');
     if (savedOpen === '1') setIsOpen(true);
@@ -81,7 +88,9 @@ export default function PersonalAssistant() {
   const clamp = useCallback((x, y) => {
     const maxX = Math.max(0, (window.innerWidth || 360) - 76);
     const maxY = Math.max(0, (window.innerHeight || 800) - 76);
-    return { x: Math.min(Math.max(0, x), maxX), y: Math.min(Math.max(0, y), maxY) };
+    const nx = Number.isFinite(x) ? x : 0;
+    const ny = Number.isFinite(y) ? y : 0;
+    return { x: Math.min(Math.max(0, nx), maxX), y: Math.min(Math.max(0, ny), maxY) };
   }, []);
   const startDrag = (e) => { e.preventDefault(); const startX = e.clientX, startY = e.clientY; setDragOffset({ x: startX - pos.x, y: startY - pos.y }); setDragging(true); setDragMoved(false); };
   useEffect(() => {
@@ -136,8 +145,10 @@ export default function PersonalAssistant() {
   const handleSaveKey = () => { localStorage.setItem('gemini_api_key', apiKey); setShowKeyEditor(false); };
   const quickAsk = (q) => { setQueryText(q); setTimeout(() => handleAsk(), 0); };
 
+  const safeLeft = Number.isFinite(pos?.x) ? pos.x : 0;
+  const safeTop = Number.isFinite(pos?.y) ? pos.y : 0;
   const launcher = (
-    <div style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: 2147483647, fontFamily: fontStack }}>
+    <div style={{ position: 'fixed', left: safeLeft, top: safeTop, zIndex: 2147483647, fontFamily: fontStack }}>
       {!isOpen && (
         <div onMouseDown={startDrag} onClick={(e) => { if (dragMoved) { e.preventDefault(); return; } setIsOpen(true); }} title="Personal Assistant" style={{ lineHeight: 0, filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.25))' }}>
           <CatAvatar size={76} fluffy={true} noBackground={true} />
@@ -147,7 +158,7 @@ export default function PersonalAssistant() {
   );
 
   const panel = isOpen && (
-    <div style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: 2147483647, width: 420, maxWidth: 'calc(100vw - 32px)', fontFamily: fontStack }}>
+    <div style={{ position: 'fixed', left: safeLeft, top: safeTop, zIndex: 2147483647, width: 420, maxWidth: 'calc(100vw - 32px)', fontFamily: fontStack }}>
       <div style={{ background: '#ffffff', borderRadius: DESIGN_SYSTEM.borderRadius.xl, boxShadow: DESIGN_SYSTEM.shadows.lg, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '72vh', border: `1px solid ${DESIGN_SYSTEM.colors.border}` }}>
         <div onMouseDown={startDrag} style={{ padding: DESIGN_SYSTEM.spacing.base, background: headerGradient, backgroundSize: '400% 400%', animation: 'paGradientShift 14s ease infinite', color: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'move', boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.15), 0 0 18px rgba(255,255,255,0.15)' }}>
           <div style={{ fontWeight: 700, fontSize: DESIGN_SYSTEM.typography.fontSize.base }}>Personal Assistant</div>

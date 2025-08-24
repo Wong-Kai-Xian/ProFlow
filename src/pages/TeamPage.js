@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import TopBar from '../components/TopBar';
 import { COLORS, INPUT_STYLES } from '../components/profile-component/constants';
 import { db } from '../firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, doc, deleteDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import UserAvatar from '../components/shared/UserAvatar';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import InviteMemberModal from '../components/team-component/InviteMemberModal';
@@ -11,6 +12,7 @@ import IncomingInvitationsModal from '../components/team-component/IncomingInvit
 
 export default function TeamPage() {
   const [teamMembers, setTeamMembers] = useState([]);
+  const [connectionMembers, setConnectionMembers] = useState([]);
   const [pendingInvitations, setPendingInvitations] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const { currentUser } = useAuth();
@@ -18,6 +20,12 @@ export default function TeamPage() {
   const [inviteMessage, setInviteMessage] = useState('');
   const [showIncomingInvitationsModal, setShowIncomingInvitationsModal] = useState(false);
   const [incomingInvitationsCount, setIncomingInvitationsCount] = useState(0);
+
+  useEffect(() => {
+    if (!inviteMessage) return;
+    const t = setTimeout(() => setInviteMessage(''), 2000);
+    return () => clearTimeout(t);
+  }, [inviteMessage]);
 
   const refreshTeamData = async () => {
     if (!currentUser) {
@@ -127,6 +135,26 @@ export default function TeamPage() {
     refreshTeamData();
   }, [currentUser]);
 
+  useEffect(() => {
+    if (!currentUser?.uid) { setConnectionMembers([]); return; }
+    const ref = collection(db, 'users', currentUser.uid, 'connections');
+    const unsub = onSnapshot(ref, async (snap) => {
+      const accepted = snap.docs.map(d => d.data()).filter(d => d && d.status === 'accepted' && d.with);
+      const ids = Array.from(new Set(accepted.map(d => d.with)));
+      const list = [];
+      for (const uid of ids) {
+        try {
+          const uref = doc(db, 'users', uid);
+          const usnap = await getDoc(uref);
+          if (usnap.exists()) { const u = usnap.data(); list.push({ uid, displayName: u.name || u.email || 'Member', email: u.email || '', photoURL: u.photoURL || '' }); }
+          else { list.push({ uid, displayName: 'Member', email: '', photoURL: '' }); }
+        } catch { list.push({ uid, displayName: 'Member', email: '', photoURL: '' }); }
+      }
+      setConnectionMembers(list);
+    });
+    return () => unsub();
+  }, [currentUser?.uid]);
+
   const handleInvite = (email, userExists, signupUrl, newInvitation) => {
     if (userExists) {
       setInviteMessage(`Invitation sent to ${email}. They can accept it from their invitations page.`);
@@ -202,7 +230,7 @@ export default function TeamPage() {
                 boxShadow: "0 8px 25px rgba(102, 126, 234, 0.3)"
               }}>
                 <FaUsers style={{ fontSize: "24px", marginBottom: "8px" }} />
-                <div style={{ fontSize: "24px", fontWeight: "700" }}>{filteredMembers.length}</div>
+                <div style={{ fontSize: "24px", fontWeight: "700" }}>{connectionMembers.length}</div>
                 <div style={{ fontSize: "12px", opacity: 0.9 }}>Team Members</div>
               </div>
               <div style={{
@@ -215,7 +243,7 @@ export default function TeamPage() {
                 boxShadow: "0 8px 25px rgba(240, 147, 251, 0.3)"
               }}>
                 <FaClock style={{ fontSize: "24px", marginBottom: "8px" }} />
-                <div style={{ fontSize: "24px", fontWeight: "700" }}>{filteredPendingInvitations.length}</div>
+                <div style={{ fontSize: "24px", fontWeight: "700" }}>{pendingInvitations.length}</div>
                 <div style={{ fontSize: "12px", opacity: 0.9 }}>Pending</div>
               </div>
             </div>
@@ -346,23 +374,7 @@ export default function TeamPage() {
             </button>
           </div>
 
-          {inviteMessage && (
-            <div style={{
-              background: "linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%)",
-              border: "2px solid #28a745",
-              borderRadius: "20px",
-              padding: "20px 24px",
-              marginBottom: "24px",
-              color: "#155724",
-              fontSize: "16px",
-              display: "flex",
-              alignItems: "center",
-              gap: "16px",
-              fontWeight: "500"
-            }}>
-              ✅ {inviteMessage}
-            </div>
-          )}
+          {/* Moved status message below Team Members list */}
 
           {/* Search Bar */}
           <div style={{
@@ -594,78 +606,81 @@ export default function TeamPage() {
               </p>
             </div>
           ) : (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
-              gap: "24px"
-            }}>
-              {filteredMembers.map((member, index) => (
-                <div key={index} style={{
-                  background: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.9) 100%)",
-                  borderRadius: "24px",
-                  padding: "28px",
-                  boxShadow: "0 12px 30px rgba(0, 0, 0, 0.08)",
-                  border: "2px solid rgba(255, 255, 255, 0.6)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "20px",
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                  cursor: member.uid ? "pointer" : "default"
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-6px)";
-                  e.currentTarget.style.boxShadow = "0 20px 45px rgba(0, 0, 0, 0.15)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 12px 30px rgba(0, 0, 0, 0.08)";
-                }}>
-                  <div style={{
-                    width: "72px",
-                    height: "72px",
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            <>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
+                gap: "24px"
+              }}>
+                {connectionMembers
+                  .filter(member => (member.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (member.email || '').toLowerCase().includes(searchTerm.toLowerCase()))
+                  .map((member, index) => (
+                  <div key={index} style={{
+                    background: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.9) 100%)",
+                    borderRadius: "24px",
+                    padding: "28px",
+                    boxShadow: "0 12px 30px rgba(0, 0, 0, 0.08)",
+                    border: "2px solid rgba(255, 255, 255, 0.6)",
+                    position: 'relative',
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    color: "white",
-                    fontSize: "28px",
-                    fontWeight: "700",
-                    boxShadow: "0 12px 25px rgba(102, 126, 234, 0.3)"
-                  }}>
-                    {member.displayName[0].toUpperCase()}
+                    gap: "20px",
+                    cursor: member.uid ? "pointer" : "default"
+                  }}
+                  >
+                    <button onClick={async () => { try { if (!currentUser?.uid || !member.uid) return; const myCol = collection(db, 'users', currentUser.uid, 'connections'); const q1 = query(myCol, where('with', '==', member.uid)); const snap1 = await getDocs(q1); await Promise.all(snap1.docs.map(d => deleteDoc(d.ref))); const theirCol = collection(db, 'users', member.uid, 'connections'); const q2 = query(theirCol, where('with', '==', currentUser.uid)); const snap2 = await getDocs(q2); await Promise.all(snap2.docs.map(d => deleteDoc(d.ref))); const inv1 = query(collection(db, 'invitations'), where('fromUserId','==', currentUser.uid), where('toUserId','==', member.uid), where('status','==','accepted')); const inv2 = query(collection(db, 'invitations'), where('fromUserId','==', member.uid), where('toUserId','==', currentUser.uid), where('status','==','accepted')); const [s1, s2] = await Promise.all([getDocs(inv1), getDocs(inv2)]); await Promise.all([...s1.docs, ...s2.docs].map(d => updateDoc(d.ref, { status: 'removed', removedAt: serverTimestamp() }))); setInviteMessage(`Removed ${member.displayName}`); } catch (e) { console.error(e); alert('Failed to remove member'); } }} title="Remove connection" style={{ position: 'absolute', top: 8, right: 8, background: 'transparent', border: '1px solid #e5e7eb', color: '#ef4444', padding: '4px 8px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Remove</button>
+                    <div style={{ width: 72, height: 72, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <UserAvatar user={{ name: member.displayName, photoURL: member.photoURL }} size={64} showBorder={true} borderColor="rgba(102,126,234,0.35)" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      {member.uid ? (
+                        <Link to={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
+                          <div style={{ fontSize: "22px", fontWeight: "700", color: "#667eea", marginBottom: "6px", transition: "color 0.2s" }}>
+                            {member.displayName}
+                          </div>
+                          <div style={{ fontSize: "16px", color: "#64748b", fontWeight: "500", maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {member.email}
+                          </div>
+                        </Link>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: "22px", fontWeight: "700", color: "#1e293b", marginBottom: "6px" }}>
+                            {member.displayName}
+                          </div>
+                          <div style={{ fontSize: "16px", color: "#64748b", fontWeight: "500", maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {member.email}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div style={{
+                      width: "16px",
+                      height: "16px",
+                      borderRadius: "50%",
+                      background: "#10b981",
+                      boxShadow: "0 0 12px rgba(16, 185, 129, 0.4)"
+                    }}></div>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    {member.uid ? (
-                      <Link to={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
-                        <div style={{ fontSize: "22px", fontWeight: "700", color: "#667eea", marginBottom: "6px", transition: "color 0.2s" }}>
-                          {member.displayName}
-                        </div>
-                        <div style={{ fontSize: "16px", color: "#64748b", fontWeight: "500" }}>
-                          {member.email}
-                        </div>
-                      </Link>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: "22px", fontWeight: "700", color: "#1e293b", marginBottom: "6px" }}>
-                          {member.displayName}
-                        </div>
-                        <div style={{ fontSize: "16px", color: "#64748b", fontWeight: "500" }}>
-                          {member.email}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <div style={{
-                    width: "16px",
-                    height: "16px",
-                    borderRadius: "50%",
-                    background: "#10b981",
-                    boxShadow: "0 0 12px rgba(16, 185, 129, 0.4)"
-                  }} />
+                ))}
+              </div>
+              {inviteMessage && (
+                <div style={{
+                  background: "linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%)",
+                  border: "2px solid #28a745",
+                  borderRadius: "12px",
+                  padding: "12px 16px",
+                  marginTop: "16px",
+                  color: "#155724",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  fontWeight: "600"
+                }}>
+                  ✅ {inviteMessage}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       </div>

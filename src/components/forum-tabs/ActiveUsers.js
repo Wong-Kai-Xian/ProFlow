@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { COLORS } from '../profile-component/constants';
 import { db } from '../../firebase';
-import { doc, updateDoc, serverTimestamp, onSnapshot, collection, query, where } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, onSnapshot, collection, query, where, addDoc, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAcceptedTeamMembers } from '../../services/teamService';
 import UserAvatar from '../shared/UserAvatar';
 
 export default function ActiveUsers({ members }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [userActivities, setUserActivities] = useState({});
   const { currentUser } = useAuth();
+  const [sendingId, setSendingId] = useState(null);
+  const [invitedMap, setInvitedMap] = useState({}); // userId -> true if invited
 
   // Update current user's last activity
   useEffect(() => {
@@ -79,6 +82,33 @@ export default function ActiveUsers({ members }) {
     };
   }, [members]);
 
+  // Prefetch accepted teammates to hide Add button
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!currentUser) return;
+        const accepted = await getAcceptedTeamMembers(currentUser);
+        const setMap = {};
+        accepted.forEach(u => { if (u.id) setMap[u.id] = true; });
+        if (!cancelled) setInvitedMap(m => ({ ...setMap, ...m }));
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser, members]);
+
+  // Live connections to update Add visibility in real-time
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    const ref = collection(db, 'users', currentUser.uid, 'connections');
+    const unsub = onSnapshot(ref, (snap) => {
+      const m = {};
+      snap.forEach(d => { const data = d.data(); if (data.with) m[data.with] = data.status === 'accepted' || data.status === 'pending'; });
+      setInvitedMap(prev => ({ ...prev, ...m }));
+    });
+    return () => unsub();
+  }, [currentUser?.uid]);
+
   const formatLastSeen = (timestamp) => {
     if (!timestamp) return 'Never';
     
@@ -102,9 +132,9 @@ export default function ActiveUsers({ members }) {
 
     return {
       id: member.id,
-      name: member.name,
-      avatar: member.name ? member.name[0].toUpperCase() : '?',
-      email: member.email,
+      name: member.isCurrentUser && currentUser?.name ? (currentUser.name || currentUser.displayName || currentUser.email) : (member.name || 'Member'),
+      avatar: (member.isCurrentUser && (currentUser?.name || currentUser?.displayName)) ? (currentUser.name || currentUser.displayName)[0].toUpperCase() : (member.name ? member.name[0].toUpperCase() : '?'),
+      email: member.isCurrentUser ? (currentUser?.email || member.email) : (member.email || ''),
       isOnline: activity.isOnline && isRecentlyActive,
       lastSeen: formatLastSeen(activity.lastActivity)
     };
@@ -161,6 +191,7 @@ export default function ActiveUsers({ members }) {
               padding: '6px 0',
               borderBottom: '1px solid #F8F9FA'
             }}>
+              <a href={`/profile/${user.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
               <div style={{
                 position: 'relative',
                 marginRight: '8px'
@@ -183,6 +214,7 @@ export default function ActiveUsers({ members }) {
                   }} />
                 )}
               </div>
+              </a>
               <div style={{ flex: 1 }}>
                 <div style={{ 
                   fontSize: '14px', 
@@ -206,6 +238,49 @@ export default function ActiveUsers({ members }) {
                   {user.isOnline ? 'Online' : `Last seen ${user.lastSeen}`}
                 </div>
               </div>
+              {currentUser && user.id !== currentUser.uid && !invitedMap[user.id] && (
+                <button
+                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.97)'; }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  onClick={async () => {
+                    if (invitedMap[user.id]) return;
+                    setSendingId(user.id);
+                    try {
+                      // Create pending invitation
+                      await addDoc(collection(db, 'invitations'), {
+                        fromUserId: currentUser.uid,
+                        fromUserEmail: currentUser.email || '',
+                        toUserId: user.id,
+                        toUserEmail: user.email || '',
+                        status: 'pending',
+                        timestamp: serverTimestamp()
+                      });
+                      const invRef = collection(db, 'invitations');
+                      const qOut = query(invRef, where('fromUserId', '==', currentUser.uid), where('toUserId', '==', user.id), where('status', 'in', ['pending','accepted']));
+                      const qIn = query(invRef, where('fromUserId', '==', user.id), where('toUserId', '==', currentUser.uid), where('status', 'in', ['pending','accepted']));
+                      const [o, i] = await Promise.all([getDocs(qOut), getDocs(qIn)]);
+                      if (!o.empty || !i.empty) {
+                        setInvitedMap(m => ({ ...m, [user.id]: true }));
+                        const p = document.createElement('div'); p.textContent = 'Already invited or connected'; Object.assign(p.style, { position: 'fixed', bottom: '20px', right: '20px', background: '#374151', color: '#fff', padding: '10px 12px', borderRadius: '8px', zIndex: 4000 }); document.body.appendChild(p); setTimeout(() => document.body.removeChild(p), 1200);
+                        return;
+                      }
+                      setInvitedMap(m => ({ ...m, [user.id]: true }));
+                    } catch (e) {
+                      console.error(e);
+                    } finally {
+                      setSendingId(null);
+                    }
+                  }}
+                  disabled={!!invitedMap[user.id] || sendingId === user.id}
+                  style={{ padding: '4px 8px', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, background: invitedMap[user.id] ? '#e5e7eb' : '#fff', color: invitedMap[user.id] ? '#6b7280' : '#111827', cursor: invitedMap[user.id] ? 'default' : 'pointer', transition: 'transform 120ms ease' }}
+                >
+                  {invitedMap[user.id] ? 'Added' : (sendingId === user.id ? 'Adding…' : 'Add')}
+                </button>
+              )}
+              {invitedMap[user.id] && (
+                <span style={{ padding: '2px 8px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 999, color: '#6b7280' }}>Added</span>
+              )}
             </div>
           ))}
 
@@ -221,7 +296,7 @@ export default function ActiveUsers({ members }) {
               }}>
                 Recently Active
               </div>
-              {offlineUsers.slice(0, 3).map((user) => (
+              {offlineUsers.slice(0, 6).map((user) => (
                 <div key={user.id} style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -240,6 +315,7 @@ export default function ActiveUsers({ members }) {
                     />
                   </div>
                   <div style={{ flex: 1 }}>
+                    <a href={`/profile/${user.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ 
                       fontSize: '13px', 
                       fontWeight: '500', 
@@ -248,6 +324,7 @@ export default function ActiveUsers({ members }) {
                     }}>
                       {user.name}
                     </div>
+                    </a>
                     <div style={{ 
                       fontSize: '11px', 
                       color: COLORS.lightText,
@@ -262,6 +339,12 @@ export default function ActiveUsers({ members }) {
                       {user.lastSeen}
                     </div>
                   </div>
+                  {currentUser && user.id !== currentUser.uid && !invitedMap[user.id] && (
+                    <button onClick={async () => { try { const invRef = collection(db, 'invitations'); const qOut = query(invRef, where('fromUserId', '==', currentUser.uid), where('toUserId', '==', user.id), where('status', 'in', ['pending','accepted'])); const qIn = query(invRef, where('fromUserId', '==', user.id), where('toUserId', '==', currentUser.uid), where('status', 'in', ['pending','accepted'])); const [o, i] = await Promise.all([getDocs(qOut), getDocs(qIn)]); if (!o.empty || !i.empty) { setInvitedMap(m => ({ ...m, [user.id]: true })); return; } await addDoc(collection(db, 'invitations'), { fromUserId: currentUser.uid, toUserId: user.id, toUserEmail: user.email || '', status: 'pending', timestamp: new Date() }); setInvitedMap(m => ({ ...m, [user.id]: true })); } catch (e) { console.error(e); } }} style={{ padding: '4px 8px', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111827', cursor: 'pointer' }}>Add</button>
+                  )}
+                  {invitedMap[user.id] && (
+                    <span style={{ padding: '2px 8px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 999, color: '#6b7280' }}>Added</span>
+                  )}
                 </div>
               ))}
             </>

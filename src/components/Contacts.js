@@ -16,6 +16,7 @@ import { db } from "../firebase"; // Import db from firebase.js
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, getDoc, query, where, onSnapshot } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 import { Link } from 'react-router-dom'; // Import Link
+import UserAvatar from './shared/UserAvatar';
 
 export default function Contacts() {
   const navigate = useNavigate();
@@ -74,58 +75,49 @@ export default function Contacts() {
       setOrganizations(orgList);
     });
 
-    // Fetch team members by looking at all projects the current user is part of
-    const fetchTeamMembers = async () => {
-      try {
-        const projectQuery = query(
-          collection(db, "projects"),
-          where("team", "array-contains", currentUser.email)
-        );
-        const projectSnapshot = await getDocs(projectQuery);
-        
-        const uniqueMemberEmails = new Set();
-        projectSnapshot.forEach(doc => {
-          const projectData = doc.data();
-          (projectData.team || []).forEach(memberEmail => {
-            // Exclude the current user from the displayed team list if they are in the project team
-            if (memberEmail !== currentUser.email) {
-              uniqueMemberEmails.add(memberEmail);
-            }
-          });
-        });
-
-        // Optionally, fetch user details for these emails if needed for display
-        const membersDetails = await Promise.all(Array.from(uniqueMemberEmails).map(async (email) => {
-          const usersQuery = query(collection(db, "users"), where("email", "==", email));
-          const userSnapshot = await getDocs(usersQuery);
-          if (!userSnapshot.empty) {
-            const userData = userSnapshot.docs[0].data();
-            return { 
-              uid: userSnapshot.docs[0].id, // Get the UID from the user document
-              email: email,
-              displayName: userData.name || email.split('@')[0] // Use stored name or derive from email
-            };
-          } else {
-            console.warn(`User document not found for email: ${email}`);
-            return { email: email, displayName: email.split('@')[0] }; // Fallback
+    // Team members: read accepted connections and shared groups (projects/forums)
+    const unsubConnections = onSnapshot(collection(db, 'users', currentUser.uid, 'connections'), async (snap) => {
+      const rawIds = snap.docs.filter(d => (d.data().status === 'accepted')).map(d => d.data().with).filter(Boolean);
+      const idSet = new Set(rawIds);
+      const acceptedIds = Array.from(idSet);
+      if (acceptedIds.length === 0) { setTeamMembersList([]); return; }
+      // Fetch user records
+      const fetched = await Promise.all(acceptedIds.map(async (uid) => {
+        try {
+          const uref = doc(db, 'users', uid);
+          const usnap = await getDoc(uref);
+          const u = usnap.exists() ? usnap.data() : {};
+          // Find shared projects (currentUser in team and uid in team)
+          const projMineQ = query(collection(db, 'projects'), where('team', 'array-contains', currentUser.uid));
+          const projMine = await getDocs(projMineQ);
+          const sharedProjects = [];
+          for (const p of projMine.docs) {
+            const d = p.data();
+            const team = d.team || [];
+            if (team.includes(uid)) sharedProjects.push({ id: p.id, name: d.name || 'Project' });
           }
-        }));
-        setTeamMembersList(membersDetails);
-
-      } catch (error) {
-        console.error("Error fetching team members for Contacts page: ", error);
-      }
-    };
-
-    fetchTeamMembers();
-    // Note: This approach for team members is not real-time like onSnapshot, 
-    // but provides a consistent view with TeamPage.js for initial sync.
-    // If real-time updates for team members are critical here, a more complex setup 
-    // involving multiple onSnapshot listeners or a single collection for all users' teams 
-    // would be needed, which is out of scope for this task.
+          // Find shared forums (both in members array)
+          const forumsQ = query(collection(db, 'forums'), where('members', 'array-contains', currentUser.uid));
+          const fMine = await getDocs(forumsQ);
+          const sharedForums = [];
+          for (const f of fMine.docs) {
+            const d = f.data();
+            const members = d.members || [];
+            if (members.includes(uid)) sharedForums.push({ id: f.id, name: d.name || 'Forum' });
+          }
+          return { uid, displayName: u.name || u.email || 'Member', email: u.email || '', phone: u.phone || '', photoURL: u.photoURL || '', sharedProjects, sharedForums };
+        } catch {
+          return { uid, displayName: 'Member', email: '', phone: '', photoURL: '', sharedProjects: [], sharedForums: [] };
+        }
+      }));
+      const dedup = new Map();
+      fetched.forEach(m => { if (m && m.uid) dedup.set(m.uid, m); });
+      setTeamMembersList(Array.from(dedup.values()));
+    });
 
     return () => {
       unsubscribeOrganizations();
+      unsubConnections && unsubConnections();
     };
   }, [currentUser]); // Add currentUser to dependency array
 
@@ -481,23 +473,35 @@ export default function Contacts() {
                   alignItems: "flex-start", // Align to start
                   boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
                 }}>
-                  <div style={{ marginBottom: "8px", width: "100%" }}>
+                  <div style={{ marginBottom: "8px", width: "100%", display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <UserAvatar user={{ name: member.displayName, photoURL: member.photoURL }} size={28} showBorder={false} />
                     {member.uid ? (
                       <Link to={`/profile/${member.uid}`} style={{ textDecoration: 'none' }}>
-                        <strong style={{ color: COLORS.primary, wordBreak: "break-word", cursor: "pointer" }}>{member.displayName}</strong><br/>
-                        <span style={{ fontSize: "12px", color: COLORS.lightText, wordBreak: "break-word", cursor: "pointer" }}>{member.email}</span>
+                        <strong style={{ color: COLORS.primary, wordBreak: "break-word", cursor: "pointer" }}>{member.displayName}</strong>
                       </Link>
                     ) : (
                       <>
-                        <strong style={{ color: COLORS.text, wordBreak: "break-word" }}>{member.displayName}</strong><br/>
-                        <span style={{ fontSize: "12px", color: COLORS.lightText, wordBreak: "break-word" }}>{member.email}</span>
+                        <strong style={{ color: COLORS.text, wordBreak: "break-word" }}>{member.displayName}</strong>
                       </>
                     )}
                   </div>
+                  {(member.sharedProjects?.length > 0 || member.sharedForums?.length > 0) && (
+                    <div style={{ width: '100%', fontSize: '12px', color: COLORS.lightText }}>
+                      {member.sharedProjects?.length > 0 && (
+                        <div style={{ marginBottom: 4 }}>Projects: {member.sharedProjects.map((p, idx) => (
+                          <Link key={p.id} to={`/project/${p.id}`} style={{ marginRight: 6 }}>{p.name}{idx < member.sharedProjects.length - 1 ? ',' : ''}</Link>
+                        ))}</div>
+                      )}
+                      {member.sharedForums?.length > 0 && (
+                        <div>Forums: {member.sharedForums.map((f, idx) => (
+                          <Link key={f.id} to={`/forum/${f.id}`} style={{ marginRight: 6 }}>{f.name}{idx < member.sharedForums.length - 1 ? ',' : ''}</Link>
+                        ))}</div>
+                      )}
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: "8px", justifyContent: "flex-start", width: "100%", marginTop: "8px" }}>
                     {/* WhatsApp and Email buttons for team members, assuming phone and email are available */}
                     {member.phone && <button onClick={(e) => { e.stopPropagation(); openWhatsApp(member.phone); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaWhatsapp /></button>}
-                    {member.email && <button onClick={(e) => { e.stopPropagation(); openEmail(member.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><MdEmail /></button>}
                     {/* Removed delete button for team members as management is moved to TeamPage */}
                   </div>
                 </li>
