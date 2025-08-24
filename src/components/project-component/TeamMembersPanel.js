@@ -212,8 +212,8 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
   const isProjectCreator = currentUserUid === projectCreatorId;
 
   return (
-    <Card style={{ flex: 1, overflow: "auto", height: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: DESIGN_SYSTEM.spacing.base }}>
+    <Card style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: DESIGN_SYSTEM.spacing.base, flexShrink: 0 }}>
         <h3 style={{ color: DESIGN_SYSTEM.colors.text.primary, margin: 0 }}>Team Members</h3>
         {isProjectCreator && (
           <button 
@@ -230,14 +230,15 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
           </button>
         )}
       </div>
-      {loading && <p style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>Loading team members...</p>}
-      {error && <p style={{ color: DESIGN_SYSTEM.colors.error }}>{error}</p>}
-      {!loading && membersData.length === 0 && (
-        <p style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>No team members assigned yet. The project creator is always included.</p>
-      )}
-      {!loading && membersData.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: DESIGN_SYSTEM.spacing.sm }}>
-          {membersData.map((member) => (
+      <div style={{ flex: 1, overflow: "auto" }}>
+        {loading && <p style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>Loading team members...</p>}
+        {error && <p style={{ color: DESIGN_SYSTEM.colors.error }}>{error}</p>}
+        {!loading && membersData.length === 0 && (
+          <p style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>No team members assigned yet. The project creator is always included.</p>
+        )}
+        {!loading && membersData.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: DESIGN_SYSTEM.spacing.sm }}>
+            {membersData.map((member) => (
             <div key={member.id} style={{
               backgroundColor: DESIGN_SYSTEM.colors.background.secondary,
               padding: DESIGN_SYSTEM.spacing.sm,
@@ -352,10 +353,11 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
               {invitedMap[member.id] && (
                 <span style={{ marginTop: 6, padding: '2px 8px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 999, color: '#6b7280' }}>Added</span>
               )}
-            </div>
-          ))}
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
