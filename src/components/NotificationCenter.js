@@ -14,6 +14,21 @@ export default function NotificationCenter({ userId, isOpen, onClose }) {
   const [enableOverdueAlerts, setEnableOverdueAlerts] = useState(true);
   const [filterType, setFilterType] = useState('all');
 
+  const typeMeta = (refType) => {
+    switch (refType) {
+      case 'mention':
+        return { label: 'Mention', bg: DESIGN_SYSTEM.colors.secondary[100], fg: DESIGN_SYSTEM.colors.text.secondary };
+      case 'invitation':
+        return { label: 'Invite', bg: '#E0F2FE', fg: '#075985' };
+      case 'approval':
+        return { label: 'Approval', bg: '#FCE7F3', fg: '#831843' };
+      case 'upcomingEvent':
+        return { label: 'Event', bg: '#ECFDF5', fg: '#065F46' };
+      default:
+        return { label: 'Other', bg: DESIGN_SYSTEM.colors.secondary[100], fg: DESIGN_SYSTEM.colors.text.secondary };
+    }
+  };
+
   useEffect(() => {
     if (!userId || !isOpen) return;
     const q = query(collection(db, 'users', userId, 'notifications'), orderBy('createdAt', 'desc'));
@@ -49,6 +64,25 @@ export default function NotificationCenter({ userId, isOpen, onClose }) {
     if (!userId) return;
     const unread = items.filter(n => n.unread);
     await Promise.all(unread.map(n => updateDoc(doc(db, 'users', userId, 'notifications', n.id), { unread: false }))).catch(() => {});
+  };
+
+  const addEventToCalendar = (n) => {
+    try {
+      if (!n?.eventDateIso || !n?.title) return;
+      const dt = new Date(n.eventDateIso).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      const ics = [
+        'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//ProFlow//EN','BEGIN:VEVENT',
+        `UID:${(n.id || Math.random()) + '@proflow'}`,
+        `DTSTAMP:${dt}`,
+        `DTSTART:${dt}`,
+        `SUMMARY:${(n.title || '').replace(/\n/g, ' ')}`,
+        `DESCRIPTION:${(n.message || '').replace(/\n/g, ' ')}`,
+        'END:VEVENT','END:VCALENDAR']
+        .join('\n');
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `${(n.title || 'event').replace(/[^a-z0-9]+/gi,'-')}.ics`; a.click(); URL.revokeObjectURL(url);
+    } catch {}
   };
 
   const handleNavigate = (n) => {
@@ -93,8 +127,14 @@ export default function NotificationCenter({ userId, isOpen, onClose }) {
             <button onClick={() => setShowSettings(v => !v)} style={{ padding: '6px 8px', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 6, background: showSettings ? DESIGN_SYSTEM.colors.secondary[100] : DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Settings</button>
             <button onClick={markAllAsRead} style={{ padding: '6px 8px', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 6, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Mark all read</button>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-              {['all','approvals','events'].map(key => (
-                <button key={key} onClick={() => setFilterType(key)} style={{ padding: '6px 8px', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 6, background: filterType === key ? DESIGN_SYSTEM.colors.secondary[100] : DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12, textTransform: 'capitalize' }}>{key === 'events' ? 'Events' : key}</button>
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'mentions', label: 'Mentions' },
+                { key: 'invites', label: 'Invites' },
+                { key: 'approvals', label: 'Approvals' },
+                { key: 'events', label: 'Events' }
+              ].map(({ key, label }) => (
+                <button key={key} onClick={() => setFilterType(key)} style={{ padding: '6px 8px', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 6, background: filterType === key ? DESIGN_SYSTEM.colors.secondary[100] : DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>{label}</button>
               ))}
             </div>
           </div>
@@ -120,21 +160,40 @@ export default function NotificationCenter({ userId, isOpen, onClose }) {
           {(() => {
             const list = (items || [])
               .filter(n => (showUnreadOnly ? n.unread : true))
-              .filter(n => filterType === 'all' || (filterType === 'approvals' && n.refType === 'approval') || (filterType === 'events' && n.refType === 'upcomingEvent'));
+              .filter(n => {
+                if (filterType === 'all') return true;
+                if (filterType === 'approvals') return n.refType === 'approval';
+                if (filterType === 'events') return n.refType === 'upcomingEvent';
+                if (filterType === 'mentions') return n.refType === 'mention';
+                if (filterType === 'invites') return n.refType === 'invitation';
+                return true;
+              });
             if (list.length === 0) {
               return <div style={{ color: '#6b7280', padding: 12 }}>No notifications</div>;
             }
             return list.map(n => (
               <div key={n.id} onClick={() => handleNavigate(n)} style={{ padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, borderRadius: 8, marginBottom: 8, background: n.unread ? DESIGN_SYSTEM.colors.background.secondary : DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer' }}>
-                <div style={{ fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: 4 }}>{n.title || 'Notification'}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <div style={{ fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {n.title || 'Notification'}
+                    <span style={{ display: 'inline-block', fontSize: 11, padding: '2px 6px', borderRadius: 999, background: typeMeta(n.refType).bg, color: typeMeta(n.refType).fg }} onClick={(e) => { e.stopPropagation(); const map = { mention: 'mentions', invitation: 'invites', approval: 'approvals', upcomingEvent: 'events' }; if (map[n.refType]) setFilterType(map[n.refType]); }}>{typeMeta(n.refType).label}</span>
+                  </div>
+                  {n.unread && <span style={{ width: 8, height: 8, borderRadius: 999, background: DESIGN_SYSTEM.colors.primary[500] }} />}
+                </div>
                 {n.message && <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, marginBottom: 6 }}>{n.message}</div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: DESIGN_SYSTEM.colors.text.tertiary }}>
                   <span>{n.origin || 'system'}</span>
                   <span>{n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString() : ''}</span>
                 </div>
+                {/* Quick actions per type */}
+                {n.refType === 'upcomingEvent' && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => addEventToCalendar(n)} style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer' }}>Add to Calendar</button>
+                  </div>
+                )}
                 {n.unread && (
                   <div style={{ marginTop: 6 }}>
-                    <button onClick={() => markAsRead(n.id)} style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer' }}>Mark as read</button>
+                    <button onClick={(e) => { e.stopPropagation(); markAsRead(n.id); }} style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer' }}>Mark as read</button>
                   </div>
                 )}
               </div>

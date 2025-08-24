@@ -14,6 +14,7 @@ export default function ForumReminders({ forumId, autoOpenReminderId }) {
   const [openMenuId, setOpenMenuId] = useState(null); // track which action menu is open
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const [viewReminder, setViewReminder] = useState(null); // details modal
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   useEffect(() => {
     if (!forumId) return;
@@ -113,7 +114,6 @@ export default function ForumReminders({ forumId, autoOpenReminderId }) {
 
   const handleDeleteReminder = async (id) => {
     if (!forumId || !id) return;
-    if (!window.confirm("Are you sure you want to delete this reminder?")) return;
     try {
       await deleteDoc(doc(db, `forums/${forumId}/reminders`, id));
     } catch (error) {
@@ -260,7 +260,7 @@ export default function ForumReminders({ forumId, autoOpenReminderId }) {
                           setOpenMenuId(null);
                         }} style={{ background: 'none', border: 'none', padding: '8px 12px', width: '100%', textAlign: 'left', cursor: 'pointer', fontSize: 13 }}>Add to Calendar</button>
                         <button onClick={() => { setEditingReminder(reminder); setShowReminderModal(true); setOpenMenuId(null); }} style={{ background: 'none', border: 'none', padding: '8px 12px', width: '100%', textAlign: 'left', cursor: 'pointer', fontSize: 13 }}>Edit</button>
-                        <button onClick={() => { handleDeleteReminder(reminder.id); setOpenMenuId(null); }} style={{ background: 'none', border: 'none', padding: '8px 12px', width: '100%', textAlign: 'left', cursor: 'pointer', color: '#E74C3C', fontSize: 13 }}>Delete</button>
+                        <button onClick={() => { setConfirmDelete(reminder); setOpenMenuId(null); }} style={{ background: 'none', border: 'none', padding: '8px 12px', width: '100%', textAlign: 'left', cursor: 'pointer', color: '#E74C3C', fontSize: 13 }}>Delete</button>
                       </div>
                     ), document.body)
                   }
@@ -276,32 +276,47 @@ export default function ForumReminders({ forumId, autoOpenReminderId }) {
         onSave={editingReminder ? (data) => handleUpdateReminder(editingReminder.id, data) : handleAddReminder}
         editingReminder={editingReminder}
       />
+      {confirmDelete && ReactDOM.createPortal((
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 3600, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setConfirmDelete(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '92%', maxWidth: 440, boxShadow: '0 20px 50px rgba(0,0,0,0.25)', padding: 18 }}>
+            <h4 style={{ margin: 0, color: COLORS.dark, fontSize: 18 }}>Delete reminder?</h4>
+            <div style={{ marginTop: 8, color: COLORS.text, fontSize: 14 }}>
+              This will permanently remove:
+              <div style={{ marginTop: 6, padding: 10, background: '#fafafa', border: `1px solid ${COLORS.border}`, borderRadius: 8 }}>
+                <div style={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{confirmDelete.title || 'Untitled'}</div>
+                <div style={{ fontSize: 12, color: COLORS.lightText, marginTop: 4 }}>{confirmDelete.date || '-'} {confirmDelete.time ? `at ${confirmDelete.time}` : ''}</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+              <button onClick={() => setConfirmDelete(null)} style={{ background: 'transparent', border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={async () => { const rid = confirmDelete?.id; setConfirmDelete(null); await handleDeleteReminder(rid); }} style={{ background: '#E74C3C', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      ), document.body)}
       {viewReminder && ReactDOM.createPortal((
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 3500, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setViewReminder(null)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '95%', maxWidth: 640, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <span style={{ fontSize: 20 }}>{getTypeIcon(viewReminder.type)}</span>
-              <h3 style={{ margin: 0, fontSize: 20, color: COLORS.dark, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{viewReminder.title}</h3>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '95%', maxWidth: 680, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 999, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{getTypeIcon(viewReminder.type)}</div>
+              <h3 style={{ margin: 0, fontSize: 22, color: COLORS.dark, fontWeight: 700, letterSpacing: 0.2, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{viewReminder.title}</h3>
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 8, color: COLORS.lightText, fontSize: 13 }}>
-              <span>Date:</span>
-              <span style={{ color: COLORS.text }}>{viewReminder.date || '-'}</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontSize: 12, color: COLORS.lightText }}>When</span>
+              <span style={{ fontSize: 12, color: COLORS.text, background: '#f3f4f6', border: `1px solid ${COLORS.border}`, padding: '4px 8px', borderRadius: 999 }}>{viewReminder.date || '-'}</span>
               {viewReminder.time && (
-                <>
-                  <span>at</span>
-                  <span style={{ color: COLORS.text }}>{viewReminder.time}</span>
-                </>
+                <span style={{ fontSize: 12, color: COLORS.text, background: '#f3f4f6', border: `1px solid ${COLORS.border}`, padding: '4px 8px', borderRadius: 999 }}>at {viewReminder.time}</span>
               )}
-              <span style={{ marginLeft: 12 }}>Priority:</span>
-              <span style={{ fontSize: 12, color: '#fff', background: getPriorityColor(viewReminder.priority), padding: '2px 8px', borderRadius: 999 }}>{viewReminder.priority || 'medium'}</span>
+              <span style={{ fontSize: 12, color: COLORS.lightText, marginLeft: 8 }}>Priority</span>
+              <span style={{ fontSize: 12, color: '#fff', background: getPriorityColor(viewReminder.priority), padding: '4px 10px', borderRadius: 999 }}>{viewReminder.priority || 'medium'}</span>
             </div>
             {viewReminder.description && (
-              <div style={{ marginTop: 10, padding: 12, border: `1px solid ${COLORS.border}`, borderRadius: 8, whiteSpace: 'pre-wrap', color: COLORS.text, lineHeight: 1.5, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+              <div style={{ marginTop: 12, padding: 14, background: '#fafafa', border: `1px solid ${COLORS.border}`, borderRadius: 10, whiteSpace: 'pre-wrap', color: COLORS.text, lineHeight: 1.7, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                 {viewReminder.description}
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-              <button onClick={() => setViewReminder(null)} style={{ background: 'transparent', border: `1px solid #e5e7eb`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>Close</button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+              <button onClick={() => setViewReminder(null)} style={{ background: 'transparent', border: `1px solid #e5e7eb`, borderRadius: 10, padding: '10px 14px', cursor: 'pointer' }}>Close</button>
               <button onClick={() => {
                 const r = viewReminder; if (!r?.date) { setViewReminder(null); return; }
                 const t = (r.time && r.time.trim()) ? r.time : '09:00';
@@ -313,7 +328,7 @@ export default function ForumReminders({ forumId, autoOpenReminderId }) {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a'); a.href = url; a.download = `${(r.title || 'reminder').replace(/[^a-z0-9]+/gi,'-')}.ics`; a.click(); URL.revokeObjectURL(url);
                 setViewReminder(null);
-              }} style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>Add to Calendar</button>
+              }} style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 14px', cursor: 'pointer', fontWeight: 600 }}>Add to Calendar</button>
             </div>
           </div>
         </div>
