@@ -166,9 +166,19 @@ export default function ProjectList() {
       tasks: newProject.tasks || [], // Initialize tasks as an empty array
       completedTasks: newProject.completedTasks || 0,
       userId: currentUser.uid, // Assign project to current user
+      createdBy: currentUser.uid, // normalized creator field
       description: newProject.description || '', // Include description
       allowJoinById: newProject.allowJoinById !== undefined ? newProject.allowJoinById : true, // Include allowJoinById
       deadline: newProject.deadline || null,
+      // Customer/company fields for ProjectDetails sync
+      company: newProject.company || newProject.companyName || '',
+      contactEmail: newProject.contactEmail || newProject.customerEmail || '',
+      customerName: newProject.customerName || '',
+      companyInfo: {
+        companyName: (newProject.company || newProject.companyName || ''),
+        customerEmail: (newProject.contactEmail || newProject.customerEmail || ''),
+        customerName: (newProject.customerName || '')
+      }
     });
     // setProjects will be handled by the onSnapshot listener, no need to refetch
     setShowCreateModal(false);
@@ -305,6 +315,15 @@ export default function ProjectList() {
         // Stage is controlled by workflow; do not change here
         allowJoinById: updatedProject.allowJoinById,
         deadline: updatedProject.deadline || null,
+        // Keep customer/company info in sync
+        company: updatedProject.company || updatedProject.companyName || updatedProject.companyInfo?.companyName || '',
+        contactEmail: updatedProject.contactEmail || updatedProject.customerEmail || updatedProject.companyInfo?.customerEmail || '',
+        customerName: updatedProject.customerName || updatedProject.companyInfo?.customerName || '',
+        companyInfo: {
+          companyName: (updatedProject.company || updatedProject.companyName || updatedProject.companyInfo?.companyName || ''),
+          customerEmail: (updatedProject.contactEmail || updatedProject.customerEmail || updatedProject.companyInfo?.customerEmail || ''),
+          customerName: (updatedProject.customerName || updatedProject.companyInfo?.customerName || '')
+        }
       });
       // The onSnapshot listener will handle updating the projects state
       setShowCreateModal(false); // Close CreateProjectModal

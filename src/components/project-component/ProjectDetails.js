@@ -148,25 +148,26 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
               </div>
             )}
           </div>
+        </div>
+
+        <div style={{ marginTop: 2, color: COLORS.lightText, fontSize: "11px", fontWeight: 600 }}>Customer</div>
+        <div style={{ display: "flex", flexDirection: "row", gap: LAYOUT.smallGap }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Company</label>
+            <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Customer Name</label>
             {isEditing && !effectiveReadOnly ? (
               <input
                 type="text"
-                name="companyInfo.companyName"
-                value={editableProject.companyInfo?.companyName || ''}
+                name="companyInfo.customerName"
+                value={editableProject.companyInfo?.customerName || ''}
                 onChange={handleChange}
                 style={{ ...INPUT_STYLES.base, width: "100%", fontSize: "12px", padding: "6px" }}
               />
             ) : (
               <div style={{ padding: "6px", fontSize: "12px", color: COLORS.text, fontWeight: "400", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {project.companyInfo?.companyName || 'No company'}
+                {project.companyInfo?.customerName || 'No customer name'}
               </div>
             )}
           </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "row", gap: LAYOUT.smallGap }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Customer Email</label>
             {isEditing && !effectiveReadOnly ? (
@@ -180,6 +181,26 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
             ) : (
               <div style={{ padding: "6px", fontSize: "12px", color: COLORS.text, fontWeight: "400", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {project.companyInfo?.customerEmail || 'No email'}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 4, color: COLORS.lightText, fontSize: "11px", fontWeight: 600 }}>Company</div>
+        <div style={{ display: "flex", flexDirection: "row", gap: LAYOUT.smallGap }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Company</label>
+            {isEditing && !effectiveReadOnly ? (
+              <input
+                type="text"
+                name="companyInfo.companyName"
+                value={editableProject.companyInfo?.companyName || ''}
+                onChange={handleChange}
+                style={{ ...INPUT_STYLES.base, width: "100%", fontSize: "12px", padding: "6px" }}
+              />
+            ) : (
+              <div style={{ padding: "6px", fontSize: "12px", color: COLORS.text, fontWeight: "400", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {project.companyInfo?.companyName || 'No company'}
               </div>
             )}
           </div>
@@ -200,7 +221,6 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
             )}
           </div>
         </div>
-
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
           <label style={{ display: "block", marginBottom: "4px", color: COLORS.dark, fontSize: "12px", fontWeight: "600" }}>Description</label>
           {isEditing && !effectiveReadOnly ? (

@@ -8,6 +8,9 @@ import { getAcceptedTeamMembers } from '../../services/teamService';
 
 export default function CreateProjectModal({ isOpen, onClose, onConfirm, editingProject, customerProfile, companyProfile }) {
   const [projectName, setProjectName] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerName, setCustomerName] = useState('');
   const [teamMembersEmails, setTeamMembersEmails] = useState([]); // Stores only emails
   const [teamMembers, setTeamMembers] = useState([]); // Stores enriched member objects {uid, email, displayName}
   const [newMember, setNewMember] = useState('');
@@ -45,6 +48,27 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
   React.useEffect(() => {
     if (editingProject) {
       setProjectName(editingProject.name || '');
+      setCompanyName(
+        editingProject.companyInfo?.companyName ||
+        editingProject.company ||
+        companyProfile?.company ||
+        companyProfile?.companyName ||
+        ''
+      );
+      setCustomerEmail(
+        editingProject.companyInfo?.customerEmail ||
+        editingProject.contactEmail ||
+        customerProfile?.email ||
+        ''
+      );
+      setCustomerName(
+        editingProject.companyInfo?.customerName ||
+        editingProject.contactPerson ||
+        editingProject.customerName ||
+        customerProfile?.name ||
+        `${customerProfile?.firstName||''} ${customerProfile?.lastName||''}`.trim() ||
+        ''
+      );
       setTeamMembersEmails(editingProject.team || []);
       setSelectedStage(editingProject.stage || 'Planning');
       setProjectDescription(editingProject.description || ''); // Populate description
@@ -53,6 +77,9 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
     } else {
       // For new projects, pre-fill from customerProfile and companyProfile if available
       if (!projectName) setProjectName(customerProfile?.name || '');
+      if (!companyName) setCompanyName(companyProfile?.company || companyProfile?.companyName || '');
+      if (!customerEmail) setCustomerEmail(customerProfile?.email || '');
+      if (!customerName) setCustomerName(customerProfile?.name || `${customerProfile?.firstName||''} ${customerProfile?.lastName||''}`.trim() || '');
       // Don't automatically add creator to team members - they're already the project owner
       // Leave team members empty by default
       if (!selectedStage) setSelectedStage('Planning');
@@ -133,6 +160,14 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
 
       onConfirm({
         name: projectName.trim(),
+        company: companyName.trim(),
+        contactEmail: customerEmail.trim(),
+        customerName: customerName.trim(),
+        companyInfo: {
+          companyName: companyName.trim(),
+          customerEmail: customerEmail.trim(),
+          customerName: customerName.trim()
+        },
         team: resolvedTeam,
         stage: selectedStage,
         description: projectDescription, // Include description
@@ -145,6 +180,9 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
       });
       // Reset form
       setProjectName('');
+      setCompanyName('');
+      setCustomerEmail('');
+      setCustomerName('');
       setTeamMembersEmails([]); // Reset to empty - don't auto-add creator
       setNewMember('');
       setSelectedStage('Planning');
@@ -156,6 +194,9 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
 
   const handleCancel = () => {
     setProjectName('');
+    setCompanyName('');
+    setCustomerEmail('');
+    setCustomerName('');
     setTeamMembersEmails([]); // Reset to empty - don't auto-add creator
     setNewMember('');
     setSelectedStage('Planning');
@@ -247,6 +288,81 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
               fontSize: '16px',
               padding: '12px',
               resize: 'vertical'
+            }}
+          />
+        </div>
+
+        {/* Company */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '8px', 
+            color: COLORS.dark,
+            fontSize: '16px',
+            fontWeight: '600'
+          }}>
+            Company
+          </label>
+          <input
+            type="text"
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            placeholder="Company name"
+            style={{
+              ...INPUT_STYLES.base,
+              width: '100%',
+              fontSize: '16px',
+              padding: '12px'
+            }}
+          />
+        </div>
+
+        {/* Customer Name */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '8px', 
+            color: COLORS.dark,
+            fontSize: '16px',
+            fontWeight: '600'
+          }}>
+            Customer Name
+          </label>
+          <input
+            type="text"
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            placeholder="Customer full name"
+            style={{
+              ...INPUT_STYLES.base,
+              width: '100%',
+              fontSize: '16px',
+              padding: '12px'
+            }}
+          />
+        </div>
+
+        {/* Customer Email */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '8px', 
+            color: COLORS.dark,
+            fontSize: '16px',
+            fontWeight: '600'
+          }}>
+            Customer Email
+          </label>
+          <input
+            type="email"
+            value={customerEmail}
+            onChange={(e) => setCustomerEmail(e.target.value)}
+            placeholder="customer@example.com"
+            style={{
+              ...INPUT_STYLES.base,
+              width: '100%',
+              fontSize: '16px',
+              padding: '12px'
             }}
           />
         </div>

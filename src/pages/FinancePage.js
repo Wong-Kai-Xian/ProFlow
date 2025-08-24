@@ -320,26 +320,61 @@ export default function FinancePage() {
     <div style={getPageContainerStyle()}>
       <TopBar />
       <div style={{ ...getContentContainerStyle(), paddingTop: DESIGN_SYSTEM.spacing['2xl'] }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: DESIGN_SYSTEM.spacing.lg }}>
-          <div style={{ background: DESIGN_SYSTEM.pageThemes.home.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: DESIGN_SYSTEM.borderRadius.lg, padding: DESIGN_SYSTEM.spacing.base, boxShadow: DESIGN_SYSTEM.shadows.md }}>
-            <h2 style={{ margin: 0 }}>Finance</h2>
-            <p style={{ margin: '4px 0 0 0', opacity: 0.9 }}>Cross‑project expenses and invoices</p>
-          </div>
+        {/* Header */}
+        <div style={{
+          marginBottom: DESIGN_SYSTEM.spacing.xl,
+          background: DESIGN_SYSTEM.pageThemes.finance.gradient,
+          borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+          padding: `${DESIGN_SYSTEM.spacing['2xl']} 0`,
+          boxShadow: DESIGN_SYSTEM.shadows.lg,
+          color: DESIGN_SYSTEM.colors.text.inverse,
+          textAlign: 'center'
+        }}>
+          <h1 style={{
+            margin: 0,
+            fontSize: DESIGN_SYSTEM.typography.fontSize['3xl'],
+            fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold,
+            marginBottom: DESIGN_SYSTEM.spacing.sm
+          }}>
+            Finance
+          </h1>
+          <p style={{
+            margin: 0,
+            fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+            opacity: 0.9
+          }}>
+            Cross‑project finance management (invoices, expenses, quotes, insights)
+          </p>
+        </div>
 
-          <div style={{ background: DESIGN_SYSTEM.colors.background.primary, borderRadius: DESIGN_SYSTEM.borderRadius.lg, boxShadow: DESIGN_SYSTEM.shadows.sm, padding: DESIGN_SYSTEM.spacing.base }}>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              {['invoices','expenses','quotes','customers','insights'].map(t => (
-                <button key={t} onClick={() => setTab(t)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: activeTab === t ? DESIGN_SYSTEM.colors.secondary[100] : DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12, textTransform: 'capitalize' }}>{t}</button>
-              ))}
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                <Stat label="Expenses" value={expTotal} />
-                <Stat label="Invoiced" value={invTotal} />
-                <Stat label="Unpaid" value={invUnpaid} />
-              </div>
+        <div style={{ background: DESIGN_SYSTEM.colors.background.primary, borderRadius: DESIGN_SYSTEM.borderRadius.lg, boxShadow: DESIGN_SYSTEM.shadows.sm, padding: DESIGN_SYSTEM.spacing.base }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {['invoices','expenses','quotes','customers','insights'].map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                style={{
+                  padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                  border: `1px solid ${activeTab === t ? DESIGN_SYSTEM.pageThemes.finance.accent : DESIGN_SYSTEM.colors.secondary[300]}`,
+                  background: activeTab === t ? DESIGN_SYSTEM.pageThemes.finance.cardGradient : DESIGN_SYSTEM.colors.background.primary,
+                  cursor: 'pointer',
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                  textTransform: 'capitalize'
+                }}
+              >{t}</button>
+            ))}
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              <Stat label="Expenses" value={expTotal} />
+              <Stat label="Invoiced" value={invTotal} />
+              <Stat label="Unpaid" value={invUnpaid} />
             </div>
+          </div>
 
             {activeTab === 'invoices' && (
               <>
+                <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: 8 }}>Invoices</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <label style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary }}>
                     Status
@@ -397,6 +432,7 @@ export default function FinancePage() {
 
             {activeTab === 'expenses' && (
               <>
+                <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: 8 }}>Expenses</div>
                 <div style={{ marginTop: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
                     <button onClick={() => exportExpensesCsv(expensesRows)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Export CSV</button>
@@ -427,6 +463,7 @@ export default function FinancePage() {
 
             {activeTab === 'quotes' && (
               <>
+                <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: 8 }}>Quotes</div>
                 <div style={{ marginTop: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -469,6 +506,7 @@ export default function FinancePage() {
 
             {activeTab === 'insights' && (
               <>
+                <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: 8 }}>Insights</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
                   <Stat label="Total Expenses" value={expTotal} />
                   <Stat label="Total Invoiced" value={invTotal} />
@@ -479,6 +517,7 @@ export default function FinancePage() {
 
             {activeTab === 'customers' && (
               <>
+                <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: 8 }}>Customers</div>
                 <div style={{ marginTop: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
                     <button onClick={() => exportCustomersCsv(customersRollup)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Export CSV</button>
@@ -516,7 +555,6 @@ export default function FinancePage() {
                 </div>
               </>
             )}
-          </div>
         </div>
       </div>
       {showEmailTpl && (

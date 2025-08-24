@@ -142,6 +142,11 @@ export const DESIGN_SYSTEM = {
       gradient: 'linear-gradient(135deg, #ea580c 0%, #c2410c 100%)',
       cardGradient: 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%)'
     },
+    finance: { // Distinct theme for Finance
+      accent: '#6366f1', // Indigo
+      gradient: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
+      cardGradient: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)'
+    },
     profile: {
       accent: '#0ea5e9', // Using primary blue for profile actions directly
       gradient: 'linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)',

@@ -596,7 +596,20 @@ export default function ProjectDetail() {
       // Ensure that only fields expected by Firestore are passed
       const { id, ...dataToUpdate } = updatedDetails; // Exclude 'id' if it's already part of the doc reference
       await updateDoc(projectRef, dataToUpdate);
-      setProjectData(prevData => ({ ...prevData, ...updatedDetails })); // Update local state with merged data
+      // Re-fetch the project to ensure we have canonical values from Firestore
+      try {
+        const snap = await getDoc(projectRef);
+        if (snap.exists()) {
+          setProjectData({ id: snap.id, ...snap.data() });
+          setProjectDetails({ id: snap.id, ...snap.data() });
+        } else {
+          setProjectData(prev => prev ? { ...prev, ...updatedDetails } : prev);
+          setProjectDetails(prev => prev ? { ...prev, ...updatedDetails } : prev);
+        }
+      } catch {
+        setProjectData(prevData => ({ ...prevData, ...updatedDetails }));
+        setProjectDetails(prevData => ({ ...prevData, ...updatedDetails }));
+      }
     }
   };
 
