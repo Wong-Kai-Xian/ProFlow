@@ -9,6 +9,7 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processingIds, setProcessingIds] = useState(new Set());
+  const [banner, setBanner] = useState({ show: false, kind: 'success', text: '' });
 
   const fetchInvitations = async () => {
     if (!currentUser) {
@@ -98,10 +99,12 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
       // 3. Update local state and notify parent
       setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
       onInvitationAction(); // Notify parent (TeamPage) to refresh its data
-      alert("Invitation accepted!");
+      setBanner({ show: true, kind: 'success', text: 'Invitation accepted' });
+      setTimeout(() => setBanner(b => ({ ...b, show: false })), 2000);
     } catch (error) {
       console.error("Error accepting invitation: ", error);
-      alert("Failed to accept invitation.");
+      setBanner({ show: true, kind: 'error', text: 'Failed to accept invitation' });
+      setTimeout(() => setBanner(b => ({ ...b, show: false })), 2500);
     } finally {
       setProcessingIds(prev => {
         const newSet = new Set(prev);
@@ -124,10 +127,12 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
       });
       setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
       onInvitationAction(); // Notify parent (TeamPage) to refresh its data
-      alert("Invitation rejected.");
+      setBanner({ show: true, kind: 'success', text: 'Invitation rejected' });
+      setTimeout(() => setBanner(b => ({ ...b, show: false })), 2000);
     } catch (error) {
       console.error("Error rejecting invitation: ", error);
-      alert("Failed to reject invitation.");
+      setBanner({ show: true, kind: 'error', text: 'Failed to reject invitation' });
+      setTimeout(() => setBanner(b => ({ ...b, show: false })), 2500);
     } finally {
       setProcessingIds(prev => {
         const newSet = new Set(prev);
@@ -143,6 +148,21 @@ export default function IncomingInvitationsModal({ isOpen, onClose, onInvitation
     <div style={modalOverlayStyle}>
       <div style={modalContentStyle}>
         <h2 style={{ color: COLORS.text, marginBottom: '20px' }}>My Invitations</h2>
+
+        {banner.show && (
+          <div style={{
+            margin: '0 0 14px 0',
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: banner.kind === 'success' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+            color: banner.kind === 'success' ? '#065f46' : '#7f1d1d',
+            border: `1px solid ${banner.kind === 'success' ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)'}`,
+            fontWeight: 600,
+            textAlign: 'left'
+          }}>
+            {banner.text}
+          </div>
+        )}
 
         {loading ? (
           <div style={{ textAlign: "center", padding: "30px", color: COLORS.lightText }}>Loading invitations...</div>

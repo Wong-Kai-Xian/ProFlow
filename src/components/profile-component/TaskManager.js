@@ -1,20 +1,24 @@
-import React from "react";
+import React, { useState } from "react";
 import { COLORS, BUTTON_STYLES, LAYOUT } from "./constants"; // Import LAYOUT
 
 export default function TaskManager({ stage, stageData, setStageData }) {
   const tasks = stageData[stage]?.tasks || [];
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newTaskName, setNewTaskName] = useState("");
 
-  const addTask = () => {
-    const taskName = prompt("Enter task name:");
+  const confirmAddTask = () => {
+    const taskName = newTaskName;
     if (taskName && taskName.trim()) {
       const newTasks = [...tasks, { name: taskName.trim(), done: false }];
-      setStageData({ 
-        ...stageData, 
-        [stage]: { 
-          ...stageData[stage], 
-          tasks: newTasks 
-        } 
+      setStageData({
+        ...stageData,
+        [stage]: {
+          ...stageData[stage],
+          tasks: newTasks
+        }
       });
+      setNewTaskName("");
+      setShowAddModal(false);
     }
   };
 
@@ -49,7 +53,7 @@ export default function TaskManager({ stage, stageData, setStageData }) {
         marginBottom: LAYOUT.smallGap
       }}>
         <button
-          onClick={addTask}
+          onClick={() => setShowAddModal(true)}
           style={{
             ...BUTTON_STYLES.primary,
             padding: "6px 12px",
@@ -120,6 +124,25 @@ export default function TaskManager({ stage, stageData, setStageData }) {
             </li>
           ))}
         </ul>
+      )}
+      {showAddModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}>
+          <div style={{ background: "#fff", borderRadius: 8, padding: 16, width: 360, maxWidth: "95vw", boxShadow: "0 10px 25px rgba(0,0,0,0.15)" }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Add Task</div>
+            <input
+              value={newTaskName}
+              onChange={(e) => setNewTaskName(e.target.value)}
+              placeholder="Task name"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmAddTask(); }}
+              style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 10px" }}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+              <button onClick={() => { setShowAddModal(false); setNewTaskName(""); }} style={{ ...BUTTON_STYLES.secondary }}>Cancel</button>
+              <button onClick={confirmAddTask} style={{ ...BUTTON_STYLES.primary }}>Add</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
