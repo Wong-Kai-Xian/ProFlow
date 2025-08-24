@@ -173,9 +173,9 @@ export default function TeamPage() {
     setShowInviteModal(false);
   };
 
-  const filteredMembers = teamMembers.filter(member =>
-    member.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredMembers = connectionMembers.filter(member =>
+    (member.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (member.email || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredPendingInvitations = pendingInvitations.filter(invitation =>
@@ -534,6 +534,9 @@ export default function TeamPage() {
                     <div style={{ fontSize: "14px", color: "#64748b", fontWeight: "500" }}>
                       Invitation pending...
                     </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={async () => { try { await deleteDoc(doc(db, 'invitations', invitation.id)); setPendingInvitations(prev => prev.filter(i => i.id !== invitation.id)); } catch (e) { console.error(e); alert('Failed to cancel'); } }} style={{ border: '1px solid #e2e8f0', background: '#fff', color: '#ef4444', padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
                   </div>
                   <div style={{
                     position: "absolute",

@@ -99,15 +99,33 @@ export default function ApprovalPage() {
       where('viewers', 'array-contains', currentUser.uid)
     );
 
+    const normalizeDateValue = (val, timeVal) => {
+      try {
+        if (val && typeof val.toDate === 'function') {
+          return val.toDate();
+        }
+        if (typeof val === 'string' && val) {
+          const time = (typeof timeVal === 'string' && timeVal.trim()) ? timeVal : '00:00';
+          const d = new Date(`${val}T${time}`);
+          return isNaN(d) ? null : d;
+        }
+        if (typeof val === 'number') {
+          const d = new Date(val);
+          return isNaN(d) ? null : d;
+        }
+      } catch {}
+      return null;
+    };
+
     const unsubscribe1 = onSnapshot(q1, (snapshot) => {
       const requests = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
           ...data,
-          dateRequested: data.dateRequested?.toDate(),
-          decisionDate: data.decisionDate?.toDate(),
-          dueDate: data.dueDate?.toDate()
+          dateRequested: normalizeDateValue(data.dateRequested),
+          decisionDate: normalizeDateValue(data.decisionDate),
+          dueDate: normalizeDateValue(data.dueDate, data.dueTime)
         };
       });
       updateRequestsList(requests);
@@ -119,9 +137,9 @@ export default function ApprovalPage() {
         return {
           id: doc.id,
           ...data,
-          dateRequested: data.dateRequested?.toDate(),
-          decisionDate: data.decisionDate?.toDate(),
-          dueDate: data.dueDate?.toDate()
+          dateRequested: normalizeDateValue(data.dateRequested),
+          decisionDate: normalizeDateValue(data.decisionDate),
+          dueDate: normalizeDateValue(data.dueDate, data.dueTime)
         };
       });
       updateRequestsList(requests);
@@ -133,9 +151,9 @@ export default function ApprovalPage() {
         return {
           id: doc.id,
           ...data,
-          dateRequested: data.dateRequested?.toDate(),
-          decisionDate: data.decisionDate?.toDate(),
-          dueDate: data.dueDate?.toDate()
+          dateRequested: normalizeDateValue(data.dateRequested),
+          decisionDate: normalizeDateValue(data.decisionDate),
+          dueDate: normalizeDateValue(data.dueDate, data.dueTime)
         };
       });
       updateRequestsList(requests);
