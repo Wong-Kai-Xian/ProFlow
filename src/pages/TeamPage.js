@@ -7,6 +7,7 @@ import UserAvatar from '../components/shared/UserAvatar';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useLocation } from 'react-router-dom';
 import InviteMemberModal from '../components/team-component/InviteMemberModal';
+import DeleteConfirmationModal from '../components/common/DeleteConfirmationModal';
 import { FaSync, FaUsers, FaClock, FaUserPlus } from 'react-icons/fa';
 import IncomingInvitationsModal from '../components/team-component/IncomingInvitationsModal';
 
@@ -25,6 +26,12 @@ export default function TeamPage() {
   const [deleteStep, setDeleteStep] = useState(1);
   const [memberToDelete, setMemberToDelete] = useState(null);
   const [isDeletingMember, setIsDeletingMember] = useState(false);
+  const [showCancelInviteModal, setShowCancelInviteModal] = useState(false);
+  const [inviteToCancel, setInviteToCancel] = useState(null);
+  const [isCancellingInvite, setIsCancellingInvite] = useState(false);
+  const [showRemoveMemberModal, setShowRemoveMemberModal] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState(null);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   useEffect(() => {
     if (!inviteMessage) return;
@@ -581,7 +588,7 @@ export default function TeamPage() {
                     </>
                   )}
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={async () => { try { await deleteDoc(doc(db, 'invitations', invitation.id)); setPendingInvitations(prev => prev.filter(i => i.id !== invitation.id)); } catch (e) { console.error(e); alert('Failed to cancel'); } }} style={{ border: '1px solid #e2e8f0', background: '#fff', color: '#ef4444', padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                    <button onClick={() => { setInviteToCancel(invitation); setShowCancelInviteModal(true); }} style={{ border: '1px solid #e2e8f0', background: '#fff', color: '#ef4444', padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
                   </div>
                   <div style={{
                     position: "absolute",

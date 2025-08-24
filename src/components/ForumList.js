@@ -441,7 +441,7 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                     border: "1px solid #dcfce7"
                   }}>
                     <span style={{ fontWeight: "600", color: "#16a34a" }}>Posts</span>
-                    <span style={{ fontWeight: "700", color: "#15803d" }}>{forum.posts || 0}</span>
+                    <span style={{ fontWeight: "700", color: "#15803d" }}>{typeof forum.actualPostCount === 'number' ? forum.actualPostCount : (forum.posts || 0)}</span>
                   </div>
                 </div>
 
