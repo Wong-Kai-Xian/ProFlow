@@ -753,7 +753,7 @@ export default function CustomerProfile() {
       });
       setProjectSnapshots(prev => ({ ...(prev || {}), [newProjectRef.id]: snapshot }));
 
-      // Move all customer draft quotes into the new project's quotes collection
+      // Copy all customer draft quotes into the new project's quotes collection (keep originals for reference, tag with projectId)
       try {
         const draftsSnap = await getDocs(collection(db, 'customerProfiles', id, 'quotesDrafts'));
         const addPromises = [];
@@ -768,7 +768,9 @@ export default function CustomerProfile() {
             status: q.status || 'draft',
             createdAt: serverTimestamp(),
             movedFromCustomerId: id,
-          }).then(() => deleteDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id))).catch(() => {}));
+          }).catch(() => {}));
+          // Tag the customer-level draft with projectId so it won't appear across other projects in profile
+          addPromises.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
         });
         if (addPromises.length > 0) {
           await Promise.all(addPromises);

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { DESIGN_SYSTEM, getCardStyle } from '../../styles/designSystem';
 import AttachedFiles from './AttachedFiles';
 import CustomerQuotesPanel from './CustomerQuotesPanel';
+import ProjectQuotesPanel from '../project-component/ProjectQuotesPanel';
 import ProjectReminders from '../project-component/Reminders';
 import CustomerReminders from './Reminders';
 import StatusPanel from './StatusPanel';
@@ -247,12 +248,16 @@ export default function ProjectWorkspacePanel({
         )}
 
         {activeTab === 'Quotes' && (
-          <CustomerQuotesPanel
-            customerId={customerId}
-            projects={projects}
-            customerProfile={customerProfile}
-            readOnly={readOnlyCustomer}
-          />
+          selectedProjectId ? (
+            <ProjectQuotesPanel projectId={selectedProjectId} />
+          ) : (
+            <CustomerQuotesPanel
+              customerId={customerId}
+              projects={projects}
+              customerProfile={customerProfile}
+              readOnly={readOnlyCustomer}
+            />
+          )
         )}
 
         {activeTab === 'Actions' && (

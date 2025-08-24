@@ -14,6 +14,7 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
     const col = collection(db, 'customerProfiles', customerId, 'quotesDrafts');
     const unsub = onSnapshot(col, snap => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(q => !q.projectId) // show only customer-level quotes, not ones linked to a project
         .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
       setQuotes(list);
     });
