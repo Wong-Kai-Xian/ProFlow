@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
+import { DESIGN_SYSTEM, getButtonStyle } from '../../styles/designSystem';
 import { getAcceptedTeamMembersForProject } from '../../services/teamService';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -105,57 +105,57 @@ export default function ApprovalSelectionModal({
       zIndex: 1000
     }}>
       <div style={{
-        background: COLORS.background,
-        padding: LAYOUT.gap,
-        borderRadius: LAYOUT.borderRadius,
-        boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-        width: "500px",
-        maxWidth: "90%",
+        background: DESIGN_SYSTEM.colors.background.primary,
+        padding: DESIGN_SYSTEM.spacing.lg,
+        borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+        boxShadow: DESIGN_SYSTEM.shadows.xl,
+        width: "540px",
+        maxWidth: "92%",
         maxHeight: "80vh",
         overflowY: "auto",
         display: "flex",
         flexDirection: "column",
-        gap: LAYOUT.smallGap,
+        gap: DESIGN_SYSTEM.spacing.base,
       }}>
-        <h3 style={{ margin: 0, color: COLORS.dark, fontSize: "18px", fontWeight: "600" }}>
+        <h3 style={{ margin: 0, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>
           {title}
         </h3>
         
-        <p style={{ color: COLORS.text, fontSize: "14px", lineHeight: "1.5", margin: 0 }}>
+        <p style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, lineHeight: 1.6, margin: 0 }}>
           {message}
         </p>
 
         {/* Action Selection */}
-        <div style={{ marginTop: LAYOUT.smallGap }}>
-          <label style={{ display: 'block', marginBottom: '8px', color: COLORS.dark, fontSize: '14px', fontWeight: '500' }}>
+        <div style={{ marginTop: DESIGN_SYSTEM.spacing.base }}>
+          <label style={{ display: 'block', marginBottom: DESIGN_SYSTEM.spacing.xs, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium }}>
             Decision *
           </label>
-          <div style={{ display: 'flex', gap: LAYOUT.smallGap }}>
+          <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.sm }}>
             <button
               onClick={() => setSelectedAction('approve')}
               style={{
-                ...BUTTON_STYLES.primary,
-                backgroundColor: selectedAction === 'approve' ? COLORS.success : COLORS.light,
-                color: selectedAction === 'approve' ? COLORS.white : COLORS.dark,
-                border: `2px solid ${selectedAction === 'approve' ? COLORS.success : COLORS.border}`,
+                ...getButtonStyle('secondary','projects'),
+                backgroundColor: selectedAction === 'approve' ? DESIGN_SYSTEM.colors.success : DESIGN_SYSTEM.colors.background.secondary,
+                color: selectedAction === 'approve' ? DESIGN_SYSTEM.colors.text.inverse : DESIGN_SYSTEM.colors.text.primary,
+                border: selectedAction === 'approve' ? 'none' : `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
                 flex: 1,
-                padding: "10px"
+                padding: DESIGN_SYSTEM.spacing.sm
               }}
             >
-              ✓ Approve
+              Approve
             </button>
             <button
               onClick={() => setSelectedAction('reject')}
               style={{
-                ...BUTTON_STYLES.primary,
-                backgroundColor: selectedAction === 'reject' ? COLORS.danger : COLORS.light,
-                color: selectedAction === 'reject' ? COLORS.white : COLORS.dark,
-                border: `2px solid ${selectedAction === 'reject' ? COLORS.danger : COLORS.border}`,
+                ...getButtonStyle('secondary','projects'),
+                backgroundColor: selectedAction === 'reject' ? DESIGN_SYSTEM.colors.error : DESIGN_SYSTEM.colors.background.secondary,
+                color: selectedAction === 'reject' ? DESIGN_SYSTEM.colors.text.inverse : DESIGN_SYSTEM.colors.text.primary,
+                border: selectedAction === 'reject' ? 'none' : `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
                 flex: 1,
-                padding: "10px"
+                padding: DESIGN_SYSTEM.spacing.sm
               }}
             >
-              ✗ Reject
+              Reject
             </button>
           </div>
         </div>
@@ -163,38 +163,38 @@ export default function ApprovalSelectionModal({
         {/* Team Member Selection (if enabled) */}
         {showTeamSelection && (
           <div>
-            <label style={{ display: 'block', marginBottom: '8px', color: COLORS.dark, fontSize: '14px', fontWeight: '500' }}>
+            <label style={{ display: 'block', marginBottom: DESIGN_SYSTEM.spacing.xs, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium }}>
               Notify Team Members (Optional)
             </label>
             {loadingTeam ? (
-              <p style={{ color: COLORS.lightText, fontSize: "12px" }}>Loading team members...</p>
+              <p style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.xs }}>Loading team members...</p>
             ) : acceptedTeamMembers.length > 0 ? (
               <div style={{ 
                 maxHeight: "150px", 
                 overflowY: "auto", 
-                border: `1px solid ${COLORS.border}`, 
-                borderRadius: LAYOUT.borderRadius, 
-                padding: LAYOUT.smallGap 
+                border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, 
+                borderRadius: DESIGN_SYSTEM.borderRadius.base, 
+                padding: DESIGN_SYSTEM.spacing.sm 
               }}>
                 {acceptedTeamMembers.map(member => (
                   <div key={member.id} style={{ 
                     display: 'flex', 
                     alignItems: 'center', 
-                    marginBottom: '8px',
-                    padding: '4px',
-                    borderRadius: '4px',
-                    backgroundColor: selectedTeamMembers.includes(member.id) ? COLORS.light : 'transparent'
+                    marginBottom: DESIGN_SYSTEM.spacing.xs,
+                    padding: DESIGN_SYSTEM.spacing.xs,
+                    borderRadius: DESIGN_SYSTEM.borderRadius.sm,
+                    backgroundColor: selectedTeamMembers.includes(member.id) ? DESIGN_SYSTEM.colors.background.secondary : 'transparent'
                   }}>
                     <input
                       type="checkbox"
                       id={`member-${member.id}`}
                       checked={selectedTeamMembers.includes(member.id)}
                       onChange={() => handleTeamMemberToggle(member.id)}
-                      style={{ marginRight: '8px' }}
+                      style={{ marginRight: DESIGN_SYSTEM.spacing.xs }}
                     />
                     <label htmlFor={`member-${member.id}`} style={{ 
-                      fontSize: '14px', 
-                      color: COLORS.dark,
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm, 
+                      color: DESIGN_SYSTEM.colors.text.primary,
                       cursor: 'pointer',
                       flex: 1
                     }}>
@@ -204,7 +204,7 @@ export default function ApprovalSelectionModal({
                 ))}
               </div>
             ) : (
-              <p style={{ color: COLORS.lightText, fontSize: "12px" }}>
+              <p style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.xs }}>
                 No accepted team members available for notification.
               </p>
             )}
@@ -213,7 +213,7 @@ export default function ApprovalSelectionModal({
 
         {/* Admin Message */}
         <div>
-          <label style={{ display: 'block', marginBottom: '8px', color: COLORS.dark, fontSize: '14px', fontWeight: '500' }}>
+          <label style={{ display: 'block', marginBottom: DESIGN_SYSTEM.spacing.xs, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium }}>
             Message (Optional)
           </label>
           <textarea
@@ -221,10 +221,14 @@ export default function ApprovalSelectionModal({
             onChange={(e) => setAdminMessage(e.target.value)}
             placeholder="Add a message about your decision..."
             style={{
-              ...INPUT_STYLES.base,
               width: "100%",
               minHeight: "60px",
-              resize: "vertical"
+              resize: "vertical",
+              padding: DESIGN_SYSTEM.spacing.sm,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              outline: 'none',
+              fontSize: DESIGN_SYSTEM.typography.fontSize.sm
             }}
             disabled={loading}
           />
@@ -234,14 +238,14 @@ export default function ApprovalSelectionModal({
         <div style={{ 
           display: "flex", 
           justifyContent: "flex-end", 
-          gap: LAYOUT.smallGap, 
-          marginTop: LAYOUT.smallGap,
-          borderTop: `1px solid ${COLORS.border}`,
-          paddingTop: LAYOUT.smallGap
+          gap: DESIGN_SYSTEM.spacing.sm, 
+          marginTop: DESIGN_SYSTEM.spacing.sm,
+          borderTop: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+          paddingTop: DESIGN_SYSTEM.spacing.sm
         }}>
           <button 
             onClick={onClose} 
-            style={BUTTON_STYLES.secondary}
+            style={getButtonStyle('secondary','projects')}
             disabled={loading}
           >
             Cancel
@@ -249,9 +253,11 @@ export default function ApprovalSelectionModal({
           <button 
             onClick={handleSubmit} 
             style={{
-              ...BUTTON_STYLES.primary,
-              backgroundColor: selectedAction === 'approve' ? COLORS.success : 
-                             selectedAction === 'reject' ? COLORS.danger : COLORS.primary
+              ...getButtonStyle('secondary','projects'),
+              backgroundColor: selectedAction === 'approve' ? DESIGN_SYSTEM.colors.success : 
+                             selectedAction === 'reject' ? DESIGN_SYSTEM.colors.error : DESIGN_SYSTEM.colors.primary[600],
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              border: 'none'
             }}
             disabled={loading || !selectedAction}
           >

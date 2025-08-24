@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
-import { DESIGN_SYSTEM } from '../styles/designSystem';
+import { DESIGN_SYSTEM, getPageContainerStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../firebase';
 import { 
@@ -563,7 +563,7 @@ export default function ApprovalPage() {
                     textDecoration: 'none'
                   }}
                 >
-                  📎 {request.decisionFileNames?.[index] || `File ${index + 1}`}
+                  {request.decisionFileNames?.[index] || `File ${index + 1}`}
                 </button>
               ))}
             </div>
@@ -601,31 +601,25 @@ export default function ApprovalPage() {
   }
 
   return (
-    <div style={{ 
-      fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary, 
-      background: DESIGN_SYSTEM.colors.background.secondary, 
-      minHeight: "100vh" 
-    }}>
+    <div style={getPageContainerStyle()}>
       <TopBar />
       
-      <div style={{
-        maxWidth: "1400px",
-        margin: "0 auto",
-        padding: DESIGN_SYSTEM.spacing.xl
-      }}>
+      <div style={{ ...getContentContainerStyle(), paddingTop: DESIGN_SYSTEM.spacing['2xl'] }}>
         {/* Header */}
         <div style={{
           marginBottom: DESIGN_SYSTEM.spacing.xl,
-          background: DESIGN_SYSTEM.colors.background.primary,
+          background: DESIGN_SYSTEM.pageThemes.neutral.gradient,
           borderRadius: DESIGN_SYSTEM.borderRadius.lg,
-          padding: DESIGN_SYSTEM.spacing.lg,
-          boxShadow: DESIGN_SYSTEM.shadows.sm
+          padding: `${DESIGN_SYSTEM.spacing['2xl']} 0`,
+          boxShadow: DESIGN_SYSTEM.shadows.lg,
+          color: DESIGN_SYSTEM.colors.text.inverse,
+          textAlign: 'center'
         }}>
           <h1 style={{
             margin: 0,
-            fontSize: DESIGN_SYSTEM.typography.fontSize["2xl"],
+            fontSize: DESIGN_SYSTEM.typography.fontSize['3xl'],
             fontWeight: DESIGN_SYSTEM.typography.fontWeight.bold,
-            color: DESIGN_SYSTEM.colors.text.primary,
+            color: DESIGN_SYSTEM.colors.text.inverse,
             marginBottom: DESIGN_SYSTEM.spacing.sm
           }}>
             Approval Requests
@@ -633,7 +627,7 @@ export default function ApprovalPage() {
           <p style={{
             margin: 0,
             fontSize: DESIGN_SYSTEM.typography.fontSize.base,
-            color: DESIGN_SYSTEM.colors.text.secondary
+            opacity: 0.9
           }}>
             Review and make decisions on stage advancement requests
           </p>
@@ -655,23 +649,7 @@ export default function ApprovalPage() {
                 key={filter}
                 onClick={() => setCurrentFilter(filter)}
                 style={{
-                  padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
-                  borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                  border: currentFilter === filter 
-                    ? `2px solid ${DESIGN_SYSTEM.colors.primary[500]}`
-                    : `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
-                  backgroundColor: currentFilter === filter 
-                    ? DESIGN_SYSTEM.colors.primary[50]
-                    : DESIGN_SYSTEM.colors.background.primary,
-                  color: currentFilter === filter 
-                    ? DESIGN_SYSTEM.colors.primary[700]
-                    : DESIGN_SYSTEM.colors.text.secondary,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                  fontWeight: currentFilter === filter 
-                    ? DESIGN_SYSTEM.typography.fontWeight.medium
-                    : DESIGN_SYSTEM.typography.fontWeight.normal,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
+                  ...getButtonStyle(currentFilter === filter ? 'primary' : 'secondary', 'neutral')
                 }}
               >
                 {filter} ({filter === 'All' 
@@ -694,7 +672,8 @@ export default function ApprovalPage() {
               borderRadius: DESIGN_SYSTEM.borderRadius.base,
               fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
               outline: 'none',
-              minWidth: '250px'
+              minWidth: '280px',
+              background: DESIGN_SYSTEM.colors.background.primary
             }}
           />
         </div>
@@ -738,7 +717,7 @@ export default function ApprovalPage() {
               </p>
             </div>
           ) : (
-            currentRequests.map(request => (
+            currentRequests.map((request, idx) => (
               <div key={request.id}>
                 {/* Main Row */}
                 <div
@@ -753,7 +732,7 @@ export default function ApprovalPage() {
                     transition: 'background-color 0.2s ease',
                     backgroundColor: expandedRow === request.id 
                       ? DESIGN_SYSTEM.colors.primary[25]
-                      : 'transparent'
+                      : (idx % 2 === 1 ? DESIGN_SYSTEM.colors.secondary[50] : 'transparent')
                   }}
                   onMouseEnter={(e) => {
                     if (expandedRow !== request.id) {
@@ -853,7 +832,7 @@ export default function ApprovalPage() {
                         }}
                         title="Delete Request"
                       >
-                        ✕
+                        Delete
                       </button>
                     )}
                   </div>
@@ -952,7 +931,7 @@ export default function ApprovalPage() {
                                     textDecoration: 'none'
                                   }}
                                 >
-                                  📎 {request.attachedFileNames?.[index] || `File ${index + 1}`}
+                                  {request.attachedFileNames?.[index] || `File ${index + 1}`}
                                 </button>
                               ))}
                             </div>
@@ -991,7 +970,7 @@ export default function ApprovalPage() {
                                 transition: 'all 0.2s ease'
                               }}
                             >
-                              ✓ Approve
+                              Approve
                             </button>
                             <button
                               onClick={(e) => openActionModal(request, 'reject', e)}
@@ -1007,7 +986,7 @@ export default function ApprovalPage() {
                                 transition: 'all 0.2s ease'
                               }}
                             >
-                              ✗ Reject
+                              Reject
                             </button>
                           </div>
                         ) : request.status === 'pending' ? (
