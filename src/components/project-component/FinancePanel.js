@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { DESIGN_SYSTEM } from '../../styles/designSystem';
+import ProjectQuotesPanel from './ProjectQuotesPanel';
 
 export default function FinancePanel({ projectId }) {
-  const [tab, setTab] = useState('expenses'); // 'expenses' | 'invoices'
+  const [tab, setTab] = useState('expenses'); // 'expenses' | 'invoices' | 'quotes'
   const [expenses, setExpenses] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -29,7 +30,7 @@ export default function FinancePanel({ projectId }) {
   const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, inv) => s + (Number(inv.total) || 0), 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', ...getCardStyleSafe() }}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.projects.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
           <h3 style={{ margin: 0, fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>Finance</h3>
@@ -51,11 +52,14 @@ export default function FinancePanel({ projectId }) {
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <button onClick={() => setTab('expenses')} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: tab === 'expenses' ? DESIGN_SYSTEM.colors.secondary[100] : DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Expenses</button>
           <button onClick={() => setTab('invoices')} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: tab === 'invoices' ? DESIGN_SYSTEM.colors.secondary[100] : DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Invoices</button>
+          <button onClick={() => setTab('quotes')} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: tab === 'quotes' ? DESIGN_SYSTEM.colors.secondary[100] : DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Quotes</button>
         </div>
         {tab === 'expenses' ? (
           <ExpensesList projectId={projectId} items={expenses} />
-        ) : (
+        ) : tab === 'invoices' ? (
           <InvoicesList projectId={projectId} items={invoices} />
+        ) : (
+          <ProjectQuotesPanel projectId={projectId} />
         )}
       </div>
 

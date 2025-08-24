@@ -726,6 +726,28 @@ export default function CustomerProfile() {
       });
       setProjectSnapshots(prev => ({ ...(prev || {}), [newProjectRef.id]: snapshot }));
 
+      // Move all customer draft quotes into the new project's quotes collection
+      try {
+        const draftsSnap = await getDocs(collection(db, 'customerProfiles', id, 'quotesDrafts'));
+        const addPromises = [];
+        draftsSnap.forEach(d => {
+          const q = d.data() || {};
+          const items = Array.isArray(q.items) ? q.items : [];
+          addPromises.push(addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
+            client: q.client || '',
+            validUntil: q.validUntil || '',
+            items,
+            total: Number(q.total || 0),
+            status: q.status || 'draft',
+            createdAt: serverTimestamp(),
+            movedFromCustomerId: id,
+          }).then(() => deleteDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id))).catch(() => {}));
+        });
+        if (addPromises.length > 0) {
+          await Promise.all(addPromises);
+        }
+      } catch {}
+
       console.log("Project created from conversion with ID:", newProjectRef.id);
       // Reset non-core panels for a clean state per requirement
       setActivities([]);

@@ -13,6 +13,7 @@ import AdvancedApprovalRequestModal from '../components/project-component/Advanc
 import AddTeamMemberModal from '../components/project-component/AddTeamMemberModal';
 import TeamMembersPanel from '../components/project-component/TeamMembersPanel';
 import FinancePanel from '../components/project-component/FinancePanel';
+import ProjectQuotesPanel from '../components/project-component/ProjectQuotesPanel';
 import { db } from "../firebase";
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs, arrayUnion, arrayRemove, addDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext';
@@ -454,7 +455,7 @@ export default function ProjectDetail() {
   const [projectTasks, setProjectTasks] = useState([]);
   const [projectReminders, setProjectReminders] = useState([]);
   const [projectDetails, setProjectDetails] = useState(null);
-  const [tasksCollapsed, setTasksCollapsed] = useState(false);
+  const [stagesCollapsed, setStagesCollapsed] = useState(false);
 
   const handleAdvanceStage = async () => {
     const currentStageIndex = projectStages.indexOf(currentStage);
@@ -1157,6 +1158,8 @@ export default function ProjectDetail() {
             </div>
           </div>
 
+          {/* Project Quotes Section moved into Finance tab */}
+
             {/* Meeting Transcripts Section */}
             <div style={{
               ...getCardStyle('projects'),
@@ -1293,7 +1296,7 @@ export default function ProjectDetail() {
             minWidth: '0',
             overflowX: 'hidden' 
         }}>
-          {/* Project Stages Section */}
+          {/* Project Stages + inline Tasks Section */}
           <div style={{
             ...getCardStyle('projects'),
               padding: 0,
@@ -1373,69 +1376,57 @@ export default function ProjectDetail() {
                   {currentApproval ? 'Pending Approval' : 'Send Approval'}
                 </button>
                 )}
+                {!isEditingStages && (
+                  <button
+                    onClick={() => setStagesCollapsed(v => !v)}
+                    style={{
+                      ...getButtonStyle('secondary', 'projects'),
+                      background: 'rgba(255,255,255,0.2)',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                    }}
+                    title={stagesCollapsed ? 'Expand' : 'Collapse'}
+                  >
+                    {stagesCollapsed ? 'Expand' : 'Collapse'}
+                  </button>
+                )}
               </div>
           </div>
+            {!stagesCollapsed && (
             <div style={{ padding: DESIGN_SYSTEM.spacing.base, overflowX: 'auto', maxWidth: '100%', width: '100%', boxSizing: 'border-box', minWidth: '0' }}>
-              <StageIndicator 
-                currentStage={currentStage} 
-                allStages={isEditingStages ? workingStages : projectStages} 
-                onAdvanceStage={handleAdvanceStage} 
-                onGoBackStage={handleGoBackStage} 
-                isCurrentStageTasksComplete={isCurrentStageTasksComplete}
-                onStageSelect={handleStageSelect}
-                canAdvance={canAdvanceStage}
-                editing={isEditingStages}
-                onAddStage={handleAddStage}
-                onDeleteStageAt={handleDeleteStageAt}
-                onRenameStage={handleRenameStageAt}
-                onMoveStageLeft={handleMoveStageLeft}
-                onMoveStageRight={handleMoveStageRight}
-              />
+               <StageIndicator 
+                 currentStage={currentStage} 
+                 allStages={isEditingStages ? workingStages : projectStages} 
+                 onAdvanceStage={handleAdvanceStage} 
+                 onGoBackStage={handleGoBackStage} 
+                 isCurrentStageTasksComplete={isCurrentStageTasksComplete}
+                 onStageSelect={handleStageSelect}
+                 canAdvance={canAdvanceStage}
+                 editing={isEditingStages}
+                 onAddStage={handleAddStage}
+                 onDeleteStageAt={handleDeleteStageAt}
+                 onRenameStage={handleRenameStageAt}
+                 onMoveStageLeft={handleMoveStageLeft}
+                 onMoveStageRight={handleMoveStageRight}
+               />
             </div>
-          </div>
-
-          {/* Project Tasks Section */}
-          <div style={{
-            ...getCardStyle('projects'),
-            flex: tasksCollapsed ? '0 0 auto' : 1.2,
-            minHeight: tasksCollapsed ? "auto" : "500px",
-            display: "flex",
-            flexDirection: "column"
-          }}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <h3 style={{
-                margin: 0,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-              }}>
-                Stage — {currentStage}
-              </h3>
-              <button
-                onClick={() => setTasksCollapsed(v => !v)}
-                style={{ ...getButtonStyle('secondary', 'projects') }}
-                title={tasksCollapsed ? 'Expand' : 'Collapse'}
-              >
-                {tasksCollapsed ? 'Expand' : 'Collapse'}
-              </button>
-            </div>
-            {!tasksCollapsed && (
-              <div style={{ flex: 1, overflow: "hidden" }}>
-                <ProjectTaskPanel 
-                  projectTasks={projectTasks}
-                  setProjectTasks={setProjectTasks}
-                  currentStage={currentStage} 
-                  projectId={projectId}
-                  setProjectData={setProjectData}
-                  projectMembers={projectTeamMembersDetails}
-                />
+            )}
+            {!isEditingStages && !stagesCollapsed && (
+              <div style={{ padding: DESIGN_SYSTEM.spacing.base, borderTop: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <h4 style={{ margin: 0 }}></h4>
+                </div>
+                <div style={{ overflow: 'hidden' }}>
+                  <ProjectTaskPanel 
+                    projectTasks={projectTasks}
+                    setProjectTasks={setProjectTasks}
+                    currentStage={currentStage} 
+                    projectId={projectId}
+                    setProjectData={setProjectData}
+                    projectMembers={projectTeamMembersDetails}
+                  />
+                </div>
               </div>
             )}
           </div>
