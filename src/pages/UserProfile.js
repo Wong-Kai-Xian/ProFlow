@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
@@ -40,6 +40,8 @@ export default function UserProfile() {
   const [projectId, setProjectId] = useState('');
   const [forumId, setForumId] = useState('');
   const [invitations, setInvitations] = useState([]);
+  const [sharedProjects, setSharedProjects] = useState([]);
+  const [sharedForums, setSharedForums] = useState([]);
   const auth = getAuth();
   const currentUser = auth.currentUser;
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
@@ -103,6 +105,50 @@ export default function UserProfile() {
     fetchUserProfile();
     fetchInvitations();
   }, [userId, currentUser]);
+
+  // Compute shared projects and forums with the current user when viewing someone else's profile
+  useEffect(() => {
+    const run = async () => {
+      try {
+        if (!currentUser || !userId || (currentUser.uid === userId)) { setSharedProjects([]); setSharedForums([]); return; }
+        // Ensure we have the viewed user's email for project matching
+        const targetEmail = (userProfile && (userProfile.email || '')) || '';
+        // Shared Projects (projects.team contains emails)
+        try {
+          const projSnap = await getDocs(query(collection(db, 'projects'), where('team', 'array-contains', currentUser.email || '')));
+          const commons = [];
+          projSnap.forEach(p => {
+            const d = p.data();
+            const teamArr = Array.isArray(d.team) ? d.team : [];
+            if (targetEmail && teamArr.includes(targetEmail)) {
+              commons.push({ id: p.id, name: d.name || 'Project' });
+            }
+          });
+          setSharedProjects(commons);
+        } catch {
+          setSharedProjects([]);
+        }
+        // Shared Forums (forums.members contains UIDs)
+        try {
+          const forumSnap = await getDocs(query(collection(db, 'forums'), where('members', 'array-contains', currentUser.uid)));
+          const commonsF = [];
+          forumSnap.forEach(f => {
+            const d = f.data();
+            const membersArr = Array.isArray(d.members) ? d.members : [];
+            if (membersArr.includes(userId)) {
+              commonsF.push({ id: f.id, name: d.name || 'Forum' });
+            }
+          });
+          setSharedForums(commonsF);
+        } catch {
+          setSharedForums([]);
+        }
+      } catch {
+        setSharedProjects([]); setSharedForums([]);
+      }
+    };
+    run();
+  }, [currentUser, userId, userProfile]);
 
   const handleJoinProject = async () => {
     if (!projectId || !currentUser) return;
@@ -427,6 +473,54 @@ export default function UserProfile() {
 
           {/* Right Column - Functions */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.xl }}>
+
+      {/* Shared context with current user when viewing others */}
+      {currentUser && currentUser.uid !== userId && (
+        <div style={{
+          ...getCardStyle('profile'),
+          padding: DESIGN_SYSTEM.spacing.xl
+        }}>
+          <h2 style={{
+            color: DESIGN_SYSTEM.colors.text.primary,
+            fontSize: DESIGN_SYSTEM.typography.fontSize.xl,
+            fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+            marginBottom: DESIGN_SYSTEM.spacing.lg,
+            textAlign: 'center'
+          }}>
+            Shared Workspaces
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: DESIGN_SYSTEM.spacing.base }}>
+            <div>
+              <div style={{ fontWeight: 700, color: DESIGN_SYSTEM.colors.text.primary, marginBottom: 6 }}>Projects</div>
+              {sharedProjects.length === 0 ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>No shared projects</div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {sharedProjects.map(p => (
+                    <Link key={p.id} to={`/project/${p.id}`} style={{ textDecoration: 'none' }}>
+                      <span style={{ display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#111827', fontSize: 12 }}>{p.name}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, color: DESIGN_SYSTEM.colors.text.primary, marginBottom: 6 }}>Forums</div>
+              {sharedForums.length === 0 ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>No shared forums</div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {sharedForums.map(f => (
+                    <Link key={f.id} to={`/forum/${f.id}`} style={{ textDecoration: 'none' }}>
+                      <span style={{ display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#111827', fontSize: 12 }}>{f.name}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {currentUser && currentUser.uid === userId && (
               <>
