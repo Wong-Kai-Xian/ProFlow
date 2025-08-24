@@ -29,7 +29,7 @@ export default function FinancePanel({ projectId }) {
   const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, inv) => s + (Number(inv.total) || 0), 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', ...getCardStyleSafe() }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.projects.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0` }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
           <h3 style={{ margin: 0, fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>Finance</h3>
@@ -67,6 +67,22 @@ export default function FinancePanel({ projectId }) {
       )}
     </div>
   );
+}
+
+function getCardStyleSafe() {
+  try {
+    // Lazy import to avoid circular styled refs; fallback to simple border box
+    const base = DESIGN_SYSTEM;
+    return {
+      border: `1px solid ${base.colors.secondary[200]}`,
+      borderRadius: base.borderRadius.lg,
+      background: base.colors.background.primary,
+      boxShadow: base.shadows.sm,
+      overflow: 'hidden'
+    };
+  } catch {
+    return { border: '1px solid #e5e7eb', borderRadius: 12, background: '#fff', overflow: 'hidden' };
+  }
 }
 
 function ExpensesList({ projectId, items }) {

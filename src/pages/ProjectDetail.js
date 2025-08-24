@@ -1041,14 +1041,6 @@ export default function ProjectDetail() {
             </div>
           </div>
 
-          {/* Finance Section */}
-          <div style={{
-            ...getCardStyle('projects'),
-            flexShrink: 0
-          }}>
-            <FinancePanel projectId={projectId} />
-          </div>
-          
           {/* Project Forum Section */}
           <div style={{
             ...getCardStyle('projects'),
@@ -1229,10 +1221,50 @@ export default function ProjectDetail() {
               }}>
                 Project Stages
               </h3>
+              <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.xs, alignItems: 'center' }}>
+                {!isEditingStages ? (
+                  <button
+                    onClick={enterEditStages}
+                    style={{
+                      ...getButtonStyle('secondary', 'projects'),
+                      background: 'rgba(255,255,255,0.2)',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                    }}
+                  >
+                    Edit Stages
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleSaveStages}
+                      style={{
+                        ...getButtonStyle('primary', 'projects'),
+                        padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                      }}
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={cancelEditStages}
+                      style={{
+                        ...getButtonStyle('secondary', 'projects'),
+                        background: 'rgba(255,255,255,0.2)',
+                        border: '1px solid rgba(255,255,255,0.3)',
+                        padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.sm
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => !currentApproval && handleSendApprovalRequest()}
-                disabled={!!currentApproval}
-                style={{
+                  disabled={!!currentApproval}
+                  style={{
                     ...getButtonStyle('secondary', 'projects'),
                     background: currentApproval ? 'rgba(107,114,128,0.3)' : 'rgba(255,255,255,0.2)',
                     color: currentApproval ? '#9CA3AF' : DESIGN_SYSTEM.colors.text.inverse,
@@ -1240,10 +1272,11 @@ export default function ProjectDetail() {
                     padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
                     fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
                     cursor: currentApproval ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {currentApproval ? 'Pending Approval' : 'Send Approval'}
-              </button>
+                  }}
+                >
+                  {currentApproval ? 'Pending Approval' : 'Send Approval'}
+                </button>
+              </div>
           </div>
             <div style={{ padding: DESIGN_SYSTEM.spacing.base, overflowX: 'hidden' }}>
           <StageIndicator 
