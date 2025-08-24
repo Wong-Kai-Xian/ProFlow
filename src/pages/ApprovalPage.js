@@ -221,7 +221,7 @@ export default function ApprovalPage() {
     return (
       <span style={{
         padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
-        borderRadius: DESIGN_SYSTEM.borderRadius.full,
+        borderRadius: DESIGN_SYSTEM.borderRadius.base,
         fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
         fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
         color: config.color,
@@ -688,7 +688,7 @@ export default function ApprovalPage() {
           {/* Table Header */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 200px 150px 150px 150px 120px',
+            gridTemplateColumns: '1fr 220px 160px 160px 160px 140px',
             gap: DESIGN_SYSTEM.spacing.sm,
             padding: DESIGN_SYSTEM.spacing.base,
             backgroundColor: DESIGN_SYSTEM.colors.secondary[50],
@@ -724,7 +724,7 @@ export default function ApprovalPage() {
                   onClick={() => handleRowClick(request.id)}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '1fr 200px 150px 150px 150px 120px',
+                    gridTemplateColumns: '1fr 220px 160px 160px 160px 140px',
                     gap: DESIGN_SYSTEM.spacing.sm,
                     padding: DESIGN_SYSTEM.spacing.base,
                     borderBottom: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
@@ -745,30 +745,50 @@ export default function ApprovalPage() {
                     }
                   }}
                 >
-                  <div style={{
-                    fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                    color: DESIGN_SYSTEM.colors.text.primary,
-                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium
-                  }}>
-                    {request.requestTitle}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.xs }}>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                      borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                      background: DESIGN_SYSTEM.colors.secondary[100],
+                      border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                      color: DESIGN_SYSTEM.colors.text.primary,
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                      fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                    }}>
+                      {request.projectName || request.entityName || 'Project'}
+                    </span>
+                    <span style={{
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                      color: DESIGN_SYSTEM.colors.text.primary,
+                      fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium
+                    }}>
+                      {request.requestTitle}
+                    </span>
                   </div>
                   
                   <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.xs }}>
                     {getRequestTypeBadge(request.requestType)}
-                    <button
+                    <span
                       onClick={(e) => handleEntityClick(request, e)}
+                      title={request.entityName}
                       style={{
-                        background: 'none',
-                        border: 'none',
-                        color: DESIGN_SYSTEM.colors.primary[600],
+                        display: 'inline-block',
+                        padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                        borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                        background: DESIGN_SYSTEM.colors.background.primary,
+                        border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                        color: DESIGN_SYSTEM.colors.text.primary,
                         fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
                         cursor: 'pointer',
-                        textDecoration: 'underline',
-                        padding: 0
+                        whiteSpace: 'nowrap',
+                        maxWidth: 180,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
                       }}
                     >
                       {request.entityName}
-                    </button>
+                    </span>
                   </div>
                   
                   <div style={{
@@ -796,7 +816,6 @@ export default function ApprovalPage() {
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'space-between',
-                    minWidth: '140px', // Fixed minimum width to ensure consistent layout
                     gap: DESIGN_SYSTEM.spacing.xs 
                   }}>
                     <div style={{ flex: '1' }}>
