@@ -1,4 +1,6 @@
 import React from 'react';
+import Lottie from 'lottie-react';
+import catAnimation from '../../assets/cat.json';
 
 export default function CatAvatar({ size = 42, onClick, fluffy = true, noBackground = false }) {
   const wrapperStyle = {
@@ -28,16 +30,12 @@ export default function CatAvatar({ size = 42, onClick, fluffy = true, noBackgro
 
   return (
     <div style={wrapperStyle} onClick={onClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-      <div style={{ 
-        fontSize: size * 0.5,
-        fontWeight: 'bold',
-        color: '#6B5B95',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        😺
-      </div>
+      <Lottie
+        animationData={catAnimation}
+        loop
+        autoplay
+        style={{ width: size, height: size, background: 'transparent' }}
+      />
     </div>
   );
 }
