@@ -107,11 +107,33 @@ export default function CreateProjectModal({ isOpen, onClose, onConfirm, editing
     setTeamMembersEmails(teamMembersEmails.filter(member => member !== memberToRemove));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (projectName.trim() && currentUser) {
+      // Resolve emails to user UIDs for project team field
+      let resolvedTeam = [];
+      try {
+        const chunkSize = 10;
+        for (let i = 0; i < teamMembersEmails.length; i += chunkSize) {
+          const chunk = teamMembersEmails.slice(i, i + chunkSize);
+          const usersQuery = query(collection(db, "users"), where("email", "in", chunk));
+          const usersSnapshot = await getDocs(usersQuery);
+          const uidByEmail = new Map();
+          usersSnapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            if (data.email) uidByEmail.set(data.email, data.uid || docSnap.id);
+          });
+          chunk.forEach(email => {
+            const uid = uidByEmail.get(email);
+            if (uid) resolvedTeam.push(uid);
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to resolve some team emails to user IDs. Proceeding with resolved ones only.', e);
+      }
+
       onConfirm({
         name: projectName.trim(),
-        team: teamMembersEmails,
+        team: resolvedTeam,
         stage: selectedStage,
         description: projectDescription, // Include description
         deadline: deadline || '',

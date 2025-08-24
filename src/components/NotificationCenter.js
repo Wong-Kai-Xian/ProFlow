@@ -70,6 +70,9 @@ export default function NotificationCenter({ userId, isOpen, onClose }) {
         }
       } else if (n.refType === 'approval') {
         navigate('/approvals');
+      } else if (n.refType === 'invitation') {
+        // Team invitation -> go to Team page and open My Invitations modal
+        navigate('/team', { state: { openInvitations: true } });
       }
       // Fallback: do nothing
     } catch {}

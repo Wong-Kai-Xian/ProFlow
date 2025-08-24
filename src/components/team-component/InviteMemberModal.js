@@ -109,6 +109,7 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite, currentUs
         // Add invitation to a 'invitations' collection
         const docRef = await addDoc(collection(db, "invitations"), {
           fromUserId: currentUserId,
+          fromUserEmail: auth.currentUser?.email || '',
           toUserId: invitedUserId,
           toUserEmail: email,
           status: "pending",

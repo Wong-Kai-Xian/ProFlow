@@ -247,15 +247,7 @@ export default function ActiveUsers({ members }) {
                     if (invitedMap[user.id]) return;
                     setSendingId(user.id);
                     try {
-                      // Create pending invitation
-                      await addDoc(collection(db, 'invitations'), {
-                        fromUserId: currentUser.uid,
-                        fromUserEmail: currentUser.email || '',
-                        toUserId: user.id,
-                        toUserEmail: user.email || '',
-                        status: 'pending',
-                        timestamp: serverTimestamp()
-                      });
+                      // Prevent duplicates before creating invitation
                       const invRef = collection(db, 'invitations');
                       const qOut = query(invRef, where('fromUserId', '==', currentUser.uid), where('toUserId', '==', user.id), where('status', 'in', ['pending','accepted']));
                       const qIn = query(invRef, where('fromUserId', '==', user.id), where('toUserId', '==', currentUser.uid), where('status', 'in', ['pending','accepted']));
@@ -265,6 +257,15 @@ export default function ActiveUsers({ members }) {
                         const p = document.createElement('div'); p.textContent = 'Already invited or connected'; Object.assign(p.style, { position: 'fixed', bottom: '20px', right: '20px', background: '#374151', color: '#fff', padding: '10px 12px', borderRadius: '8px', zIndex: 4000 }); document.body.appendChild(p); setTimeout(() => document.body.removeChild(p), 1200);
                         return;
                       }
+                      // Create pending invitation
+                      await addDoc(collection(db, 'invitations'), {
+                        fromUserId: currentUser.uid,
+                        fromUserEmail: currentUser.email || '',
+                        toUserId: user.id,
+                        toUserEmail: user.email || '',
+                        status: 'pending',
+                        timestamp: serverTimestamp()
+                      });
                       setInvitedMap(m => ({ ...m, [user.id]: true }));
                     } catch (e) {
                       console.error(e);
@@ -340,7 +341,7 @@ export default function ActiveUsers({ members }) {
                     </div>
                   </div>
                   {currentUser && user.id !== currentUser.uid && !invitedMap[user.id] && (
-                    <button onClick={async () => { try { const invRef = collection(db, 'invitations'); const qOut = query(invRef, where('fromUserId', '==', currentUser.uid), where('toUserId', '==', user.id), where('status', 'in', ['pending','accepted'])); const qIn = query(invRef, where('fromUserId', '==', user.id), where('toUserId', '==', currentUser.uid), where('status', 'in', ['pending','accepted'])); const [o, i] = await Promise.all([getDocs(qOut), getDocs(qIn)]); if (!o.empty || !i.empty) { setInvitedMap(m => ({ ...m, [user.id]: true })); return; } await addDoc(collection(db, 'invitations'), { fromUserId: currentUser.uid, toUserId: user.id, toUserEmail: user.email || '', status: 'pending', timestamp: new Date() }); setInvitedMap(m => ({ ...m, [user.id]: true })); } catch (e) { console.error(e); } }} style={{ padding: '4px 8px', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111827', cursor: 'pointer' }}>Add</button>
+                    <button onClick={async () => { try { const invRef = collection(db, 'invitations'); const qOut = query(invRef, where('fromUserId', '==', currentUser.uid), where('toUserId', '==', user.id), where('status', 'in', ['pending','accepted'])); const qIn = query(invRef, where('fromUserId', '==', user.id), where('toUserId', '==', currentUser.uid), where('status', 'in', ['pending','accepted'])); const [o, i] = await Promise.all([getDocs(qOut), getDocs(qIn)]); if (!o.empty || !i.empty) { setInvitedMap(m => ({ ...m, [user.id]: true })); return; } await addDoc(collection(db, 'invitations'), { fromUserId: currentUser.uid, fromUserEmail: currentUser.email || '', toUserId: user.id, toUserEmail: user.email || '', status: 'pending', timestamp: serverTimestamp() }); setInvitedMap(m => ({ ...m, [user.id]: true })); } catch (e) { console.error(e); } }} style={{ padding: '4px 8px', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111827', cursor: 'pointer' }}>Add</button>
                   )}
                   {invitedMap[user.id] && (
                     <span style={{ padding: '2px 8px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 999, color: '#6b7280' }}>Added</span>

@@ -324,10 +324,11 @@ export default function TeamMembersPanel({ projectId, teamMembers, onAddMemberCl
                       if (!outSnap.empty || !inSnap.empty) { setInvitedMap(m => ({ ...m, [member.id]: true })); const p = document.createElement('div'); p.textContent = 'Already invited or connected'; Object.assign(p.style, { position: 'fixed', bottom: '20px', right: '20px', background: '#374151', color: '#fff', padding: '10px 12px', borderRadius: '8px', zIndex: 4000 }); document.body.appendChild(p); setTimeout(() => document.body.removeChild(p), 1200); return; }
                       await addDoc(collection(db, 'invitations'), {
                         fromUserId: currentUser.uid,
+                        fromUserEmail: currentUser.email || '',
                         toUserId: member.id,
                         toUserEmail: member.email || '',
                         status: 'pending',
-                        timestamp: new Date()
+                        timestamp: serverTimestamp()
                       });
                       setInvitedMap(m => ({ ...m, [member.id]: true }));
                       const popup = document.createElement('div');
