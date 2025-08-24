@@ -454,6 +454,7 @@ export default function ProjectDetail() {
   const [projectTasks, setProjectTasks] = useState([]);
   const [projectReminders, setProjectReminders] = useState([]);
   const [projectDetails, setProjectDetails] = useState(null);
+  const [tasksCollapsed, setTasksCollapsed] = useState(false);
 
   const handleAdvanceStage = async () => {
     const currentStageIndex = projectStages.indexOf(currentStage);
@@ -1273,12 +1274,16 @@ export default function ProjectDetail() {
           flexDirection: "column", 
           gap: DESIGN_SYSTEM.spacing.lg, 
           gridColumn: 2, 
-            gridRow: 1 
+            gridRow: 1,
+            minWidth: '0',
+            overflowX: 'hidden' 
         }}>
           {/* Project Stages Section */}
           <div style={{
             ...getCardStyle('projects'),
-              padding: 0
+              padding: 0,
+              overflow: 'hidden',
+              minWidth: '0'
           }}>
             <div style={{
               background: DESIGN_SYSTEM.pageThemes.projects.gradient,
@@ -1353,22 +1358,22 @@ export default function ProjectDetail() {
                 </button>
               </div>
           </div>
-            <div style={{ padding: DESIGN_SYSTEM.spacing.base, overflowX: 'hidden' }}>
-          <StageIndicator 
-            currentStage={currentStage} 
-            allStages={isEditingStages ? workingStages : projectStages} 
-            onAdvanceStage={handleAdvanceStage} 
-            onGoBackStage={handleGoBackStage} 
-            isCurrentStageTasksComplete={isCurrentStageTasksComplete}
-            onStageSelect={handleStageSelect}
-            canAdvance={canAdvanceStage}
-            editing={isEditingStages}
-            onAddStage={handleAddStage}
-            onDeleteStageAt={handleDeleteStageAt}
-            onRenameStage={handleRenameStageAt}
-            onMoveStageLeft={handleMoveStageLeft}
-            onMoveStageRight={handleMoveStageRight}
-          />
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base, overflowX: 'auto', maxWidth: '100%', width: '100%', boxSizing: 'border-box', minWidth: '0' }}>
+              <StageIndicator 
+                currentStage={currentStage} 
+                allStages={isEditingStages ? workingStages : projectStages} 
+                onAdvanceStage={handleAdvanceStage} 
+                onGoBackStage={handleGoBackStage} 
+                isCurrentStageTasksComplete={isCurrentStageTasksComplete}
+                onStageSelect={handleStageSelect}
+                canAdvance={canAdvanceStage}
+                editing={isEditingStages}
+                onAddStage={handleAddStage}
+                onDeleteStageAt={handleDeleteStageAt}
+                onRenameStage={handleRenameStageAt}
+                onMoveStageLeft={handleMoveStageLeft}
+                onMoveStageRight={handleMoveStageRight}
+              />
             </div>
           </div>
 
@@ -1376,6 +1381,7 @@ export default function ProjectDetail() {
           <div style={{
             ...getCardStyle('projects'),
             flex: 1,
+            minHeight: "600px",
             display: "flex",
             flexDirection: "column"
           }}>
@@ -1383,7 +1389,10 @@ export default function ProjectDetail() {
               background: DESIGN_SYSTEM.pageThemes.projects.gradient,
               color: DESIGN_SYSTEM.colors.text.inverse,
               padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
             }}>
               <h3 style={{
                 margin: 0,
@@ -1392,18 +1401,36 @@ export default function ProjectDetail() {
               }}>
                 Project Tasks
               </h3>
+              <button
+                onClick={() => setTasksCollapsed(v => !v)}
+                style={{ ...getButtonStyle('secondary', 'projects') }}
+                title={tasksCollapsed ? 'Expand' : 'Collapse'}
+              >
+                {tasksCollapsed ? 'Expand' : 'Collapse'}
+              </button>
             </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
-          <ProjectTaskPanel 
-            projectTasks={projectTasks}
-            setProjectTasks={setProjectTasks}
-            currentStage={currentStage} 
-            projectId={projectId}
-                setProjectData={setProjectData}
-                projectMembers={projectTeamMembersDetails}
-          />
-        </div>
-      </div>
+            {!tasksCollapsed && (
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <ProjectTaskPanel 
+                  projectTasks={projectTasks}
+                  setProjectTasks={setProjectTasks}
+                  currentStage={currentStage} 
+                  projectId={projectId}
+                  setProjectData={setProjectData}
+                  projectMembers={projectTeamMembersDetails}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Finance Section - moved below Project Tasks */}
+          <div style={{
+            ...getCardStyle('projects'),
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <FinancePanel projectId={projectId} />
+          </div>
         </div>
       </div>
       </div>
