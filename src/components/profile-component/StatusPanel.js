@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from "react";
 import Card from "./Card";
 import { COLORS, INPUT_STYLES, BUTTON_STYLES } from "./constants";
 import IncompleteStageModal from "./IncompleteStageModal"; // Import the new modal
+import { db } from "../../firebase";
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
+import { useAuth } from "../../contexts/AuthContext";
 
 // Define the stages for progress tracking
 
@@ -21,6 +24,45 @@ export default function StatusPanel({
   customerId, // Customer ID for approval requests
   customerName // Customer name for approval requests
 }) {
+  const { currentUser } = useAuth();
+  // Mention helpers
+  const extractMentionEmails = (text = "") => {
+    const emails = new Set();
+    const regex = /@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      emails.add(m[1].toLowerCase());
+    }
+    return Array.from(emails);
+  };
+
+  const notifyMentions = async (text) => {
+    try {
+      const emails = extractMentionEmails(text);
+      if (emails.length === 0) return;
+      for (const email of emails) {
+        try {
+          const uq = query(collection(db, 'users'), where('email', '==', email));
+          const snap = await getDocs(uq);
+          for (const udoc of snap.docs) {
+            const uid = udoc.id;
+            if (!uid || uid === (currentUser?.uid || '')) continue;
+            const snippet = (text || '').slice(0, 140);
+            await addDoc(collection(db, 'users', uid, 'notifications'), {
+              unread: true,
+              createdAt: serverTimestamp(),
+              origin: 'customer',
+              title: 'You were mentioned',
+              message: `${currentUser?.displayName || currentUser?.name || currentUser?.email || 'Someone'}: ${snippet}`,
+              refType: 'mention',
+              customerId,
+              stage: currentStage
+            });
+          }
+        } catch {}
+      }
+    } catch {}
+  };
   const [newNote, setNewNote] = useState("");
   const [newNoteType, setNewNoteType] = useState("Other");
   const [showNoteModal, setShowNoteModal] = useState(false);
@@ -73,7 +115,7 @@ export default function StatusPanel({
     return false;
   };
 
-  const handleAddNote = () => {
+  const handleAddNote = async () => {
     if (newNote.trim()) {
       const noteToAdd = { type: newNoteType, text: newNote.trim(), createdAt: Date.now() };
       const existingNotes = stageData[currentStage]?.notes || [];
@@ -85,6 +127,7 @@ export default function StatusPanel({
           notes: updatedNotes,
         },
       });
+      await notifyMentions(newNote.trim());
       setNewNote("");
       setNewNoteType("Other");
       setShowNoteModal(false);
@@ -111,7 +154,7 @@ export default function StatusPanel({
     setShowNoteModal(true);
   };
 
-  const handleUpdateNote = () => {
+  const handleUpdateNote = async () => {
     if (editingNoteIndex === null || newNote.trim() === "") {
       setShowNoteModal(false);
       return;
@@ -128,6 +171,7 @@ export default function StatusPanel({
         }
       };
     });
+    await notifyMentions(newNote.trim());
     setShowNoteModal(false);
     setEditingNoteIndex(null);
     setNewNote("");

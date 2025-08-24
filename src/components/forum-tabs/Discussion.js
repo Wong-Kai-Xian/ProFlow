@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { COLORS, LAYOUT, INPUT_STYLES, BUTTON_STYLES } from "../profile-component/constants";
 import { db } from "../../firebase"; // Import db
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, arrayUnion, arrayRemove, getDoc, deleteDoc } from "firebase/firestore"; // Import Firestore functions
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, arrayUnion, arrayRemove, getDoc, deleteDoc, where, getDocs } from "firebase/firestore"; // Import Firestore functions
 import { storage } from "../../firebase";
 import { ref, deleteObject } from "firebase/storage";
 import CreatePostModal from "./CreatePostModal"; // Import CreatePostModal
@@ -14,6 +14,45 @@ const formatTimestamp = (timestamp) => {
   // Firestore Timestamp object might need to be converted to a Date object first
   const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
   return date.toLocaleString();
+};
+
+// Mention helpers
+const extractMentionEmails = (text = "") => {
+  const emails = new Set();
+  const regex = /@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    emails.add(m[1].toLowerCase());
+  }
+  return Array.from(emails);
+};
+
+const notifyMentions = async ({ text, forumId, postId, db, currentUser }) => {
+  try {
+    const emails = extractMentionEmails(text);
+    if (emails.length === 0) return;
+    for (const email of emails) {
+      try {
+        const uq = query(collection(db, 'users'), where('email', '==', email));
+        const snap = await getDocs(uq);
+        for (const udoc of snap.docs) {
+          const uid = udoc.id;
+          if (uid === (currentUser?.uid || '')) continue;
+          const snippet = (text || '').slice(0, 140);
+          await addDoc(collection(db, 'users', uid, 'notifications'), {
+            unread: true,
+            createdAt: serverTimestamp(),
+            origin: 'forum',
+            title: 'You were mentioned',
+            message: `${currentUser?.displayName || currentUser?.email || 'Someone'}: ${snippet}`,
+            refType: 'mention',
+            forumId,
+            postId
+          });
+        }
+      } catch {}
+    }
+  } catch {}
 };
 
 // PostItem Sub-component (if you want to keep it separate or move it here)
@@ -96,6 +135,7 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
       await updateDoc(postRef, {
         comments: [...currentComments, newComment]
       });
+      await notifyMentions({ text: newCommentText.trim(), forumId: post.forumId, postId: post.id, db, currentUser });
       
       setNewCommentText(''); // Clear input after commenting
       setShowComments(true);
@@ -696,7 +736,7 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
     if (newPostContent.trim() === '' || !forumId) return;
 
     try {
-      await addDoc(collection(doc(db, "forums", forumId), "posts"), {
+      const ref = await addDoc(collection(doc(db, "forums", forumId), "posts"), {
         content: newPostContent.trim(),
         author: currentUser?.name || currentUser?.displayName || currentUser?.email || "Anonymous", // Use currentUser.name
         authorId: currentUser?.uid, // Add authorId field
@@ -706,6 +746,7 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
         likedBy: [], // Initialize likedBy as an empty array
         starredBy: [], // Initialize starredBy as an empty array
       });
+      await notifyMentions({ text: newPostContent.trim(), forumId, postId: ref.id, db, currentUser });
       setNewPostContent('');
       updateForumLastActivity(); // Update parent forum's last activity
       updateForumPostCount(1); // Increment post count

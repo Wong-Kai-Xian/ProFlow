@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-component/constants';
 import { db } from "../../firebase"; // Import db
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc } from "firebase/firestore"; // Import Firestore functions
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, where, getDocs } from "firebase/firestore"; // Import Firestore functions
 import { useAuth } from '../../contexts/AuthContext'; // Import useAuth
 
 export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
@@ -9,6 +9,45 @@ export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef(null);
+
+  // Mention helpers
+  const extractMentionEmails = (text = '') => {
+    const emails = new Set();
+    const regex = /@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      emails.add(m[1].toLowerCase());
+    }
+    return Array.from(emails);
+  };
+
+  const notifyMentions = async (text) => {
+    try {
+      const emails = extractMentionEmails(text);
+      if (emails.length === 0) return;
+      for (const email of emails) {
+        try {
+          const uq = query(collection(db, 'users'), where('email', '==', email));
+          const snap = await getDocs(uq);
+          for (const udoc of snap.docs) {
+            const uid = udoc.id;
+            if (!uid || uid === (currentUser?.uid || '')) continue;
+            const snippet = (text || '').slice(0, 140);
+            await addDoc(collection(db, 'users', uid, 'notifications'), {
+              unread: true,
+              createdAt: serverTimestamp(),
+              origin: 'task',
+              title: 'You were mentioned in a task chat',
+              message: `${currentUser?.displayName || currentUser?.name || currentUser?.email || 'Someone'}: ${snippet}`,
+              refType: 'mention',
+              projectId,
+              taskId
+            });
+          }
+        } catch {}
+      }
+    } catch {}
+  };
 
   useEffect(() => {
     if (isOpen && taskId && projectId) {
@@ -53,6 +92,7 @@ export default function TaskChatModal({ isOpen, onClose, taskId, projectId }) {
           projectId: projectId,
           taskId: taskId
         });
+        await notifyMentions(newMessage.trim());
         setNewMessage('');
       } catch (error) {
         console.error("Error sending message: ", error);
