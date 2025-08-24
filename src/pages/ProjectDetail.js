@@ -573,15 +573,34 @@ export default function ProjectDetail() {
 
   const handleSaveStages = async () => {
     const newStages = [...workingStages];
-    const newCurrent = newStages[0];
-    // Remove tasks that belong to deleted stages
-    const filteredTaskSections = (projectData?.tasks || []).filter(section => newStages.includes(section.stage));
+    const oldStages = [...projectStages];
+    // Map old stage name to new stage name by index
+    const stageMap = {};
+    const maxLen = Math.max(oldStages.length, newStages.length);
+    for (let i = 0; i < maxLen; i++) {
+      const oldName = oldStages[i];
+      const newName = newStages[i];
+      if (oldName && newName) stageMap[oldName] = newName;
+    }
+    // Remap existing task sections to preserve data
+    const remappedSections = (projectData?.tasks || []).map(section => {
+      const nextName = stageMap[section.stage] || section.stage;
+      return { ...section, stage: nextName };
+    }).filter(section => newStages.includes(section.stage));
+
+    // Keep current mapped if possible, otherwise first
+    const mappedCurrent = stageMap[currentStage] || (newStages.includes(currentStage) ? currentStage : newStages[0]);
+
     if (projectData?.id) {
-      await updateDoc(doc(db, 'projects', projectData.id), { stages: newStages, stage: newCurrent, tasks: filteredTaskSections });
+      await updateDoc(doc(db, 'projects', projectData.id), {
+        stages: newStages,
+        tasks: remappedSections,
+        stage: mappedCurrent
+      });
     }
     setProjectStages(newStages);
-    setCurrentStage(newCurrent);
-    setProjectData(prev => prev ? { ...prev, stages: newStages, stage: newCurrent, tasks: filteredTaskSections } : prev);
+    setProjectData(prev => prev ? { ...prev, stages: newStages, tasks: remappedSections, stage: mappedCurrent } : prev);
+    setCurrentStage(mappedCurrent);
     setIsEditingStages(false);
     setStageSelectOptions(newStages);
     setShowStageSelectModal(true);
@@ -1018,9 +1037,7 @@ export default function ProjectDetail() {
           flexDirection: "column", 
           gap: DESIGN_SYSTEM.spacing.lg,
           gridColumn: 1, 
-          gridRow: 1,
-          maxHeight: "90vh",
-          overflowY: "auto"
+          gridRow: 1
         }}>
           {/* Project Details Card */}
           <div style={{
@@ -1080,7 +1097,6 @@ export default function ProjectDetail() {
             ...getCardStyle('projects'),
             flex: "1 1 350px", 
             minHeight: "300px",
-            maxHeight: "400px",
             display: "flex",
             flexDirection: "column"
           }}>
@@ -1098,7 +1114,7 @@ export default function ProjectDetail() {
                 Project Forum
               </h3>
             </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
+            <div style={{ flex: 1, overflow: "visible" }}>
             <ProjectGroupForum 
               projectId={projectId} 
                 forums={projectForums}
@@ -1111,7 +1127,6 @@ export default function ProjectDetail() {
             ...getCardStyle('projects'),
             flex: "1 1 300px", 
             minHeight: "250px",
-            maxHeight: "350px",
             display: "flex",
             flexDirection: "column"
           }}>
@@ -1129,7 +1144,7 @@ export default function ProjectDetail() {
                 Team Members
               </h3>
             </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
+            <div style={{ flex: 1, overflow: "visible" }}>
             <TeamMembersPanel 
               projectId={projectId}
               teamMembers={projectData.team}
@@ -1341,6 +1356,7 @@ export default function ProjectDetail() {
                     </button>
                   </>
                 )}
+                {!isEditingStages && (
                 <button
                   onClick={() => !currentApproval && handleSendApprovalRequest()}
                   disabled={!!currentApproval}
@@ -1356,6 +1372,7 @@ export default function ProjectDetail() {
                 >
                   {currentApproval ? 'Pending Approval' : 'Send Approval'}
                 </button>
+                )}
               </div>
           </div>
             <div style={{ padding: DESIGN_SYSTEM.spacing.base, overflowX: 'auto', maxWidth: '100%', width: '100%', boxSizing: 'border-box', minWidth: '0' }}>
@@ -1380,8 +1397,8 @@ export default function ProjectDetail() {
           {/* Project Tasks Section */}
           <div style={{
             ...getCardStyle('projects'),
-            flex: 1,
-            minHeight: "600px",
+            flex: tasksCollapsed ? '0 0 auto' : 1.2,
+            minHeight: tasksCollapsed ? "auto" : "500px",
             display: "flex",
             flexDirection: "column"
           }}>
@@ -1399,7 +1416,7 @@ export default function ProjectDetail() {
                 fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
                 fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
               }}>
-                Project Tasks
+                Stage — {currentStage}
               </h3>
               <button
                 onClick={() => setTasksCollapsed(v => !v)}
@@ -1427,7 +1444,9 @@ export default function ProjectDetail() {
           <div style={{
             ...getCardStyle('projects'),
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
+            flex: 1,
+            minHeight: '480px'
           }}>
             <FinancePanel projectId={projectId} />
           </div>
