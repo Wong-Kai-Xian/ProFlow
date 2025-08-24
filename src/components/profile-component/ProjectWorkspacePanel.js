@@ -42,7 +42,7 @@ export default function ProjectWorkspacePanel({
 }) {
   // Editable when no project is selected; read-only when a project is selected
   const readOnlyCustomer = Boolean(selectedProjectId);
-  const [activeTab, setActiveTab] = useState('Reminders'); // Reminders | Transcripts | Files | Quotes | Actions
+  const [activeTab, setActiveTab] = useState('Stages'); // default to Stages per request
   const [transcripts, setTranscripts] = useState([]);
   const [isSwitching, setIsSwitching] = useState(false);
   const switchTimerRef = useRef(null);

@@ -343,14 +343,24 @@ export default function ProjectList() {
     }
   };
 
-  const getStageProgress = (stage) => {
-    const stageOrder = ['Proposal', 'Negotiation', 'Complete'];
-    const currentIndex = stageOrder.indexOf(stage);
-    return ((currentIndex + 1) / stageOrder.length) * 100;
+  const DEFAULT_STAGE_ORDER = ['Planning', 'Development', 'Testing', 'Completed'];
+  const getStageProgressForProject = (project) => {
+    try {
+      const stageOrder = Array.isArray(project.stages) && project.stages.length > 0
+        ? project.stages
+        : DEFAULT_STAGE_ORDER;
+      const currentStageName = project.stage || stageOrder[0];
+      const currentIndex = Math.max(0, stageOrder.indexOf(currentStageName));
+      const denom = Math.max(1, stageOrder.length);
+      return ((currentIndex + 1) / denom) * 100;
+    } catch {
+      return 0;
+    }
   };
 
-  const determineProjectStatus = (stage) => {
-    return getStageProgress(stage) === 100 ? "Complete" : "Ongoing";
+  const determineProjectStatus = (stage, project) => {
+    const progress = getStageProgressForProject(project || { stage });
+    return Math.round(progress) === 100 ? "Complete" : "Ongoing";
   };
 
   return (
@@ -490,6 +500,7 @@ export default function ProjectList() {
             {filteredProjects.map((project) => {
               const bgColor = stringToColor(project.name);
               const progress = getProgress(project);
+              const stageProgress = getStageProgressForProject(project);
 
               return (
                 <div
@@ -694,12 +705,8 @@ export default function ProjectList() {
                       }}>
                         Stage Progress
                       </span>
-                      <span style={{ 
-                        fontSize: "14px", 
-                        fontWeight: "600", 
-                        color: getStageColor(project.stage)
-                      }}>
-                        {Math.round(getStageProgress(project.stage))}%
+                      <span style={{ fontSize: "14px", fontWeight: "600", color: getStageColor(project.stage) }}>
+                        {Math.round(stageProgress)}%
                       </span>
                     </div>
                     <div style={{
@@ -709,13 +716,7 @@ export default function ProjectList() {
                       borderRadius: "4px",
                       overflow: "hidden"
                     }}>
-                      <div style={{
-                        height: "100%",
-                        width: `${getStageProgress(project.stage)}%`,
-                        backgroundColor: getStageColor(project.stage),
-                        borderRadius: "4px",
-                        transition: "width 0.3s ease"
-                      }} />
+                      <div style={{ height: "100%", width: `${stageProgress}%`, backgroundColor: getStageColor(project.stage), borderRadius: "4px", transition: "width 0.3s ease" }} />
                     </div>
                   </div>
 

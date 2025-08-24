@@ -6,10 +6,14 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
   const isLastStage = currentStageIndex === allStages.length - 1;
   const rowRef = useRef(null);
 
+  // Auto-scroll to the latest stage only when a new stage is added in edit mode
+  const prevLenRef = useRef(allStages.length);
   useEffect(() => {
-    if (editing && rowRef.current) {
-      rowRef.current.scrollLeft = rowRef.current.scrollWidth;
+    const prevLen = prevLenRef.current;
+    if (editing && rowRef.current && allStages.length > prevLen) {
+      try { rowRef.current.scrollLeft = rowRef.current.scrollWidth; } catch {}
     }
+    prevLenRef.current = allStages.length;
   }, [allStages.length, editing]);
 
   return (
@@ -87,9 +91,9 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
             <React.Fragment key={index}>
               {index > 0 && <div style={lineStyle}></div>}
               <div 
-                style={{ display: "flex", flexDirection: "column", alignItems: "center", maxWidth: 200 }}
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", maxWidth: 220 }}
               >
-                <div style={circleStyle}>
+                <div style={circleStyle} title={isActive ? 'Current Stage' : (isCompleted ? 'Completed' : 'Upcoming')}>
                   {index + 1}
                 </div>
                 {editing ? (
@@ -107,9 +111,7 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
                     <button onClick={() => onDeleteStageAt && onDeleteStageAt(index)} style={{ ...BUTTON_STYLES.secondary, padding: '2px 6px', fontSize: 12, color: '#b91c1c', background: '#fee2e2' }}>{'✕'}</button>
                   </div>
                 ) : (
-                  <div style={labelStyle}>
-                    {stage}
-                  </div>
+                  <div style={labelStyle}>{stage}</div>
                 )}
               </div>
             </React.Fragment>
@@ -121,20 +123,32 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
           {onAddStage && <button onClick={onAddStage} style={{ ...BUTTON_STYLES.secondary, flex: 1 }}>Add Stage</button>}
         </div>
       )}
-      {!editing && currentStageIndex < allStages.length - 1 && (
-        <button 
-          onClick={onAdvanceStage}
-          style={{
-            ...BUTTON_STYLES.primary,
-            width: "100%",
-            marginTop: LAYOUT.smallGap, // Space above button
-            opacity: canAdvance ? 1 : 0.5, // Use canAdvance prop
-            cursor: canAdvance ? "pointer" : "not-allowed"
-          }}
-          disabled={!canAdvance} // Use canAdvance prop
-        >
-          Get Approval & Advance Stage
-        </button>
+      {!editing && (
+        <div style={{ display: 'flex', gap: LAYOUT.smallGap, width: '100%', marginTop: LAYOUT.smallGap }}>
+          {currentStageIndex > 0 && (
+            <button
+              onClick={onGoBackStage}
+              title="Go back to previous stage"
+              style={{ ...BUTTON_STYLES.secondary, padding: '6px 10px' }}
+            >
+              ◀
+            </button>
+          )}
+          {currentStageIndex < allStages.length - 1 && (
+            <button 
+              onClick={onAdvanceStage}
+              style={{
+                ...BUTTON_STYLES.primary,
+                flex: 1,
+                opacity: canAdvance ? 1 : 0.5,
+                cursor: canAdvance ? 'pointer' : 'not-allowed'
+              }}
+              disabled={!canAdvance}
+            >
+              Get Approval & Advance Stage
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

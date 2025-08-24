@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { DESIGN_SYSTEM } from "../../styles/designSystem";
 import { db, storage } from '../../firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, where, updateDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getAcceptedTeamMembersForProject } from "../../services/teamService";
 
@@ -36,6 +36,7 @@ export default function AdvancedApprovalRequestModal({
   const [viewersSearchTerm, setViewersSearchTerm] = useState("");
   const [showDecisionMakerDropdown, setShowDecisionMakerDropdown] = useState(false);
   const [showViewersDropdown, setShowViewersDropdown] = useState(false);
+  const [noApprovalNeeded, setNoApprovalNeeded] = useState(false);
 
   // Request type - Project or Customer
   const requestType = projectId ? 'Project' : 'Customer';
@@ -143,6 +144,7 @@ export default function AdvancedApprovalRequestModal({
       setViewersSearchTerm("");
       setShowDecisionMakerDropdown(false);
       setShowViewersDropdown(false);
+      setNoApprovalNeeded(false);
       
       // Set default title based on type and purpose
                     if (isStageAdvancement) {
@@ -204,17 +206,38 @@ export default function AdvancedApprovalRequestModal({
   );
 
   const handleSubmit = async () => {
+    if (noApprovalNeeded) {
+      // Bypass all validations and approvals
+      try {
+        if (isStageAdvancement) {
+          if (projectId && nextStage) {
+            await updateDoc(doc(db, 'projects', projectId), { stage: nextStage });
+          }
+          // Optionally handle customer stage here in future
+        }
+      } catch {}
+      if (onSuccess) {
+        onSuccess({
+          type: requestType,
+          entityName,
+          decisionMaker: 'n/a',
+          viewerCount: 0,
+          title: requestTitle || `Advance ${entityName} to ${nextStage}`,
+          bypassed: true,
+          nextStage
+        });
+      }
+      onClose();
+      return;
+    }
     if (!requestTitle.trim()) {
       alert("Please enter a request title.");
       return;
     }
 
-    if (!requestDescription.trim()) {
-      alert("Please enter a request description.");
-      return;
-    }
+    // Description optional per request
 
-    if (!selectedDecisionMaker) {
+    if (!noApprovalNeeded && !selectedDecisionMaker) {
       alert("Please select a decision maker.");
       return;
     }
@@ -461,6 +484,24 @@ export default function AdvancedApprovalRequestModal({
           overflow: "auto",
           flex: 1
         }}>
+          {/* No approval needed toggle (always at top) */}
+          <div style={{
+            marginBottom: DESIGN_SYSTEM.spacing.base,
+            padding: DESIGN_SYSTEM.spacing.sm,
+            border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+            borderRadius: DESIGN_SYSTEM.borderRadius.base,
+            background: DESIGN_SYSTEM.colors.background.secondary
+          }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={noApprovalNeeded} onChange={(e) => setNoApprovalNeeded(e.target.checked)} />
+              <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>
+                No approval needed ({isStageAdvancement ? 'advance immediately' : 'do not send approval'})
+              </span>
+            </label>
+          </div>
+
+          {!noApprovalNeeded && (
+            <>
           {/* Request Title */}
           <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
             <label style={{
@@ -494,7 +535,7 @@ export default function AdvancedApprovalRequestModal({
             />
           </div>
 
-          {/* Request Description */}
+          {/* Request Description (optional) */}
           <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
             <label style={{
               display: "block",
@@ -503,7 +544,7 @@ export default function AdvancedApprovalRequestModal({
               fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
               color: DESIGN_SYSTEM.colors.text.primary
             }}>
-              Description *
+              Description (optional)
             </label>
             <textarea
               value={requestDescription}
@@ -653,10 +694,10 @@ export default function AdvancedApprovalRequestModal({
                   fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
                   outline: "none"
                 }}
-                disabled={loading}
+                disabled={loading || noApprovalNeeded}
               />
               
-              {showDecisionMakerDropdown && (
+              {showDecisionMakerDropdown && !noApprovalNeeded && (
                 <div style={{
                   position: "absolute",
                   top: "100%",
@@ -724,7 +765,7 @@ export default function AdvancedApprovalRequestModal({
             </div>
             
             {/* Selected Decision Maker */}
-            {selectedDecisionMaker && (
+            {selectedDecisionMaker && !noApprovalNeeded && (
               <div style={{
                 marginTop: DESIGN_SYSTEM.spacing.sm,
                 padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
@@ -770,6 +811,8 @@ export default function AdvancedApprovalRequestModal({
               </div>
             )}
           </div>
+            </>
+          )}
         </div>
 
         {/* Footer */}
@@ -799,7 +842,7 @@ export default function AdvancedApprovalRequestModal({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={loading || !requestTitle.trim() || !requestDescription.trim() || !selectedDecisionMaker}
+            disabled={loading || (!noApprovalNeeded && (!requestTitle.trim() || !selectedDecisionMaker))}
             style={{
               padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
               border: "none",
@@ -811,11 +854,11 @@ export default function AdvancedApprovalRequestModal({
               fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
               fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
               cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading || !requestTitle.trim() || !requestDescription.trim() || !selectedDecisionMaker ? 0.6 : 1,
+              opacity: loading || (!noApprovalNeeded && (!requestTitle.trim() || !selectedDecisionMaker)) ? 0.6 : 1,
               minWidth: "120px"
             }}
           >
-            {loading ? "Sending..." : uploading ? "Uploading..." : "Send Request"}
+            {noApprovalNeeded ? (loading ? "Advancing..." : "Advance Stage") : (loading ? "Sending..." : uploading ? "Uploading..." : "Send Request")}
           </button>
         </div>
       </div>

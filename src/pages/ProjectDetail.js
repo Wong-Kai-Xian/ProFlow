@@ -478,8 +478,13 @@ export default function ProjectDetail() {
   };
 
   const handleApprovalRequestSuccess = (result) => {
-    console.log(`Project approval request sent for ${result.entityName}`);
-    // Could add notification or other success handling here
+    // If bypassed (no approval needed), immediately reflect next stage locally
+    if (result && result.bypassed && result.nextStage) {
+      setCurrentStage(result.nextStage);
+      setProjectData(prev => prev ? { ...prev, stage: result.nextStage } : prev);
+    }
+    // Optional: log/notify for non-bypassed requests
+    console.log(`Project approval request ${result?.bypassed ? 'bypassed/advanced' : 'sent'} for ${result?.entityName || ''}`);
   };
 
   const handleConfirmAdvanceStage = async () => {
@@ -885,7 +890,7 @@ export default function ProjectDetail() {
               <span style={{ opacity: 0.85 }}>|</span>
               <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Members: {projectData?.team?.length || 0}</span>
               <span style={{ opacity: 0.85 }}>|</span>
-              <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Stage: {projectData?.stage || currentStage}</span>
+              <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Stage: {currentStage || projectData?.stage}</span>
               <span style={{ opacity: 0.85 }}>|</span>
               <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Deadline: {projectData?.deadline || 'No deadline'}</span>
             </div>

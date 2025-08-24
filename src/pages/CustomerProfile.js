@@ -85,6 +85,8 @@ export default function CustomerProfile() {
   const [aiModalSelection, setAiModalSelection] = useState({});
   const [aiModalTranscriptDoc, setAiModalTranscriptDoc] = useState(null);
   const [aiModalTarget, setAiModalTarget] = useState('reminders'); // 'reminders' | 'notes'
+  // Default CRM tab to Stages on load
+  const [defaultCrmTab, setDefaultCrmTab] = useState('Stages');
 
   // Helper to check if a stage is completed
   const isStageCompleted = (stageName) => stageData[stageName]?.completed;

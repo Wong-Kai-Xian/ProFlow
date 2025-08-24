@@ -5,7 +5,6 @@ import { COLORS, LAYOUT, BUTTON_STYLES, INPUT_STYLES } from '../profile-componen
 export default function ProjectDetails({ project, onSave, allProjectNames, readOnly, noCard }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editableProject, setEditableProject] = useState(project || {});
-  const [showDescModal, setShowDescModal] = useState(false);
 
   // Debugging: Log onSave prop
   useEffect(() => {
@@ -70,12 +69,12 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
   };
 
   const cardStyle = {
-    height: noCard ? "100%" : "250px", 
-    minHeight: noCard ? "auto" : "250px", 
-    maxHeight: noCard ? "none" : "250px", 
-    display: "flex", 
-    flexDirection: "column", 
-    overflow: (isEditing && !effectiveReadOnly) ? "hidden" : "hidden",
+    height: "auto",
+    minHeight: "auto",
+    maxHeight: "none",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "visible",
     position: "relative",
     opacity: isWaitingForApproval ? 0.6 : 1,
     pointerEvents: isWaitingForApproval ? "none" : "auto"
@@ -233,28 +232,16 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
             />
           ) : (
             <div style={{ 
-              flex: 1, 
-              color: COLORS.lightText, 
-              fontSize: "14px", 
-              lineHeight: "1.6", 
+              flex: 1,
+              color: COLORS.lightText,
+              fontSize: "14px",
+              lineHeight: "1.6",
               fontWeight: "400",
-              overflowY: "auto",
-              paddingRight: "5px",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
               marginTop: "4px"
             }}>
               {project.description || 'No description provided.'}
-              {project.description && (
-                <div style={{ marginTop: '6px' }}>
-                  <button
-                    onClick={() => setShowDescModal(true)}
-                    style={{ ...BUTTON_STYLES.secondary, padding: '4px 8px', fontSize: '12px' }}
-                  >
-                    View Full
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -269,22 +256,6 @@ export default function ProjectDetails({ project, onSave, allProjectNames, readO
   return (
     <Card style={cardStyle}>
       {content}
-      {showDescModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-          <div style={{ background: '#fff', padding: '16px', borderRadius: '10px', width: '90%', maxWidth: '700px', maxHeight: '80vh', overflowY: 'auto' }}>
-            <h4 style={{ margin: 0, color: COLORS.dark }}>Full Description</h4>
-            <div style={{ marginTop: '8px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: '1.7', color: COLORS.text }}>
-              {project.description}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
-              <button onClick={() => setShowDescModal(false)} style={BUTTON_STYLES.primary}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
     </Card>
   );
 }
