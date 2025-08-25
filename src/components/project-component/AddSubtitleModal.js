@@ -49,10 +49,10 @@ export default function AddSubtitleModal({ isOpen, onClose, onAddSubtitle }) {
         flexDirection: "column",
         gap: LAYOUT.gap,
       }}>
-        <h3 style={{ margin: "0 0 10px 0", color: COLORS.text }}>Add New Subtitle</h3>
+        <h3 style={{ margin: "0 0 10px 0", color: COLORS.text }}>Add New Section</h3>
         <input
           type="text"
-          placeholder="Subtitle Name"
+          placeholder="Section Name"
           value={subtitleName}
           onChange={(e) => setSubtitleName(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && handleAddClick()}
@@ -85,7 +85,7 @@ export default function AddSubtitleModal({ isOpen, onClose, onAddSubtitle }) {
             Cancel
           </button>
           <button onClick={handleAddClick} style={BUTTON_STYLES.primary}>
-            Add Subtitle
+            Add Section
           </button>
         </div>
       </div>
