@@ -3,17 +3,19 @@ import { DESIGN_SYSTEM, getCardStyle, getButtonStyle } from '../styles/designSys
 import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
 
 // Get initials from forum name
-const getInitials = (name) =>
-  name
-    .split(" ")
-    .map((w) => w[0].toUpperCase())
-    .join("");
+const getInitials = (name) => {
+  if (!name || typeof name !== 'string') return 'NA';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'NA';
+  return parts.map((w) => (w && w[0] ? w[0].toUpperCase() : '')).join('') || 'NA';
+};
 
 // Generate a consistent color based on string
 const stringToColor = (str) => {
+  const input = typeof str === 'string' && str.length > 0 ? str : 'Forum';
   let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < input.length; i++) {
+    hash = input.charCodeAt(i) + ((hash << 5) - hash);
   }
   const c = (hash & 0x00ffffff).toString(16).toUpperCase();
   return "#" + "00000".substring(0, 6 - c.length) + c;
@@ -41,10 +43,12 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
 
   // Filter and sort forums - use the `forums` prop directly
   const getFilteredAndSortedForums = () => {
-    let filtered = forums.filter(forum =>
-      forum.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      forum.description.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    let filtered = forums.filter((forum) => {
+      const name = forum?.name || '';
+      const description = forum?.description || '';
+      const term = (searchTerm || '').toLowerCase();
+      return name.toLowerCase().includes(term) || description.toLowerCase().includes(term);
+    });
 
     // Sort based on selected option
     switch (sortBy) {
@@ -163,7 +167,7 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
           marginBottom: "30px"
         }}>
           {filteredAndSortedForums.map((forum) => {
-            const bgColor = stringToColor(forum.name);
+            const bgColor = stringToColor(forum?.name || 'Forum');
             return (
               <div
                 key={forum.id}

@@ -11,11 +11,14 @@ import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
 import DeleteProfileModal from '../components/profile-component/DeleteProfileModal'; // Import DeleteProfileModal
 
 // Get initials from customer name
-const getInitials = (name) =>
-  name
-    .split(" ")
-    .map((w) => w[0].toUpperCase())
-    .join("");
+const getInitials = (name) => {
+  if (!name || typeof name !== 'string') return 'NA';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'NA';
+  return parts
+    .map((word) => (word && word[0] ? word[0].toUpperCase() : ''))
+    .join('') || 'NA';
+};
 
 // Generate a consistent color based on string
 const stringToColor = (str) => {
@@ -98,13 +101,16 @@ export default function CustomerProfileList() {
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
 
-  const filteredCustomers = customers.filter(customer => {
-    const matchesSearch = (
-      customer.customerProfile?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.companyProfile?.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.customerProfile?.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCustomers = customers.filter((customer) => {
+    const name = customer?.customerProfile?.name || '';
+    const company = customer?.companyProfile?.company || '';
+    const email = customer?.customerProfile?.email || '';
+    const term = (searchTerm || '').toLowerCase();
+    return (
+      name.toLowerCase().includes(term) ||
+      company.toLowerCase().includes(term) ||
+      email.toLowerCase().includes(term)
     );
-    return matchesSearch;
   });
 
   const getStatusColor = (currentStage) => {
@@ -465,7 +471,8 @@ export default function CustomerProfileList() {
             padding: `0 ${DESIGN_SYSTEM.spacing.base}`
           }}>
             {filteredCustomers.map((customer) => {
-              const bgColor = stringToColor(customer.customerProfile.name || ""); // Handle potentially undefined name
+              const nameForColor = customer?.customerProfile?.name || customer?.companyProfile?.company || 'Customer';
+              const bgColor = stringToColor(nameForColor);
               const progress = getProgress(customer);
               const currentStageName = customer.currentStage;
               const currentStageColor = getStatusColor(currentStageName); // Use currentStageName for color
@@ -574,7 +581,7 @@ export default function CustomerProfileList() {
                       color: DESIGN_SYSTEM.colors.text.inverse,
                       marginBottom: DESIGN_SYSTEM.spacing.lg
                     }}>
-                      {getInitials(customer.customerProfile.name || customer.companyProfile.company || "N/A")}
+                      {getInitials(customer?.customerProfile?.name || customer?.companyProfile?.company || 'N/A')}
                     </div>
                     
                     <h3 style={{

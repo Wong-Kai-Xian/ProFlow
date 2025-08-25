@@ -13,16 +13,18 @@ import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainer
 import DeleteConfirmationModal from '../components/common/DeleteConfirmationModal'; // Import the new modal
 
 // Get initials from project name
-const getInitials = (name) =>
-  name
-    .split(" ")
-    .map((w) => w[0].toUpperCase())
-    .join("");
+const getInitials = (name) => {
+  if (!name || typeof name !== 'string') return 'NA';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'NA';
+  return parts.map((w) => (w && w[0] ? w[0].toUpperCase() : '')).join('') || 'NA';
+};
 
 // Generate a consistent color based on string
 const stringToColor = (str) => {
+  const input = typeof str === 'string' && str.length > 0 ? str : 'Project';
   let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < input.length; i++) hash = input.charCodeAt(i) + ((hash << 5) - hash);
   const c = (hash & 0x00ffffff).toString(16).toUpperCase();
   return "#" + "00000".substring(0, 6 - c.length) + c;
 };
@@ -152,9 +154,11 @@ export default function ProjectList() {
     return Math.round((completedTasks / totalTasks) * 100);
   };
 
-  const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProjects = projects.filter((project) => {
+    const name = project?.name || '';
+    const term = (searchTerm || '').toLowerCase();
+    return name.toLowerCase().includes(term);
+  });
 
   const handleCreateProject = async (newProject) => {
     if (!currentUser) return; // Ensure user is logged in to create projects
@@ -498,7 +502,8 @@ export default function ProjectList() {
             marginBottom: "30px"
           }}>
             {filteredProjects.map((project) => {
-              const bgColor = stringToColor(project.name);
+              const displayName = project?.name || 'Project';
+              const bgColor = stringToColor(displayName);
               const progress = getProgress(project);
               const stageProgress = getStageProgressForProject(project);
 
@@ -605,7 +610,7 @@ export default function ProjectList() {
                     fontWeight: "700",
                     marginBottom: "20px"
                   }}>
-                    {getInitials(project.name)}
+                    {getInitials(displayName)}
                   </div>
 
                   <h3 style={{ 
