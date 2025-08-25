@@ -15,6 +15,7 @@ export default function Home() {
   const navigate = useNavigate();
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [dashboardScope, setDashboardScope] = useState('private');
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
   // Forums state is now managed within HomeGroupForum, so we can remove it here
   // const [forums, setForums] = useState([]);
@@ -177,23 +178,57 @@ export default function Home() {
             color: DESIGN_SYSTEM.colors.text.inverse,
             borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
           }}>
-            <h2 style={{
-              margin: "0",
-              fontSize: DESIGN_SYSTEM.typography.fontSize.xl,
-              fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-            }}>
-              Dashboard
-            </h2>
-            <p style={{
-              margin: "4px 0 0 0",
-              fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-              opacity: 0.9
-            }}>
-              Overview of your work and progress
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: DESIGN_SYSTEM.spacing.base }}>
+              <div>
+                <h2 style={{
+                  margin: "0",
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.xl,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                }}>
+                  Dashboard
+                </h2>
+                <p style={{
+                  margin: "4px 0 0 0",
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                  opacity: 0.9
+                }}>
+                  Overview of your work and progress
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setDashboardScope('private')}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    border: `1px solid ${dashboardScope === 'private' ? DESIGN_SYSTEM.colors.primary[500] : DESIGN_SYSTEM.colors.secondary[300]}`,
+                    background: dashboardScope === 'private' ? DESIGN_SYSTEM.colors.primary[600] : DESIGN_SYSTEM.colors.secondary[100],
+                    color: dashboardScope === 'private' ? DESIGN_SYSTEM.colors.text.inverse : DESIGN_SYSTEM.colors.text.primary,
+                    cursor: 'pointer',
+                    fontSize: 12
+                  }}
+                >
+                  Private
+                </button>
+                <button
+                  onClick={() => setDashboardScope('public')}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    border: `1px solid ${dashboardScope === 'public' ? DESIGN_SYSTEM.colors.primary[500] : DESIGN_SYSTEM.colors.secondary[300]}`,
+                    background: dashboardScope === 'public' ? DESIGN_SYSTEM.colors.primary[600] : DESIGN_SYSTEM.colors.secondary[100],
+                    color: dashboardScope === 'public' ? DESIGN_SYSTEM.colors.text.inverse : DESIGN_SYSTEM.colors.text.primary,
+                    cursor: 'pointer',
+                    fontSize: 12
+                  }}
+                >
+                  Public
+                </button>
+              </div>
+            </div>
           </div>
           <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-            <Dashboard />
+            <Dashboard scope={dashboardScope} />
           </div>
         </div>
 
