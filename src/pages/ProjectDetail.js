@@ -112,6 +112,8 @@ export default function ProjectDetail() {
   const [aiModalSelection, setAiModalSelection] = useState({});
   const [aiModalTranscriptDoc, setAiModalTranscriptDoc] = useState(null);
   const [isUploadingProjectFile, setIsUploadingProjectFile] = useState(false);
+  const [showAddFileModal, setShowAddFileModal] = useState(false);
+  const filePickerRef = useRef(null);
   
   // Confirmation modal state
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -1150,37 +1152,13 @@ export default function ProjectDetail() {
             </div>
             <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <label style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>Add File</label>
-                <input
-                  type="file"
-                  onChange={async (e) => {
-                    try {
-                      const file = e.target.files && e.target.files[0];
-                      if (!file || !projectId) return;
-                      setIsUploadingProjectFile(true);
-                      const path = `project_files/${projectId}/${Date.now()}_${file.name}`;
-                      const sref = storageRef(storage, path);
-                      await uploadBytes(sref, file);
-                      const url = await getDownloadURL(sref);
-                      const fileEntry = {
-                        name: file.name,
-                        type: file.type && file.type.startsWith('image/') ? 'image' : 'document',
-                        url,
-                        size: file.size,
-                        uploadTime: Date.now()
-                      };
-                      const refDoc = doc(db, 'projects', projectId);
-                      const nextFiles = Array.isArray(projectData?.files) ? [...projectData.files, fileEntry] : [fileEntry];
-                      await updateDoc(refDoc, { files: nextFiles });
-                    } catch (err) {
-                      alert('Failed to upload file');
-                    } finally {
-                      setIsUploadingProjectFile(false);
-                      if (e.target) { try { e.target.value = ''; } catch {} }
-                    }
-                  }}
-                  disabled={isUploadingProjectFile}
-                />
+                <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>Upload project files</div>
+                <button
+                  onClick={() => setShowAddFileModal(true)}
+                  style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}
+                >
+                  + Add
+                </button>
               </div>
               {Array.isArray(projectData?.files) && projectData.files.length > 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
@@ -1526,6 +1504,38 @@ export default function ProjectDetail() {
       </div>
       </div>
       
+      {/* Add File Modal */}
+      {showAddFileModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 2200, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowAddFileModal(false)}>
+          <div onClick={(e)=>e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: 420, maxWidth: '92vw', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', padding: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Add Project File</div>
+            <p style={{ margin: 0, color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Choose a file to upload. Supported: any document or image.</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+              <input ref={filePickerRef} type="file" onChange={async (e) => {
+                try {
+                  const file = e.target.files && e.target.files[0];
+                  if (!file || !projectId) return;
+                  setIsUploadingProjectFile(true);
+                  const path = `project_files/${projectId}/${Date.now()}_${file.name}`;
+                  const sref = storageRef(storage, path);
+                  await uploadBytes(sref, file);
+                  const url = await getDownloadURL(sref);
+                  const fileEntry = { name: file.name, type: file.type && file.type.startsWith('image/') ? 'image' : 'document', url, size: file.size, uploadTime: Date.now() };
+                  await updateDoc(doc(db, 'projects', projectId), { files: Array.isArray(projectData?.files) ? [...projectData.files, fileEntry] : [fileEntry] });
+                  setShowAddFileModal(false);
+                } catch { alert('Failed to upload file'); } finally {
+                  setIsUploadingProjectFile(false);
+                  if (e.target) { try { e.target.value = ''; } catch {} }
+                }
+              }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button onClick={() => setShowAddFileModal(false)} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showApprovalModal && (
         <ApprovalModal
           isOpen={showApprovalModal}
