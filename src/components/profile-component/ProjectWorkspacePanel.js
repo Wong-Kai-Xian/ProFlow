@@ -68,7 +68,7 @@ export default function ProjectWorkspacePanel({
     return () => unsub();
   }, [selectedProjectId]);
 
-  const tabs = ['Stages','Reminders','Transcripts','Files','Quotes','Actions'];
+  const tabs = ['Stages','Reminders','Transcripts','Files','Quotes'];
 
   return (
     <div style={getCardStyle('customers')}>
@@ -260,22 +260,7 @@ export default function ProjectWorkspacePanel({
           )
         )}
 
-        {activeTab === 'Actions' && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              onClick={onConvertToProject}
-              style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
-            >
-              Convert to Project
-            </button>
-            <button
-              onClick={onSendApprovalRequest}
-              style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
-            >
-              Send Approval Request
-            </button>
-          </div>
-        )}
+        
       </div>
       {/* Double-confirmation modals for transcript delete */}
       {confirmDelete && confirmDeleteStep === 1 && (

@@ -23,13 +23,17 @@ export default function AdvancedApprovalRequestModal({
   customerProfileData = null,
   companyProfileData = null,
   quoteProjectId = null,
-  quoteProjectName = ""
+  quoteProjectName = "",
+  selectedQuote = null
 }) {
   // Form data states
   const [requestTitle, setRequestTitle] = useState("");
   const [requestDescription, setRequestDescription] = useState("");
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [autoAttachedFiles, setAutoAttachedFiles] = useState([]); // URLs prefilled by system
+  const [autoAttachedPdfFiles, setAutoAttachedPdfFiles] = useState([]); // PDF preview copies
+  const [quoteAttachError, setQuoteAttachError] = useState("");
+  const [selectedQuoteData, setSelectedQuoteData] = useState(null);
   const [selectedDecisionMaker, setSelectedDecisionMaker] = useState(null);
   const [selectedViewers, setSelectedViewers] = useState([]);
   const [allRecipients, setAllRecipients] = useState([]);
@@ -60,6 +64,10 @@ export default function AdvancedApprovalRequestModal({
   const [cpAllowJoinById, setCpAllowJoinById] = useState(true);
   const [cpAcceptedTeamMembers, setCpAcceptedTeamMembers] = useState([]);
   const [cpLoadingAcceptedMembers, setCpLoadingAcceptedMembers] = useState(false);
+
+  // Quotation selection (modal-level) for conversion requests
+  const [modalProjectQuotes, setModalProjectQuotes] = useState([]);
+  const [selectedQuoteIdLocal, setSelectedQuoteIdLocal] = useState("");
 
   // Helper: generate a simple PDF from quote data
   const generatePdfFromQuote = async (quoteData, displayName = 'Quotation') => {
@@ -117,6 +125,76 @@ export default function AdvancedApprovalRequestModal({
     }
   };
 
+  // Load quotes from project OR customer drafts when modal opens (conversion flow)
+  useEffect(() => {
+    const loadQuotes = async () => {
+      try {
+        if (!isOpen) { setModalProjectQuotes([]); setSelectedQuoteIdLocal(""); return; }
+        const pid = projectId || quoteProjectId;
+        let quotes = [];
+        if (pid) {
+          const snap = await getDocs(collection(db, 'projects', pid, 'quotes'));
+          quotes = snap.docs.map(d => ({ id: d.id, scope: 'project', ...d.data() }));
+        } else if (customerId) {
+          const draftsSnap = await getDocs(collection(db, 'customerProfiles', customerId, 'quotesDrafts'));
+          quotes = draftsSnap.docs
+            .map(d => ({ id: d.id, scope: 'customer', ...d.data() }))
+            // Exclude drafts already converted/moved to a project
+            .filter(q => !q.projectId);
+        }
+        quotes.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+        setModalProjectQuotes(quotes);
+        if (quotes.length > 0) {
+          const chosenId = quotes[0].id;
+          setSelectedQuoteIdLocal(prev => prev || chosenId);
+          await attachQuoteById(chosenId, quotes);
+        }
+      } catch {
+        setModalProjectQuotes([]);
+      }
+    };
+    loadQuotes();
+  }, [isOpen, projectId, quoteProjectId, customerId]);
+
+  // Attach selected quote (original + PDF preview)
+  const attachQuoteById = async (quoteId, quotesArray) => {
+    try {
+      const source = Array.isArray(quotesArray) ? quotesArray : modalProjectQuotes;
+      const q = source.find(x => x.id === quoteId);
+      if (!q) return;
+      setAutoAttachedFiles([]);
+      setAutoAttachedPdfFiles([]);
+      const base = `quotation-${projectName || quoteProjectName || effectiveEntityName || 'proposal'}`;
+      const originalUrl = q.fileUrl || q.attachmentUrl || q.originalUrl || q.sourceUrl || q.renderUrl;
+      if (originalUrl) {
+        const originalName = q.fileName || `${base}.quote`;
+        setAutoAttachedFiles([{ url: originalUrl, name: originalName }]);
+        setQuoteAttachError("");
+      }
+      if (!originalUrl) {
+        // Do not generate files; approver will render PDF from data
+        setQuoteAttachError("");
+      }
+      // Capture minimal data for approver-side PDF render
+      const items = Array.isArray(q.items) ? q.items.map(it => ({
+        description: it.description || it.name || '',
+        qty: Number(it.qty || it.quantity || 1),
+        unitPrice: Number(it.unitPrice || it.price || it.rate || 0)
+      })) : [];
+      const total = items.reduce((s,it)=> s + it.qty * it.unitPrice, 0);
+      setSelectedQuoteData({
+        id: q.id,
+        scope: q.scope,
+        name: q.name || q.title || '',
+        client: q.client || q.customer || '',
+        items,
+        total,
+        validUntil: q.validUntil || ''
+      });
+      // Skip adding PDF attachments per requirement
+    } catch {}
+  };
+
   // Request type - Project or Customer
   const requestType = projectId ? 'Project' : 'Customer';
   const entityId = projectId || customerId;
@@ -149,71 +227,8 @@ export default function AdvancedApprovalRequestModal({
           // For projects, get accepted team members
           recipients = await getAcceptedTeamMembersForProject(currentUser, projectId);
         } else if (customerId) {
-          // For customers, get team members using the same logic as TeamPage
-          const uniqueMemberEmails = new Set();
-
-          // Get current user's projects
-          const projectsQuery = query(
-            collection(db, "projects"),
-            where("userId", "==", currentUser.uid)
-          );
-          const projectsSnapshot = await getDocs(projectsQuery);
-
-          // For each project, find team members
-          for (const projectDoc of projectsSnapshot.docs) {
-            const projectData = projectDoc.data();
-            if (projectData.team && Array.isArray(projectData.team)) {
-              // Get user details for team members
-              const teamUids = projectData.team.filter(uid => uid !== currentUser.uid);
-              if (teamUids.length > 0) {
-                const chunkSize = 10;
-                for (let i = 0; i < teamUids.length; i += chunkSize) {
-                  const chunk = teamUids.slice(i, i + chunkSize);
-                  const usersQuery = query(collection(db, "users"), where("uid", "in", chunk));
-                  const usersSnapshot = await getDocs(usersQuery);
-                  usersSnapshot.forEach(userDoc => {
-                    const userData = userDoc.data();
-                    if (userData.email) {
-                      uniqueMemberEmails.add(userData.email);
-                    }
-                  });
-                }
-              }
-            }
-          }
-
-          // Get accepted invitations (team members through invitations)
-          const acceptedInvitationsQuery = query(
-            collection(db, "invitations"),
-            where("fromUserId", "==", currentUser.uid),
-            where("status", "==", "accepted")
-          );
-          const acceptedInvitationsSnapshot = await getDocs(acceptedInvitationsQuery);
-          acceptedInvitationsSnapshot.docs.forEach(invitationDoc => {
-            const invitationData = invitationDoc.data();
-            if (invitationData.toUserEmail) {
-              uniqueMemberEmails.add(invitationData.toUserEmail);
-            }
-          });
-
-          // Fetch user details for all unique member emails
-          const allMemberEmails = Array.from(uniqueMemberEmails);
-          if (allMemberEmails.length > 0) {
-            const chunkSize = 10;
-            for (let i = 0; i < allMemberEmails.length; i += chunkSize) {
-              const chunk = allMemberEmails.slice(i, i + chunkSize);
-              const usersQuery = query(collection(db, "users"), where("email", "in", chunk));
-              const usersSnapshot = await getDocs(usersQuery);
-              usersSnapshot.forEach(doc => {
-                const userData = doc.data();
-                recipients.push({
-                  id: doc.id,
-                  name: userData.name || userData.displayName || userData.email,
-                  email: userData.email,
-                });
-              });
-            }
-          }
+          // For customers, include ALL accepted team members for the current user
+          recipients = await getAcceptedTeamMembers(currentUser);
         }
 
         setAllRecipients(recipients);
@@ -270,8 +285,22 @@ export default function AdvancedApprovalRequestModal({
       setCpDescription(companyProfileData?.description || "");
       setCpAllowJoinById(true);
 
-      // Auto-attach quotation based on selected project (if provided) else fallback to customer drafts
-      if (isOpen && autoAttachQuotation) {
+      // Prefer explicitly selected quotation if provided
+      if (isOpen && selectedQuote) {
+        try {
+          const q = selectedQuote || {};
+          const originalUrl = q.fileUrl || q.attachmentUrl || q.originalUrl || q.sourceUrl || q.renderUrl;
+          const pdfUrl = q.pdfUrl || q.renderedPdfUrl || q.renderedPdf;
+          const baseName = `quotation-${effectiveEntityName || quoteProjectName || 'proposal'}`;
+          if (originalUrl) {
+            setAutoAttachedFiles([{ url: originalUrl, name: `${baseName}${(q.fileName && q.fileName.includes('.')) ? '' : (q.extension ? `.${q.extension}` : '')}` || `${baseName}.quote` }]);
+          }
+          // Skip adding PDF attachments per requirement
+        } catch (e) {
+          console.warn('Failed to attach selected quotation', e);
+        }
+      } else if (isOpen && autoAttachQuotation) {
+        // Auto-attach quotation based on selected project (if provided) else fallback to customer drafts
         try {
           if (quoteProjectId) {
             // Fetch latest quote from selected project
@@ -280,53 +309,13 @@ export default function AdvancedApprovalRequestModal({
               const docs = projQuotesSnap.docs;
               const last = docs[docs.length - 1];
               const q = last.data() || {};
-              const pdfUrl = q.pdfUrl || q.fileUrl || q.attachmentUrl || q.renderedPdfUrl || q.renderedPdf;
-              if (pdfUrl) {
-                const fileName = `quotation-${quoteProjectName || 'project'}.pdf`;
-                setAutoAttachedFiles([{ url: pdfUrl, name: fileName }]);
-              } else {
-                // Generate PDF on the fly
-                const pdfBlob = await generatePdfFromQuote(q, `Quotation - ${quoteProjectName || 'Project'}`);
-                if (pdfBlob) {
-                  const fileName = `quotation-${quoteProjectName || 'project'}.pdf`;
-                  const storageRef = ref(storage, `approval_files/${Date.now()}_${fileName}`);
-                  const uploadTask = uploadBytesResumable(storageRef, pdfBlob);
-                  await new Promise((resolve, reject) => {
-                    uploadTask.on('state_changed', () => {}, reject, async () => {
-                      const url = await getDownloadURL(uploadTask.snapshot.ref);
-                      setAutoAttachedFiles([{ url, name: fileName }]);
-                      resolve();
-                    });
-                  });
-                }
+              const originalUrl = q.fileUrl || q.attachmentUrl || q.originalUrl || q.sourceUrl || q.renderUrl;
+              const pdfUrl = q.pdfUrl || q.renderedPdfUrl || q.renderedPdf;
+              if (originalUrl) {
+                const fileName = q.fileName || `quotation-${quoteProjectName || 'project'}.quote`;
+                setAutoAttachedFiles([{ url: originalUrl, name: fileName }]);
               }
-            }
-          } else if (customerId && requestType === 'Customer') {
-            // Fallback to customer quotation drafts
-            const draftsSnap = await getDocs(collection(db, 'customerProfiles', customerId, 'quotesDrafts'));
-            if (!draftsSnap.empty) {
-              const docs = draftsSnap.docs;
-              const last = docs[docs.length - 1];
-              const q = last.data() || {};
-              const pdfUrl = q.pdfUrl || q.fileUrl || q.attachmentUrl || q.renderedPdfUrl || q.renderedPdf;
-              if (pdfUrl) {
-                const fileName = `quotation-${effectiveEntityName || 'customer'}.pdf`;
-                setAutoAttachedFiles([{ url: pdfUrl, name: fileName }]);
-              } else {
-                const pdfBlob = await generatePdfFromQuote(q, `Quotation - ${effectiveEntityName || 'Customer'}`);
-                if (pdfBlob) {
-                  const fileName = `quotation-${effectiveEntityName || 'customer'}.pdf`;
-                  const storageRef = ref(storage, `approval_files/${Date.now()}_${fileName}`);
-                  const uploadTask = uploadBytesResumable(storageRef, pdfBlob);
-                  await new Promise((resolve, reject) => {
-                    uploadTask.on('state_changed', () => {}, reject, async () => {
-                      const url = await getDownloadURL(uploadTask.snapshot.ref);
-                      setAutoAttachedFiles([{ url, name: fileName }]);
-                      resolve();
-                    });
-                  });
-                }
-              }
+              // Skip adding PDF attachments per requirement
             }
           }
         } catch (err) {
@@ -519,9 +508,35 @@ export default function AdvancedApprovalRequestModal({
     setUploading(true);
 
     try {
-      // Upload files first
+      // Ensure quotation is attached if configured but not yet populated
+      if (!isStageAdvancement && autoAttachQuotation && (autoAttachedFiles.length === 0 && autoAttachedPdfFiles.length === 0)) {
+        try {
+          if (selectedQuoteIdLocal && modalProjectQuotes.length > 0) {
+            await attachQuoteById(selectedQuoteIdLocal, modalProjectQuotes);
+          } else {
+            // Attempt to load latest quotes on-demand
+            const pid = projectId || quoteProjectId || null;
+            let quotes = [];
+            if (pid) {
+              const snap = await getDocs(collection(db, 'projects', pid, 'quotes'));
+              quotes = snap.docs.map(d => ({ id: d.id, scope: 'project', ...d.data() }));
+            } else if (customerId) {
+              const draftsSnap = await getDocs(collection(db, 'customerProfiles', customerId, 'quotesDrafts'));
+              quotes = draftsSnap.docs.map(d => ({ id: d.id, scope: 'customer', ...d.data() })).filter(q => !q.projectId);
+            }
+            if (quotes.length > 0) {
+              quotes.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+              await attachQuoteById(quotes[0].id, quotes);
+            }
+          }
+        } catch {}
+      }
+
+      // Upload files first (original attachments selected by user)
       const fileUrls = [];
       const fileNames = [];
+      const quotationUrls = [];
+      const quotationNames = [];
 
       // Include auto-attached files
       (autoAttachedFiles || []).forEach(f => {
@@ -558,6 +573,9 @@ export default function AdvancedApprovalRequestModal({
 
       setUploading(false);
 
+      // Include ONLY original quotation attachments (no PDFs) and keep separate from general attachments
+      (autoAttachedFiles || []).forEach(f => { if (f?.url && f?.name) { quotationUrls.push(f.url); quotationNames.push(f.name); } });
+
       // Create a single approval request with decision maker and viewers
       const approvalRequest = await addDoc(collection(db, "approvalRequests"), {
           // Request metadata
@@ -581,6 +599,18 @@ export default function AdvancedApprovalRequestModal({
           // File attachments
           attachedFiles: fileUrls,
           attachedFileNames: fileNames,
+          quotationFiles: quotationUrls,
+          quotationFileNames: quotationNames,
+          // Proposed project (for conversion flow) - used on approval to create project
+          proposedProject: (!isStageAdvancement ? {
+            name: cpProjectName.trim(),
+            description: cpDescription,
+            deadline: cpDeadline || null,
+            company: cpCompanyName,
+            customerName: cpCustomerName,
+            customerEmail: cpCustomerEmail
+          } : null),
+          quotationData: selectedQuoteData || null,
           
           // User information
           requestedBy: currentUser.uid,
@@ -751,26 +781,22 @@ export default function AdvancedApprovalRequestModal({
           }}>
             {effectiveEntityName} {isStageAdvancement && currentStage && nextStage && `• ${currentStage} → ${nextStage}`}
           </p>
-          {autoAttachedFiles.length > 0 && (
+          {(autoAttachedFiles.length > 0 || autoAttachedPdfFiles.length > 0) && (
             <div style={{ marginTop: DESIGN_SYSTEM.spacing.xs }}>
               <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.xs, color: DESIGN_SYSTEM.colors.text.secondary }}>
                 Attached quotation:
               </span>
               <span style={{ marginLeft: 6 }}>
+                {/* Original format(s) */}
                 {autoAttachedFiles.map((f, idx) => (
-                  <a
-                    key={idx}
-                    href={f.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
-                      color: DESIGN_SYSTEM.colors.primary[600],
-                      textDecoration: 'underline',
-                      marginRight: 8
-                    }}
-                  >
+                  <a key={`orig-${idx}`} href={f.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.xs, color: DESIGN_SYSTEM.colors.primary[600], textDecoration: 'underline', marginRight: 8 }}>
                     {f.name}
+                  </a>
+                ))}
+                {/* PDF preview */}
+                {autoAttachedPdfFiles.map((f, idx) => (
+                  <a key={`pdf-${idx}`} href={f.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.xs, color: DESIGN_SYSTEM.colors.primary[700], textDecoration: 'underline', marginRight: 8 }}>
+                    View PDF
                   </a>
                 ))}
               </span>
@@ -835,6 +861,8 @@ export default function AdvancedApprovalRequestModal({
             />
           </div>
 
+          
+
           {/* Request Description (optional) */}
           <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
             <label style={{
@@ -890,6 +918,73 @@ export default function AdvancedApprovalRequestModal({
               <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} style={{ width: '100%', padding: DESIGN_SYSTEM.spacing.sm, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: DESIGN_SYSTEM.borderRadius.base, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }} />
             </div>
           </div>
+
+          {/* Quotation Selection (from selected project) – above Attach Files */}
+          {!isStageAdvancement && (
+            <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
+              <label style={{
+                display: "block",
+                marginBottom: DESIGN_SYSTEM.spacing.xs,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
+                color: DESIGN_SYSTEM.colors.text.primary
+              }}>
+                Attach Quotation (from selected project)
+              </label>
+              <select
+                value={selectedQuoteIdLocal}
+                onChange={async (e) => {
+                  setSelectedQuoteIdLocal(e.target.value);
+                  await attachQuoteById(e.target.value);
+                }}
+                disabled={modalProjectQuotes.length === 0 || loading}
+                style={{
+                  width: '100%',
+                  padding: DESIGN_SYSTEM.spacing.sm,
+                  border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                }}
+              >
+                {modalProjectQuotes.length === 0 && (
+                  <option value="">No quotes found (select a project or add drafts)</option>
+                )}
+                {modalProjectQuotes.length > 0 && (
+                  <>
+                    {modalProjectQuotes.some(q => q.scope === 'project') && (
+                      <optgroup label="Project Quotes">
+                        {modalProjectQuotes.filter(q => q.scope === 'project').map((q, idx) => {
+                          const label = q.name || q.title || q.client || `Quote ${idx + 1}`;
+                          const total = Number(q.total || 0);
+                          const suffix = isNaN(total) || total === 0 ? '' : ` • Total ${total.toFixed(2)}`;
+                          return (
+                            <option key={q.id} value={q.id}>{`${label}${suffix}`}</option>
+                          );
+                        })}
+                      </optgroup>
+                    )}
+                    {modalProjectQuotes.some(q => q.scope === 'customer') && (
+                      <optgroup label="Customer Drafts">
+                        {modalProjectQuotes.filter(q => q.scope === 'customer').map((q, idx) => {
+                          const label = q.name || q.title || q.client || `Draft ${idx + 1}`;
+                          const total = Number(q.total || 0);
+                          const suffix = isNaN(total) || total === 0 ? '' : ` • Total ${total.toFixed(2)}`;
+                          return (
+                            <option key={q.id} value={q.id}>{`${label}${suffix}`}</option>
+                          );
+                        })}
+                      </optgroup>
+                    )}
+                  </>
+                )}
+              </select>
+              {quoteAttachError && (
+                <div style={{ marginTop: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.xs, color: DESIGN_SYSTEM.colors.error }}>
+                  {quoteAttachError}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* File Attachments */}
           <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
@@ -1258,7 +1353,9 @@ export default function AdvancedApprovalRequestModal({
           </button>
           <button
             onClick={noApprovalNeeded ? cpSubmitCreateProject : handleSubmit}
-            disabled={noApprovalNeeded ? (!onCreateProject || !cpProjectName.trim()) : (loading || (!requestTitle.trim() || !selectedDecisionMaker))}
+            disabled={noApprovalNeeded
+              ? (!onCreateProject || !cpProjectName.trim())
+              : (loading || (!requestTitle.trim() || !selectedDecisionMaker) || (!cpProjectName.trim()))}
             style={{
               padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
               border: "none",

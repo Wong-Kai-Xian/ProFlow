@@ -93,6 +93,8 @@ export default function CustomerProfile() {
   // Default CRM tab to Stages on load
   const [defaultCrmTab, setDefaultCrmTab] = useState('Stages');
 
+  
+
   // Wire AI Actions button inside CRM transcripts to this page modal
   useEffect(() => {
     const handler = (e) => {
@@ -153,18 +155,7 @@ export default function CustomerProfile() {
     alert("Conversion approval request sent successfully! You'll be able to create the project once it's approved.");
   };
 
-  // Auto-create project once approved
-  useEffect(() => {
-    const tryAutoCreate = async () => {
-      if (!hasApprovedConversion || autoCreatedFromApproval) return;
-      // Minimal project data from customer/company
-      const projectName = companyProfile?.company || companyProfile?.companyName || customerProfile?.name || 'New Project';
-      await handleSaveProjectFromConversion({ name: projectName, team: [currentUser?.uid].filter(Boolean) });
-      setAutoCreatedFromApproval(true);
-    };
-    tryAutoCreate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasApprovedConversion]);
+  // Disabled auto-create on approval to prevent auto-linking customer to project
 
   const handleCreateProjectAfterApproval = () => {
     setShowConvertPanel(true);
@@ -277,6 +268,8 @@ export default function CustomerProfile() {
     });
     return () => unsub();
   }, [id]);
+
+  
 
   // Watch session transcripts
   useEffect(() => {
@@ -1219,6 +1212,7 @@ export default function CustomerProfile() {
                       <input value={convertForm.name} onChange={(e) => setConvertForm(f => ({ ...f, name: e.target.value }))} placeholder="Enter project name" />
                     </label>
                   </div>
+                  
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
                     <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
                       <span style={{ marginBottom: 4 }}>Start Date</span>
@@ -1261,7 +1255,7 @@ export default function CustomerProfile() {
                       ))}
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>Quotation: { (customerProfile?.lastQuoteName || 'Auto‑attach if available') }</div>
+                  
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
                     <button onClick={() => setShowProjectConversionApprovalModal(true)} style={{ ...getButtonStyle('secondary', 'customers') }}>Send Approval Request</button>
                     <button onClick={() => handleSaveProjectFromConversion({ 

@@ -16,7 +16,8 @@ import {
   deleteDoc,
   serverTimestamp,
   getDoc,
-  getDocs
+  getDocs,
+  arrayUnion
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
@@ -340,6 +341,92 @@ export default function ApprovalPage() {
     }
   };
 
+  const generatePdfFromQuote = async (quoteData) => {
+    try {
+      const pdfLib = await import('pdf-lib');
+      const { PDFDocument, StandardFonts, rgb } = pdfLib;
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([595, 842]);
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      let y = 800;
+      const left = 50;
+      const line = (text, opts = {}) => {
+        const { bold = false, size = 12, color = rgb(0, 0, 0) } = opts;
+        page.drawText(String(text || ''), { x: left, y, size, font: bold ? fontBold : font, color });
+        y -= size + 6;
+      };
+      line(quoteData.name || 'Quotation', { bold: true, size: 18 });
+      line(`Client: ${quoteData.client || ''}`);
+      if (quoteData.validUntil) line(`Valid Until: ${quoteData.validUntil}`);
+      line('');
+      line('Items:', { bold: true });
+      const items = Array.isArray(quoteData.items) ? quoteData.items : [];
+      items.slice(0, 30).forEach((it, idx) => {
+        const desc = it.description || `Item ${idx + 1}`;
+        const qty = Number(it.qty || 1);
+        const unit = Number(it.unitPrice || 0);
+        const total = (qty * unit).toFixed(2);
+        line(`- ${desc}  x${qty}  @ ${unit} = ${total}`);
+      });
+      line('');
+      const subtotal = items.reduce((s, it) => s + Number(it.qty || 1) * Number(it.unitPrice || 0), 0);
+      const grand = Number(quoteData.total ?? subtotal);
+      line(`Subtotal: ${subtotal.toFixed(2)}`);
+      line(`Total: ${grand.toFixed(2)}`, { bold: true });
+      const bytes = await pdfDoc.save();
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (e) {
+      // Fallback to HTML preview if pdf-lib isn't available
+      try {
+        const data = quoteData || {};
+        const items = Array.isArray(data.items) ? data.items : [];
+        const rows = items.map((it, i) => `
+          <tr>
+            <td style="padding:6px;border:1px solid #e5e7eb">${it.description || `Item ${i+1}`}</td>
+            <td style="padding:6px;border:1px solid #e5e7eb;text-align:right">${Number(it.qty||1)}</td>
+            <td style="padding:6px;border:1px solid #e5e7eb;text-align:right">${Number(it.unitPrice||0).toFixed(2)}</td>
+            <td style="padding:6px;border:1px solid #e5e7eb;text-align:right">${(Number(it.qty||1)*Number(it.unitPrice||0)).toFixed(2)}</td>
+          </tr>`).join('');
+        const subtotal = items.reduce((s,it)=> s + Number(it.qty||1)*Number(it.unitPrice||0),0);
+        const total = Number(data.total ?? subtotal);
+        const html = `
+          <html>
+          <head><meta charset="utf-8"/><title>Quotation</title></head>
+          <body style="font-family:Arial,Helvetica,sans-serif;padding:20px">
+            <h2 style="margin:0 0 10px">${data.name || 'Quotation'}</h2>
+            <div style="margin:0 0 6px">Client: ${data.client || ''}</div>
+            ${data.validUntil ? `<div style="margin:0 0 10px">Valid Until: ${data.validUntil}</div>` : ''}
+            <table style="border-collapse:collapse;width:100%;margin-top:10px">
+              <thead>
+                <tr>
+                  <th style="padding:6px;border:1px solid #e5e7eb;text-align:left">Description</th>
+                  <th style="padding:6px;border:1px solid #e5e7eb;text-align:right">Qty</th>
+                  <th style="padding:6px;border:1px solid #e5e7eb;text-align:right">Unit</th>
+                  <th style="padding:6px;border:1px solid #e5e7eb;text-align:right">Total</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <div style="margin-top:10px;text-align:right">
+              <div>Subtotal: ${subtotal.toFixed(2)}</div>
+              <div style="font-weight:bold">Total: ${total.toFixed(2)}</div>
+            </div>
+            <script>window.print()</script>
+          </body>
+          </html>`;
+        const w = window.open('', '_blank');
+        if (w) { w.document.write(html); w.document.close(); } else { alert('Pop-up blocked. Allow pop-ups to view.'); }
+      } catch (err) {
+        console.error('Failed to show quotation preview', err);
+        alert('Unable to preview quotation');
+      }
+    }
+  };
+
   const processAction = async () => {
     if (!selectedRequest || !actionType) return;
 
@@ -383,6 +470,37 @@ export default function ApprovalPage() {
       };
 
       await updateDoc(requestRef, updateData);
+
+      // If approved and this is a customer conversion request, create the project and link to customer
+      if (actionType === 'approve' && selectedRequest.requestType === 'Customer' && selectedRequest.proposedProject && selectedRequest.customerId) {
+        try {
+          // Create project from proposedProject
+          const projectPayload = {
+            name: selectedRequest.proposedProject.name || 'New Project',
+            description: selectedRequest.proposedProject.description || '',
+            deadline: selectedRequest.proposedProject.deadline || null,
+            company: selectedRequest.proposedProject.company || '',
+            contactPerson: selectedRequest.proposedProject.customerName || '',
+            contactEmail: selectedRequest.proposedProject.customerEmail || '',
+            status: 'Active',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            customerId: selectedRequest.customerId,
+            convertedFromCustomer: true,
+            userId: selectedRequest.requestedBy,
+            createdBy: selectedRequest.requestedBy,
+            createdByName: selectedRequest.requestedByName || '' ,
+            team: [selectedRequest.requestedBy]
+          };
+          const projRef = await addDoc(collection(db, 'projects'), projectPayload);
+          // Link project to customer profile for dropdown
+          await updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId), {
+            projects: arrayUnion(projRef.id)
+          });
+        } catch (e) {
+          console.error('Failed to create/link project after approval', e);
+        }
+      }
 
       // Notifications to stakeholders
       try {
@@ -921,6 +1039,61 @@ export default function ApprovalPage() {
                         </div>
 
                         {/* Attached Files */}
+                        {/* Quotation (files or data preview) */}
+                        {(request.quotationFiles?.length > 0 || request.quotationData) && (
+                          <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
+                            <h4 style={{
+                              margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
+                              fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                              fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
+                              color: DESIGN_SYSTEM.colors.text.primary
+                            }}>
+                              Quotation
+                            </h4>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: DESIGN_SYSTEM.spacing.xs }}>
+                              {(request.quotationFiles || []).map((fileUrl, index) => (
+                                <button
+                                  key={index}
+                                  onClick={() => {
+                                    const name = request.quotationFileNames?.[index] || `Quotation ${index + 1}`;
+                                    downloadFile(fileUrl, name);
+                                  }}
+                                  style={{
+                                    padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                                    backgroundColor: DESIGN_SYSTEM.colors.primary[100],
+                                    color: DESIGN_SYSTEM.colors.primary[700],
+                                    border: `1px solid ${DESIGN_SYSTEM.colors.primary[300]}`,
+                                    borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                                    fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                                    cursor: 'pointer',
+                                    textDecoration: 'none'
+                                  }}
+                                >
+                                  {request.quotationFileNames?.[index] || `Quotation ${index + 1}`}
+                                </button>
+                              ))}
+                              {/* If there is no quotation file but quotationData exists, allow viewing as PDF */}
+                              {(!(request.quotationFiles && request.quotationFiles.length > 0) && request.quotationData) && (
+                                <button
+                                  onClick={() => generatePdfFromQuote(request.quotationData)}
+                                  style={{
+                                    padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                                    backgroundColor: DESIGN_SYSTEM.colors.secondary[100],
+                                    color: DESIGN_SYSTEM.colors.text.primary,
+                                    border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                                    borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                                    fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  View as PDF
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Other Attachments */}
                         {request.attachedFiles?.length > 0 && (
                           <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
                             <h4 style={{
@@ -929,15 +1102,16 @@ export default function ApprovalPage() {
                               fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
                               color: DESIGN_SYSTEM.colors.text.primary
                             }}>
-                              Attached Files
+                              Attachments
                             </h4>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: DESIGN_SYSTEM.spacing.xs }}>
                               {request.attachedFiles.map((fileUrl, index) => (
                                 <button
                                   key={index}
                                   onClick={() => {
-                                    console.log('Downloading attached file:', fileUrl, request.attachedFileNames?.[index]);
-                                    downloadFile(fileUrl, request.attachedFileNames?.[index]);
+                                    const name = request.attachedFileNames?.[index] || `File ${index + 1}`;
+                                    console.log('Downloading attached file:', fileUrl, name);
+                                    downloadFile(fileUrl, name);
                                   }}
                                   style={{
                                     padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
