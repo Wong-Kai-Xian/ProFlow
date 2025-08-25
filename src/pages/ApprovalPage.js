@@ -1544,7 +1544,7 @@ export default function ApprovalPage() {
                                       >
                                         {name}
                                       </button>
-                                      {isPdf && (
+                                      {isPdf && request.requestedTo === currentUser?.uid && request.status === 'pending' && (
                                         <button
                                           onClick={() => openSignModal(request.id, fileUrl, name)}
                                           style={{
