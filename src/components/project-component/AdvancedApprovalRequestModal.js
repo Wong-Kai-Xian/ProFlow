@@ -270,7 +270,18 @@ export default function AdvancedApprovalRequestModal({
         if (requestType === 'Project') {
           setRequestTitle(`Approval Request for ${effectiveEntityName}`);
         } else {
-          setRequestTitle(`Convert Customer "${effectiveEntityName}" to Project`);
+          if (autoAttachQuotation) {
+            setRequestTitle(`Convert Customer "${effectiveEntityName}" to Project`);
+          } else {
+            // Generic send approval from customer profile: use customer profile name without quotes
+            const nameForTitle = (
+              (customerProfileData?.name && customerProfileData.name.trim())
+              || (`${(customerProfileData?.firstName||'').trim()} ${(customerProfileData?.lastName||'').trim()}`.trim())
+              || (customerName || '').trim()
+              || effectiveEntityName
+            );
+            setRequestTitle(`Approval Request for ${nameForTitle}`);
+          }
         }
       }
 
@@ -773,7 +784,11 @@ export default function AdvancedApprovalRequestModal({
               fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
               color: DESIGN_SYSTEM.colors.text.primary
             }}>
-              {(!isStageAdvancement && requestType === 'Customer') ? 'Project Conversion' : (isStageAdvancement ? "Get approval & advance stage" : "Send approval")}
+              {(!isStageAdvancement && requestType === 'Customer' && !autoAttachQuotation) ? 'Send Approval' : (
+                (!isStageAdvancement && requestType === 'Customer' && autoAttachQuotation) ? 'Project Conversion' : (
+                  isStageAdvancement ? 'Get approval & advance stage' : 'Send approval'
+                )
+              )}
             </h2>
           </div>
           <p style={{
@@ -812,8 +827,8 @@ export default function AdvancedApprovalRequestModal({
           overflow: "auto",
           flex: 1
         }}>
-          {/* No approval needed toggle */}
-          {showNoApprovalToggle && (
+          {/* No approval needed toggle: show only for conversion and stage-advance flows */}
+          {showNoApprovalToggle && (autoAttachQuotation || isStageAdvancement) && (
             <div style={{
               marginBottom: DESIGN_SYSTEM.spacing.base,
               padding: DESIGN_SYSTEM.spacing.sm,
@@ -923,8 +938,8 @@ export default function AdvancedApprovalRequestModal({
             </div>
           </div>
 
-          {/* Quotation Selection (from selected project) – above Attach Files */}
-          {!isStageAdvancement && (
+          {/* Quotation Selection (from selected project) – only for conversion flow */}
+          {(!isStageAdvancement && autoAttachQuotation) && (
             <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
               <label style={{
                 display: "block",

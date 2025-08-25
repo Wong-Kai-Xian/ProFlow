@@ -1337,13 +1337,15 @@ export default function CustomerProfile() {
         onClose={() => setShowAdvancedApprovalModal(false)}
         onSuccess={handleApprovalRequestSuccess}
         customerId={id}
-        customerName={`${customerProfile.firstName || ''} ${customerProfile.lastName || ''}`.trim() || companyProfile.companyName || 'Unknown Customer'}
+        customerName={getCustomerName()}
         currentUser={currentUser}
         currentStage={currentStage}
         nextStage={stages[stages.indexOf(currentStage) + 1] || ""}
         isStageAdvancement={approvalModalType === 'stage'}
         showCreateProjectFields={false}
         showNoApprovalToggle={false}
+        customerProfileData={customerProfile}
+        companyProfileData={companyProfile}
         />
 
       <AdvancedApprovalRequestModal
@@ -1357,6 +1359,7 @@ export default function CustomerProfile() {
         nextStage=""
         isStageAdvancement={false}
         autoAttachQuotation={true}
+        showNoApprovalToggle={false}
         onCreateProject={(data) => handleSaveProjectFromConversion({ ...data, team: data.team || [] })}
         customerProfileData={customerProfile}
         companyProfileData={companyProfile}
