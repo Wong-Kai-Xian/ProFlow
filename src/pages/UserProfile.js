@@ -274,11 +274,15 @@ export default function UserProfile() {
     try {
       setLoading(true);
 
-      const updatedProfile = {
-        ...editingProfile,
-        ...overrides,
-        name: editingProfile.name.trim()
-      };
+      const updatedProfile = (() => {
+        const { email, ...rest } = editingProfile; // prevent email edits
+        const { email: overrideEmail, ...restOverrides } = overrides || {};
+        return {
+          ...rest,
+          ...restOverrides,
+          name: editingProfile.name.trim()
+        };
+      })();
 
       const userRef = doc(db, 'users', userId);
       await updateDoc(userRef, updatedProfile);
@@ -722,14 +726,14 @@ function ComprehensiveEditProfileModal({
             <input
               type="email"
               value={editingProfile.email}
-              onChange={(e) => handleInputChange('email', e.target.value)}
+              onChange={() => { /* email edits disabled */ }}
               style={{ fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
               backgroundColor: DESIGN_SYSTEM.colors.background.primary,
               border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
               borderRadius: DESIGN_SYSTEM.borderRadius.base,
               padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
               placeholder="your.email@example.com"
-              disabled={loading}
+              disabled
             />
           </div>
         </div>

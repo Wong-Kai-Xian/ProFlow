@@ -14,8 +14,9 @@ import AddTeamMemberModal from '../components/project-component/AddTeamMemberMod
 import TeamMembersPanel from '../components/project-component/TeamMembersPanel';
 import FinancePanel from '../components/project-component/FinancePanel';
 import ProjectQuotesPanel from '../components/project-component/ProjectQuotesPanel';
-import { db } from "../firebase";
+import { db, storage } from "../firebase";
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs, arrayUnion, arrayRemove, addDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 import { useNavigate } from 'react-router-dom';
@@ -110,6 +111,7 @@ export default function ProjectDetail() {
   const [aiModalTarget, setAiModalTarget] = useState('tasks'); // 'tasks' | 'reminders'
   const [aiModalSelection, setAiModalSelection] = useState({});
   const [aiModalTranscriptDoc, setAiModalTranscriptDoc] = useState(null);
+  const [isUploadingProjectFile, setIsUploadingProjectFile] = useState(false);
   
   // Confirmation modal state
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -340,25 +342,29 @@ export default function ProjectDetail() {
   };
 
   useEffect(() => {
-    const fetchProject = async () => {
-      console.log("Fetching project with projectId:", projectId); // Added console.log
-      if (projectId) {
-        const docRef = doc(db, "projects", projectId);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          const data = { id: docSnap.id, ...docSnap.data() };
+    if (!projectId) return;
+    const refDoc = doc(db, 'projects', projectId);
+    // Initial fetch for immediate values
+    (async () => {
+      try {
+        const snap = await getDoc(refDoc);
+        if (snap.exists()) {
+          const data = { id: snap.id, ...snap.data() };
           setProjectData(data);
-          setProjectStages(data.stages && Array.isArray(data.stages) && data.stages.length > 0 ? data.stages : DEFAULT_STAGES);
-          setCurrentStage(data.stage || (data.stages && data.stages[0]) || DEFAULT_STAGES[0]);
-        } else {
-          console.log("No such project document!");
-          setProjectData(null);
+          setProjectStages(Array.isArray(data.stages) && data.stages.length > 0 ? data.stages : DEFAULT_STAGES);
+          setCurrentStage(data.stage || (Array.isArray(data.stages) && data.stages[0]) || DEFAULT_STAGES[0]);
         }
-      }
-    };
-
-    fetchProject();
+      } catch {}
+    })();
+    // Live updates
+    const unsub = onSnapshot(refDoc, (snap) => {
+      if (!snap.exists()) { setProjectData(null); return; }
+      const data = { id: snap.id, ...snap.data() };
+      setProjectData(data);
+      setProjectStages(Array.isArray(data.stages) && data.stages.length > 0 ? data.stages : DEFAULT_STAGES);
+      setCurrentStage(data.stage || (Array.isArray(data.stages) && data.stages[0]) || DEFAULT_STAGES[0]);
+    });
+    return () => unsub();
   }, [projectId]);
 
   // Fetch project-specific forums in real-time
@@ -1143,6 +1149,39 @@ export default function ProjectDetail() {
               </h3>
             </div>
             <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>Add File</label>
+                <input
+                  type="file"
+                  onChange={async (e) => {
+                    try {
+                      const file = e.target.files && e.target.files[0];
+                      if (!file || !projectId) return;
+                      setIsUploadingProjectFile(true);
+                      const path = `project_files/${projectId}/${Date.now()}_${file.name}`;
+                      const sref = storageRef(storage, path);
+                      await uploadBytes(sref, file);
+                      const url = await getDownloadURL(sref);
+                      const fileEntry = {
+                        name: file.name,
+                        type: file.type && file.type.startsWith('image/') ? 'image' : 'document',
+                        url,
+                        size: file.size,
+                        uploadTime: Date.now()
+                      };
+                      const refDoc = doc(db, 'projects', projectId);
+                      const nextFiles = Array.isArray(projectData?.files) ? [...projectData.files, fileEntry] : [fileEntry];
+                      await updateDoc(refDoc, { files: nextFiles });
+                    } catch (err) {
+                      alert('Failed to upload file');
+                    } finally {
+                      setIsUploadingProjectFile(false);
+                      if (e.target) { try { e.target.value = ''; } catch {} }
+                    }
+                  }}
+                  disabled={isUploadingProjectFile}
+                />
+              </div>
               {Array.isArray(projectData?.files) && projectData.files.length > 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
                   {projectData.files.map((f, i) => (
@@ -1160,6 +1199,9 @@ export default function ProjectDetail() {
                 </div>
               ) : (
                 <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>No files attached.</div>
+              )}
+              {isUploadingProjectFile && (
+                <div style={{ marginTop: 8, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>Uploading…</div>
               )}
             </div>
           </div>

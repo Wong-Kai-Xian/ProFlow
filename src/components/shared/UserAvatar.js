@@ -12,21 +12,18 @@ const stringToColor = (str) => {
 // Shared UserAvatar component for consistent avatar display across the app
 // Always shows initials only, no photo uploads
 const UserAvatar = ({ user, size = 40, showBorder = true, borderColor = 'rgba(255,255,255,0.3)', shape = 'circle', style = {} }) => {
-  const initials = (() => {
-    const name = user?.name;
-    const email = user?.email;
-    if (typeof name === 'string' && name.trim().length > 0) {
-      return name.trim().split(/\s+/).map(n => n && n[0] ? n[0].toUpperCase() : '').join('').slice(0, 2) || 'U';
-    }
-    if (typeof email === 'string' && email.length > 0) {
-      return email.slice(0, 2).toUpperCase();
-    }
-    return 'U';
-  })();
-  
-  // Generate color based on name or email
-  const colorSource = (typeof user?.name === 'string' && user.name.length > 0) ? user.name : ((typeof user?.email === 'string' && user.email.length > 0) ? user.email : 'User');
-  const backgroundColor = stringToColor(colorSource);
+  const stableName = user?.displayName || user?.name || '';
+  const stableEmail = user?.email || '';
+  const initials = React.useMemo(() => {
+    const base = (stableName && stableName.trim().length > 0) ? stableName : stableEmail;
+    if (!base) return 'U';
+    const parts = base.trim().split(/\s+/).filter(Boolean);
+    if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return base.slice(0, 2).toUpperCase();
+  }, [stableName, stableEmail]);
+
+  // Generate color based on stable name or email
+  const backgroundColor = React.useMemo(() => stringToColor(stableName || stableEmail || 'User'), [stableName, stableEmail]);
   
   return (
     <div style={{
