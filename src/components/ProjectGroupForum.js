@@ -5,7 +5,7 @@ import { COLORS, LAYOUT, BUTTON_STYLES } from "./profile-component/constants";
 import AddGroupForumModal from "./project-component/AddGroupForumModal";
 
 import { db } from "../firebase";
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, arrayUnion } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function ProjectGroupForum({ projectId, forums }) {
@@ -168,6 +168,30 @@ export default function ProjectGroupForum({ projectId, forums }) {
                 {(forum.posts || 0) > 0 ? 'Last activity: ' : 'Created: '}{getActivityDate(forum)}
               </small>
             </div>
+            {/* Join button if user is in project but not in forum */}
+            {currentUser?.uid && Array.isArray(forum.members) && projectId && !forum.members.includes(currentUser.uid) && (
+              <div style={{ marginTop: 8 }}>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      const fRef = doc(db, 'forums', forum.id);
+                      await updateDoc(fRef, { members: arrayUnion(currentUser.uid) });
+                      // Optional toast
+                      const popup = document.createElement('div');
+                      popup.textContent = 'Joined forum';
+                      Object.assign(popup.style, { position: 'fixed', bottom: '20px', right: '20px', background: '#111827', color: '#fff', padding: '10px 12px', borderRadius: '8px', zIndex: 4000 });
+                      document.body.appendChild(popup); setTimeout(() => document.body.removeChild(popup), 1200);
+                    } catch (err) {
+                      alert('Failed to join forum');
+                    }
+                  }}
+                  style={{ ...BUTTON_STYLES.primarySmall }}
+                >
+                  Join
+                </button>
+              </div>
+            )}
             {forum.notifications > 0 && (
               <div style={{
                 position: "absolute",

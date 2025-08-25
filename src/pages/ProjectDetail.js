@@ -369,21 +369,18 @@ export default function ProjectDetail() {
     return () => unsub();
   }, [projectId]);
 
-  // Fetch project-specific forums in real-time
+  // Fetch project-specific forums in real-time (show even if user is not a member)
   useEffect(() => {
-    if (projectId && currentUser) {
+    if (projectId) {
       const forumsCollectionRef = collection(db, "forums");
-      const q = query(forumsCollectionRef, where("projectId", "==", projectId), where("members", "array-contains", currentUser.uid));
+      const q = query(forumsCollectionRef, where("projectId", "==", projectId));
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const forumsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        const forumsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setProjectForums(forumsData);
       });
       return () => unsubscribe();
     }
-  }, [projectId, currentUser]);
+  }, [projectId]);
 
   // Fetch all project names for the dropdown in ProjectDetails
   useEffect(() => {
