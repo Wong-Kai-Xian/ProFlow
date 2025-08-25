@@ -497,6 +497,48 @@ export default function ApprovalPage() {
           await updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId), {
             projects: arrayUnion(projRef.id)
           });
+
+          // Migrate only unassigned quotesDrafts from customer to this project and tag them with projectId
+          try {
+            const draftsSnap = await getDocs(collection(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts'));
+            const ops = [];
+            draftsSnap.forEach(d => {
+              const q = d.data() || {};
+              if (!q.projectId) {
+                const items = Array.isArray(q.items) ? q.items : [];
+                ops.push(addDoc(collection(db, 'projects', projRef.id, 'quotes'), {
+                  client: q.client || '',
+                  validUntil: q.validUntil || '',
+                  items,
+                  total: Number(q.total || 0),
+                  status: q.status || 'draft',
+                  createdAt: serverTimestamp(),
+                  movedFromCustomerId: selectedRequest.customerId,
+                }).catch(() => {}));
+                ops.push(updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts', d.id), { projectId: projRef.id }).catch(() => {}));
+              }
+            });
+            if (ops.length > 0) await Promise.all(ops);
+          } catch {}
+
+          // Move customer transcripts to the new project's transcripts collection
+          try {
+            const transSnap = await getDocs(collection(db, 'customerProfiles', selectedRequest.customerId, 'meetingTranscripts'));
+            const moves = [];
+            transSnap.forEach(tdoc => {
+              const t = tdoc.data() || {};
+              moves.push(
+                addDoc(collection(db, 'projects', projRef.id, 'meetingTranscripts'), {
+                  ...t,
+                  migratedFromCustomerId: selectedRequest.customerId,
+                  migratedAt: serverTimestamp()
+                })
+                  .then(() => deleteDoc(doc(db, 'customerProfiles', selectedRequest.customerId, 'meetingTranscripts', tdoc.id)))
+                  .catch(() => {})
+              );
+            });
+            if (moves.length > 0) await Promise.all(moves);
+          } catch {}
         } catch (e) {
           console.error('Failed to create/link project after approval', e);
         }

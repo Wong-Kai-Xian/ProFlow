@@ -786,27 +786,50 @@ export default function CustomerProfile() {
       });
       setProjectSnapshots(prev => ({ ...(prev || {}), [newProjectRef.id]: snapshot }));
 
-      // Copy all customer draft quotes into the new project's quotes collection (keep originals for reference, tag with projectId)
+      // Copy only unassigned customer draft quotes into the new project's quotes collection and tag them with this projectId
       try {
         const draftsSnap = await getDocs(collection(db, 'customerProfiles', id, 'quotesDrafts'));
         const addPromises = [];
         draftsSnap.forEach(d => {
           const q = d.data() || {};
-          const items = Array.isArray(q.items) ? q.items : [];
-          addPromises.push(addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
-            client: q.client || '',
-            validUntil: q.validUntil || '',
-            items,
-            total: Number(q.total || 0),
-            status: q.status || 'draft',
-            createdAt: serverTimestamp(),
-            movedFromCustomerId: id,
-          }).catch(() => {}));
-          // Tag the customer-level draft with projectId so it won't appear across other projects in profile
-          addPromises.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
+          if (!q.projectId) {
+            const items = Array.isArray(q.items) ? q.items : [];
+            addPromises.push(addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
+              client: q.client || '',
+              validUntil: q.validUntil || '',
+              items,
+              total: Number(q.total || 0),
+              status: q.status || 'draft',
+              createdAt: serverTimestamp(),
+              movedFromCustomerId: id,
+            }).catch(() => {}));
+            // Tag the customer-level draft with projectId so it won't appear across other projects in profile or get re-migrated
+            addPromises.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
+          }
         });
         if (addPromises.length > 0) {
           await Promise.all(addPromises);
+        }
+      } catch {}
+
+      // Move customer transcripts to the new project's transcripts collection
+      try {
+        const transcriptsSnap = await getDocs(collection(db, 'customerProfiles', id, 'meetingTranscripts'));
+        const movePromises = [];
+        transcriptsSnap.forEach(tdoc => {
+          const t = tdoc.data() || {};
+          movePromises.push(
+            addDoc(collection(db, 'projects', newProjectRef.id, 'meetingTranscripts'), {
+              ...t,
+              migratedFromCustomerId: id,
+              migratedAt: serverTimestamp()
+            })
+              .then(() => deleteDoc(doc(db, 'customerProfiles', id, 'meetingTranscripts', tdoc.id)))
+              .catch(() => {})
+          );
+        });
+        if (movePromises.length > 0) {
+          await Promise.all(movePromises);
         }
       } catch {}
 
