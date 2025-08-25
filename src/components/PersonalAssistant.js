@@ -3,11 +3,15 @@ import { createPortal } from 'react-dom';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import { useLocation } from 'react-router-dom';
 import CatAvatar from './shared/CatAvatar';
 import { DESIGN_SYSTEM } from '../styles/designSystem';
+import { storage } from '../firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export default function PersonalAssistant() {
   const { currentUser } = useAuth();
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [projects, setProjects] = useState([]);
   const [forums, setForums] = useState([]);
@@ -22,6 +26,7 @@ export default function PersonalAssistant() {
   const [apiKey, setApiKey] = useState('');
   const [isCalling, setIsCalling] = useState(false);
   const [showKeyEditor, setShowKeyEditor] = useState(true);
+  const [stagedFile, setStagedFile] = useState(null); // { file, name, size }
 
   // Drag position (fixed, left/top in px)
   const [pos, setPos] = useState({ x: 0, y: 0 });
@@ -126,20 +131,32 @@ export default function PersonalAssistant() {
   async function callGemini(prompt, context) {
     const key = apiKey || ''; if (!key) throw new Error('Missing GEMINI API key');
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
-    const body = { contents: [{ role: 'user', parts: [{ text: JSON.stringify({ context, question: prompt }) }] }] };
+    const attachments = Array.isArray(context.attachments) ? context.attachments : [];
+    const attachmentsText = attachments.map((a, idx) => {
+      const header = `Attachment ${idx + 1}: ${a.name || 'file'} (${Math.round((a.size||0)/1024)} KB)\nURL: ${a.url || ''}`;
+      const content = (a.content || '').slice(0, 20000);
+      return `${header}${content ? `\nContent (truncated):\n\n\`\`\`\n${content}\n\`\`\`` : ''}`;
+    }).join('\n\n');
+    const promptText = [
+      'You are a helpful assistant. Use the attachments and context when relevant. If attachments are provided, prefer their content.',
+      `Question:\n${prompt}`,
+      attachmentsText ? `\n\nAttachments:\n${attachmentsText}` : '',
+      `\n\nContext (JSON):\n${JSON.stringify({ ...context, attachments: undefined })}`
+    ].join('');
+    const body = { contents: [{ role: 'user', parts: [{ text: promptText }] }] };
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!res.ok) throw new Error(await res.text()); const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || 'No answer.'; return text;
+    const answerText = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || 'No answer.'; return answerText;
   }
 
-  const handleAsk = async () => {
+  const handleAsk = async (attachments = []) => {
     const q = queryText.trim();
     if (!q) { const base = `Projects: ${insights.projectCount} • Forums: ${insights.forumCount} • Customers: ${insights.customerCount} • Active projects: ${insights.activeProjects.length} • Approvals pending: ${insights.approvalsPending}`; setSummary(base); setHistory(h => [...h, { q: '(overview)', a: base, t: Date.now() }]); return; }
     const projectsContext = projects.slice(0, 8).map(p => ({ id: p.id, name: p.name || 'Untitled', stage: p.stage || 'N/A', deadline: p.deadline || 'N/A', description: (p.description || '').slice(0, 600), members: (Array.isArray(p.team) ? p.team : []).map(uid => userMap[uid] || uid), tasks: (Array.isArray(p.tasks) ? p.tasks : []).slice(0, 6).flatMap(s => Array.isArray(s.tasks) ? s.tasks.slice(0, 6).map(t => ({ title: t.title || t.name || 'Task', status: t.status || 'open', deadline: t.deadline || '', stage: s.stage || '' })) : []) }));
     const forumsContext = forums.slice(0, 12).map(f => ({ id: f.id, name: f.name || 'Untitled', postsCount: f.posts || 0, recentPosts: (forumPostsDetailMap[f.id] || []).slice(0, 5).map(p => ({ title: p.title, excerpt: p.body, author: userMap[p.authorUid] || p.authorUid })) }));
     const customersContext = customers.slice(0, 10).map(c => ({ id: c.id, name: c.customerProfile?.name || c.customerProfile?.email || 'Customer', company: c.companyProfile?.company || '', currentStage: c.currentStage || '', notesCount: Object.keys(c.stageData || {}).reduce((acc, k) => acc + ((c.stageData?.[k]?.notes || []).length), 0), reminders: (c.reminders || []).length, files: (c.files || []).length }));
-    const ctx = { user: currentUser?.email || currentUser?.uid || 'unknown', approvalsPending: insights.approvalsPending, upcomingDeadlines: insights.upcoming.slice(0, 10), projects: projectsContext, forums: forumsContext, customers: customersContext, tasksSample: insights.myTasks.slice(0, 20).map(t => ({ title: t.title || t.name || 'Task', project: t.projectName, status: t.status || 'open', stage: t.stage || '' })) };
-    try { setIsCalling(true); const answer = await callGemini(q, ctx); setSummary(cleanText(answer)); setHistory(h => [...h, { q, a: cleanText(answer), t: Date.now() }]); } catch (err) { const msg = `AI error: ${err.message}`; setSummary(msg); setHistory(h => [...h, { q, a: msg, t: Date.now() }]); } finally { setIsCalling(false); }
+    const ctx = { user: currentUser?.email || currentUser?.uid || 'unknown', approvalsPending: insights.approvalsPending, upcomingDeadlines: insights.upcoming.slice(0, 10), projects: projectsContext, forums: forumsContext, customers: customersContext, tasksSample: insights.myTasks.slice(0, 20).map(t => ({ title: t.title || t.name || 'Task', project: t.projectName, status: t.status || 'open', stage: t.stage || '' })), attachments };
+    try { setIsCalling(true); const answer = await callGemini(q, ctx); setSummary(cleanText(answer)); setHistory(h => [...h, { q, a: cleanText(answer), t: Date.now(), attachments }]); setQueryText(''); } catch (err) { const msg = `AI error: ${err.message}`; setSummary(msg); setHistory(h => [...h, { q, a: msg, t: Date.now(), attachments }]); } finally { setIsCalling(false); }
   };
 
   const handleSaveKey = () => { localStorage.setItem('gemini_api_key', apiKey); setShowKeyEditor(false); };
@@ -147,6 +164,10 @@ export default function PersonalAssistant() {
 
   const safeLeft = Number.isFinite(pos?.x) ? pos.x : 0;
   const safeTop = Number.isFinite(pos?.y) ? pos.y : 0;
+  const isAuthRoute = useMemo(() => {
+    const p = (location?.pathname || '').toLowerCase();
+    return p === '/login' || p === '/signup' || p === '/forgot-password' || p === '/verify-email';
+  }, [location?.pathname]);
   const launcher = (
     <div style={{ position: 'fixed', left: safeLeft, top: safeTop, zIndex: 2147483647, fontFamily: fontStack }}>
       {!isOpen && (
@@ -185,10 +206,46 @@ export default function PersonalAssistant() {
           </div>
         )}
         <div style={{ padding: DESIGN_SYSTEM.spacing.base, gap: DESIGN_SYSTEM.spacing.base, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.xs }}>
+          <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.xs, alignItems: 'center' }}>
             <input value={queryText} onChange={(e) => setQueryText(e.target.value)} placeholder="Ask about projects, forums, customers, deadlines..." style={{ flex: 1, padding: DESIGN_SYSTEM.spacing.base, borderRadius: DESIGN_SYSTEM.borderRadius.lg, border: `1px solid ${DESIGN_SYSTEM.colors.border}`, outline: 'none' }} />
-            <button disabled={isCalling} onClick={handleAsk} style={{ ...blackBtn, padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`, opacity: isCalling ? 0.7 : 1 }}>{isCalling ? 'Thinking…' : 'Ask'}</button>
+            <label htmlFor="pa-chat-file-input" title="Attach file" style={{ padding: '6px 10px', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, cursor: 'pointer', background: '#fff' }}>📎</label>
+            <input id="pa-chat-file-input" type="file" accept=".txt,.md,.json,.csv,.log,.html,.xml,.yml,.yaml,.pdf,.png,.jpg,.jpeg,.webp" style={{ display: 'none' }} onChange={(e) => {
+              const file = e.target.files && e.target.files[0];
+              if (!file) return;
+              setStagedFile({ file, name: file.name, size: file.size });
+              try { e.target.value = ''; } catch {}
+            }} />
+            <button disabled={isCalling} onClick={async () => {
+              let attachments = [];
+              if (stagedFile && currentUser?.uid) {
+                try {
+                  const path = `assistant_uploads/${currentUser.uid}/${Date.now()}_${stagedFile.name}`;
+                  const sref = storageRef(storage, path);
+                  await uploadBytes(sref, stagedFile.file);
+                  const url = await getDownloadURL(sref);
+                  let content = '';
+                  try {
+                    // Best-effort: read text content for common text types
+                    if (/^(text\/|application\/(json|xml|yaml|x-yaml|x-yaml-stream))/.test(stagedFile.file.type) || /\.(txt|md|json|csv|log|xml|yml|yaml)$/i.test(stagedFile.name)) {
+                      content = await stagedFile.file.text();
+                    }
+                  } catch {}
+                  attachments = [{ name: stagedFile.name, size: stagedFile.size, url, content }];
+                } catch (err) {
+                  attachments = [{ name: stagedFile.name, size: stagedFile.size, url: '(upload failed)' }];
+                } finally {
+                  setStagedFile(null);
+                }
+              }
+              await handleAsk(attachments);
+            }} style={{ ...blackBtn, padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`, opacity: isCalling ? 0.7 : 1 }}>{isCalling ? 'Thinking…' : 'Ask'}</button>
           </div>
+          {stagedFile && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, border: `1px solid ${DESIGN_SYSTEM.colors.border}`, background: '#fff', borderRadius: 8, padding: '6px 10px' }}>
+              <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stagedFile.name} ({Math.round((stagedFile.size||0)/1024)} KB)</div>
+              <button onClick={() => setStagedFile(null)} title="Remove" style={{ ...blackBtnOutline, padding: '4px 8px' }}>×</button>
+            </div>
+          )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: DESIGN_SYSTEM.spacing.xs }}>
             <button onClick={() => quickAsk('List my upcoming deadlines in the next 14 days.')} style={{ ...blackBtnOutline, padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}` }}>Upcoming deadlines</button>
             <button onClick={() => quickAsk('Which projects have the most open tasks?')} style={{ ...blackBtnOutline, padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}` }}>Open tasks</button>
@@ -218,8 +275,8 @@ export default function PersonalAssistant() {
 
   return (
     <>
-      {createPortal(launcher, document.body)}
-      {panel && createPortal(panel, document.body)}
+      {currentUser && !isAuthRoute && createPortal(launcher, document.body)}
+      {currentUser && !isAuthRoute && panel && createPortal(panel, document.body)}
     </>
   );
 }
