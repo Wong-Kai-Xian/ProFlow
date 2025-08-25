@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import TopBar from '../components/TopBar'; // Import TopBar
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem'; // Import design system
+import { FaLinkedin, FaTwitter, FaGlobe, FaFolderOpen, FaComments } from 'react-icons/fa';
+import ConfirmationModal from '../components/common/ConfirmationModal';
 import UserAvatar from '../components/shared/UserAvatar';
 
 const modalOverlayStyle = {
@@ -34,6 +37,7 @@ const modalContentStyle = {
 
 export default function UserProfile() {
   const { userId } = useParams();
+  const navigate = useNavigate();
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -42,9 +46,19 @@ export default function UserProfile() {
   const [invitations, setInvitations] = useState([]);
   const [sharedProjects, setSharedProjects] = useState([]);
   const [sharedForums, setSharedForums] = useState([]);
+  const [myProjects, setMyProjects] = useState([]);
+  const [myForums, setMyForums] = useState([]);
   const auth = getAuth();
   const currentUser = auth.currentUser;
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState({
+    title: '',
+    message: '',
+    confirmText: 'OK',
+    confirmButtonType: 'primary',
+    onConfirm: () => setShowConfirmModal(false)
+  });
   const [editingProfile, setEditingProfile] = useState({
     name: '',
     email: '',
@@ -55,7 +69,8 @@ export default function UserProfile() {
     bio: '',
     linkedin: '',
     twitter: '',
-    website: ''
+    website: '',
+    photoURL: ''
   });
 
 
@@ -77,7 +92,8 @@ export default function UserProfile() {
             bio: userData.bio || '',
             linkedin: userData.linkedin || '',
             twitter: userData.twitter || '',
-            website: userData.website || ''
+            website: userData.website || '',
+            photoURL: userData.photoURL || ''
           });
         } else {
           setError('User not found.');
@@ -146,6 +162,32 @@ export default function UserProfile() {
       } catch {
         setSharedProjects([]); setSharedForums([]);
       }
+    };
+    run();
+  }, [currentUser, userId, userProfile]);
+
+  // Load own projects/forums when viewing own profile
+  useEffect(() => {
+    const run = async () => {
+      try {
+        if (!currentUser || currentUser.uid !== userId) { setMyProjects([]); setMyForums([]); return; }
+        const myEmail = (userProfile && (userProfile.email || '')) || currentUser.email || '';
+        const resultsMap = new Map();
+        const push = (snap) => {
+          snap.forEach(p => { const d = p.data(); resultsMap.set(p.id, { id: p.id, name: d.name || 'Project' }); });
+        };
+        try { push(await getDocs(query(collection(db, 'projects'), where('team', 'array-contains', currentUser.uid)))); } catch {}
+        if (myEmail) { try { push(await getDocs(query(collection(db, 'projects'), where('team', 'array-contains', myEmail)))); } catch {} }
+        try { push(await getDocs(query(collection(db, 'projects'), where('createdBy', '==', currentUser.uid)))); } catch {}
+        try { push(await getDocs(query(collection(db, 'projects'), where('userId', '==', currentUser.uid)))); } catch {}
+        setMyProjects(Array.from(resultsMap.values()));
+        try {
+          const forumSnap = await getDocs(query(collection(db, 'forums'), where('members', 'array-contains', userId)));
+          const mineF = [];
+          forumSnap.forEach(f => { const d = f.data(); mineF.push({ id: f.id, name: d.name || 'Forum' }); });
+          setMyForums(mineF);
+        } catch { setMyForums([]); }
+      } catch { setMyProjects([]); setMyForums([]); }
     };
     run();
   }, [currentUser, userId, userProfile]);
@@ -224,13 +266,14 @@ export default function UserProfile() {
     }
   };
 
-  const handleUpdateProfile = async () => {
+  const handleUpdateProfile = async (overrides = {}) => {
     if (!currentUser || currentUser.uid !== userId || !editingProfile.name.trim()) return;
     try {
       setLoading(true);
 
       const updatedProfile = {
         ...editingProfile,
+        ...overrides,
         name: editingProfile.name.trim()
       };
 
@@ -239,7 +282,14 @@ export default function UserProfile() {
 
       setUserProfile(prev => ({ ...prev, ...updatedProfile }));
       setShowEditProfileModal(false);
-      alert('Profile updated successfully!');
+      setConfirmModalConfig({
+        title: 'Profile Updated',
+        message: 'Your profile changes have been saved successfully.',
+        confirmText: 'OK',
+        confirmButtonType: 'primary',
+        onConfirm: () => setShowConfirmModal(false)
+      });
+      setShowConfirmModal(true);
     } catch (err) {
       console.error('Error updating profile:', err);
       setError('Failed to update profile: ' + err.message);
@@ -301,14 +351,15 @@ export default function UserProfile() {
           margin: `0 auto`,
           padding: `0 ${DESIGN_SYSTEM.spacing.xl}`,
           display: 'grid',
-          gridTemplateColumns: '400px 1fr',
+          gridTemplateColumns: '1fr 1fr',
+          alignItems: 'start',
           gap: DESIGN_SYSTEM.spacing.xl
         }}>
 
           {/* Left Column - Profile Card */}
           <div style={{
             ...getCardStyle('profile'),
-            padding: DESIGN_SYSTEM.spacing['2xl'],
+            padding: DESIGN_SYSTEM.spacing.xl,
             textAlign: 'center',
             height: 'fit-content',
             display: 'flex',
@@ -321,12 +372,15 @@ export default function UserProfile() {
               alignItems: 'center',
               marginBottom: DESIGN_SYSTEM.spacing.lg
             }}>
-              <UserAvatar
-                user={userProfile}
-                size={120}
-                showBorder={true}
-                borderColor={DESIGN_SYSTEM.colors.primary[500]}
-              />
+              {userProfile.photoURL ? (
+                <img
+                  src={userProfile.photoURL}
+                  alt="Profile"
+                  style={{ width: 220, height: 220, objectFit: 'cover', borderRadius: DESIGN_SYSTEM.borderRadius.lg, border: `2px solid ${DESIGN_SYSTEM.colors.secondary[200]}` }}
+                />
+              ) : (
+                <UserAvatar user={userProfile} size={220} showBorder={true} borderColor={DESIGN_SYSTEM.colors.primary[500]} shape="square" />
+              )}
             </div>
 
             <h1 style={{
@@ -339,15 +393,6 @@ export default function UserProfile() {
             </h1>
 
             <p style={{
-              margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
-              color: DESIGN_SYSTEM.colors.primary[500],
-              fontSize: DESIGN_SYSTEM.typography.fontSize.base,
-              fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium
-            }}>
-              {userProfile.jobTitle || userProfile.role || 'Team Member'}
-            </p>
-
-            <p style={{
               margin: `0 0 ${DESIGN_SYSTEM.spacing.lg} 0`,
               color: DESIGN_SYSTEM.colors.text.secondary,
               fontSize: DESIGN_SYSTEM.typography.fontSize.sm
@@ -355,24 +400,9 @@ export default function UserProfile() {
               {userProfile.company || 'Company not specified'}
             </p>
 
-            {userProfile.bio && (
-              <div style={{
-                background: DESIGN_SYSTEM.colors.background.secondary,
-                borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                padding: DESIGN_SYSTEM.spacing.base,
-                margin: `${DESIGN_SYSTEM.spacing.lg} 0`,
-                textAlign: 'left'
-              }}>
-                <h4 style={{ margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`, color: DESIGN_SYSTEM.colors.text.primary }}>About</h4>
-                <p style={{ margin: 0, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, lineHeight: DESIGN_SYSTEM.typography.lineHeight.loose }}>
-                  {userProfile.bio}
-                </p>
-              </div>
-            )}
-
             <div style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: '1fr',
               gap: DESIGN_SYSTEM.spacing.base,
               margin: `${DESIGN_SYSTEM.spacing.xl} 0`,
               textAlign: 'left'
@@ -381,12 +411,6 @@ export default function UserProfile() {
                 <strong style={{ color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Email:</strong>
                 <p style={{ margin: `${DESIGN_SYSTEM.spacing.xs} 0 0 0`, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, wordBreak: 'break-word' }}>{userProfile.email}</p>
               </div>
-              {userProfile.phone && (
-                <div>
-                  <strong style={{ color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Phone:</strong>
-                  <p style={{ margin: `${DESIGN_SYSTEM.spacing.xs} 0 0 0`, color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>{userProfile.phone}</p>
-                </div>
-              )}
               {userProfile.address && (
                 <div style={{ gridColumn: '1 / -1' }}>
                   <strong style={{ color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Address:</strong>
@@ -395,49 +419,24 @@ export default function UserProfile() {
               )}
             </div>
 
-            {/* Social Links */}
+            {/* Social Links as icons */}
             {(userProfile.linkedin || userProfile.twitter || userProfile.website) && (
-              <div style={{
-                borderTop: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
-                paddingTop: DESIGN_SYSTEM.spacing.lg,
-                margin: `${DESIGN_SYSTEM.spacing.lg} 0 0 0`
-              }}>
+              <div style={{ borderTop: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, paddingTop: DESIGN_SYSTEM.spacing.lg, margin: `${DESIGN_SYSTEM.spacing.lg} 0 0 0` }}>
                 <h4 style={{ margin: `0 0 ${DESIGN_SYSTEM.spacing.sm} 0`, color: DESIGN_SYSTEM.colors.text.primary }}>Connect</h4>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: DESIGN_SYSTEM.spacing.base }}>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: DESIGN_SYSTEM.spacing.lg }}>
                   {userProfile.linkedin && (
-                    <a href={userProfile.linkedin} target="_blank" rel="noopener noreferrer" style={{
-                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
-                      background: DESIGN_SYSTEM.colors.accent.linkedin,
-                      color: DESIGN_SYSTEM.colors.text.inverse,
-                      borderRadius: DESIGN_SYSTEM.borderRadius.sm,
-                      textDecoration: 'none',
-                      fontSize: DESIGN_SYSTEM.typography.fontSize.xs
-                    }}>
-                      LinkedIn
+                    <a href={userProfile.linkedin} title="LinkedIn" target="_blank" rel="noopener noreferrer" style={{ color: DESIGN_SYSTEM.colors.accent.linkedin, fontSize: 24 }}>
+                      <FaLinkedin />
                     </a>
                   )}
                   {userProfile.twitter && (
-                    <a href={userProfile.twitter} target="_blank" rel="noopener noreferrer" style={{
-                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
-                      background: DESIGN_SYSTEM.colors.accent.twitter,
-                      color: DESIGN_SYSTEM.colors.text.inverse,
-                      borderRadius: DESIGN_SYSTEM.borderRadius.sm,
-                      textDecoration: 'none',
-                      fontSize: DESIGN_SYSTEM.typography.fontSize.xs
-                    }}>
-                      Twitter
+                    <a href={userProfile.twitter} title="Twitter" target="_blank" rel="noopener noreferrer" style={{ color: DESIGN_SYSTEM.colors.accent.twitter, fontSize: 24 }}>
+                      <FaTwitter />
                     </a>
                   )}
                   {userProfile.website && (
-                    <a href={userProfile.website} target="_blank" rel="noopener noreferrer" style={{
-                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
-                      background: DESIGN_SYSTEM.colors.primary[500],
-                      color: DESIGN_SYSTEM.colors.text.inverse,
-                      borderRadius: DESIGN_SYSTEM.borderRadius.sm,
-                      textDecoration: 'none',
-                      fontSize: DESIGN_SYSTEM.typography.fontSize.xs
-                    }}>
-                      Website
+                    <a href={userProfile.website} title="Website" target="_blank" rel="noopener noreferrer" style={{ color: DESIGN_SYSTEM.colors.primary[500], fontSize: 24 }}>
+                      <FaGlobe />
                     </a>
                   )}
                 </div>
@@ -471,229 +470,54 @@ export default function UserProfile() {
           )}
         </div>
 
-          {/* Right Column - Functions */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.xl }}>
-
-      {/* Shared context with current user when viewing others */}
-      {currentUser && currentUser.uid !== userId && (
-        <div style={{
-          ...getCardStyle('profile'),
-          padding: DESIGN_SYSTEM.spacing.xl
-        }}>
-          <h2 style={{
-            color: DESIGN_SYSTEM.colors.text.primary,
-            fontSize: DESIGN_SYSTEM.typography.fontSize.xl,
-            fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-            marginBottom: DESIGN_SYSTEM.spacing.lg,
-            textAlign: 'center'
-          }}>
-            Shared Workspaces
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: DESIGN_SYSTEM.spacing.base }}>
-            <div>
-              <div style={{ fontWeight: 700, color: DESIGN_SYSTEM.colors.text.primary, marginBottom: 6 }}>Projects</div>
-              {sharedProjects.length === 0 ? (
-                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>No shared projects</div>
+          {/* Right Column - Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: DESIGN_SYSTEM.spacing.xl }}>
+            <div style={{ ...getCardStyle('profile'), padding: DESIGN_SYSTEM.spacing.xl }}>
+              <h2 style={{ color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.xl, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: DESIGN_SYSTEM.spacing.lg }}>Bio</h2>
+              {userProfile.bio ? (
+                <p style={{ margin: 0, color: DESIGN_SYSTEM.colors.text.primary, lineHeight: 1.7 }}>{userProfile.bio}</p>
               ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {sharedProjects.map(p => (
-                    <Link key={p.id} to={`/project/${p.id}`} style={{ textDecoration: 'none' }}>
-                      <span style={{ display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#111827', fontSize: 12 }}>{p.name}</span>
-                    </Link>
-                  ))}
-                </div>
+                <p style={{ margin: 0, color: DESIGN_SYSTEM.colors.text.secondary }}>No bio provided.</p>
               )}
             </div>
-            <div>
-              <div style={{ fontWeight: 700, color: DESIGN_SYSTEM.colors.text.primary, marginBottom: 6 }}>Forums</div>
-              {sharedForums.length === 0 ? (
-                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>No shared forums</div>
+
+            <div style={{ ...getCardStyle('profile'), padding: DESIGN_SYSTEM.spacing.xl }}>
+              {currentUser && currentUser.uid === userId ? (
+                <h2 style={{ color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.xl, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: DESIGN_SYSTEM.spacing.lg }}>My Projects & Forums</h2>
               ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {sharedForums.map(f => (
-                    <Link key={f.id} to={`/forum/${f.id}`} style={{ textDecoration: 'none' }}>
-                      <span style={{ display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#111827', fontSize: 12 }}>{f.name}</span>
-                    </Link>
-                  ))}
-                </div>
+                <h2 style={{ color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.xl, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: DESIGN_SYSTEM.spacing.lg }}>Shared Workspaces</h2>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {currentUser && currentUser.uid === userId && (
-              <>
-                {/* Join Projects/Forums Section */}
-                <div style={{
-                  ...getCardStyle('profile'),
-                  padding: DESIGN_SYSTEM.spacing.xl
-                }}>
-                  <h2 style={{
-                    color: DESIGN_SYSTEM.colors.text.primary,
-                    fontSize: DESIGN_SYSTEM.typography.fontSize.xl,
-                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-                    marginBottom: DESIGN_SYSTEM.spacing.lg,
-                    textAlign: 'center'
-                  }}>
-                    Join Project or Forum
-                  </h2>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.base }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm }}>
-            <input
-              type="text"
-                        placeholder="Enter Project ID"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-                        style={{
-                          fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
-                          backgroundColor: DESIGN_SYSTEM.colors.background.primary,
-                          border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
-                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                          padding: DESIGN_SYSTEM.spacing.base,
-                          flex: 1,
-                          padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.sm}`,
-                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                          border: `2px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
-                          fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                          color: DESIGN_SYSTEM.colors.text.primary
-                        }}
-                      />
-                      <button
-                        onClick={handleJoinProject}
-                        disabled={loading}
-                        style={{
-                          ...getButtonStyle('primary', 'profile'),
-                          padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
-                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                          fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-                          fontSize: DESIGN_SYSTEM.typography.fontSize.sm
-                        }}
-                      >
-                        Join Project
-                      </button>
-          </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm }}>
-            <input
-              type="text"
-                        placeholder="Enter Forum ID"
-              value={forumId}
-              onChange={(e) => setForumId(e.target.value)}
-                        style={{
-                          fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
-                          backgroundColor: DESIGN_SYSTEM.colors.background.primary,
-                          border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
-                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                          padding: DESIGN_SYSTEM.spacing.base,
-                          flex: 1,
-                          padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.sm}`,
-                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                          border: `2px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
-                          fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                          color: DESIGN_SYSTEM.colors.text.primary
-                        }}
-                      />
-                      <button
-                        onClick={handleJoinForum}
-                        disabled={loading}
-                        style={{
-                          ...getButtonStyle('primary', 'profile'),
-                          padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
-                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                          fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-                          fontSize: DESIGN_SYSTEM.typography.fontSize.sm
-                        }}
-                      >
-                        Join Forum
-                      </button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DESIGN_SYSTEM.spacing.base }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: DESIGN_SYSTEM.colors.text.primary, marginBottom: 6 }}>Projects</div>
+                  {(currentUser && currentUser.uid === userId ? myProjects : sharedProjects).length === 0 ? (
+                    <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>None</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {(currentUser && currentUser.uid === userId ? myProjects : sharedProjects).map(p => (
+                        <Link key={p.id} to={`/project/${p.id}`} style={{ textDecoration: 'none' }}>
+                          <span style={{ display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#111827', fontSize: 12 }}>{p.name}</span>
+                        </Link>
+                      ))}
                     </div>
-                  </div>
-          </div>
-
-                {/* Invitations Section */}
-                <div style={{
-                  ...getCardStyle('profile'),
-                  padding: DESIGN_SYSTEM.spacing.xl
-                }}>
-                  <h2 style={{
-                    color: DESIGN_SYSTEM.colors.text.primary,
-                    fontSize: DESIGN_SYSTEM.typography.fontSize.xl,
-                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-                    marginBottom: DESIGN_SYSTEM.spacing.lg,
-                    textAlign: 'center'
-                  }}>
-                    Pending Invitations
-                  </h2>
-
-          {invitations.length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.base }}>
-              {invitations.map(inv => (
-                        <div key={inv.id} style={{
-                          background: DESIGN_SYSTEM.pageThemes.profile.cardGradient,
-                          borderRadius: DESIGN_SYSTEM.borderRadius.lg,
-                          padding: DESIGN_SYSTEM.spacing.base,
-                          border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`
-                        }}>
-                          <p style={{
-                            margin: `0 0 ${DESIGN_SYSTEM.spacing.sm} 0`,
-                            color: DESIGN_SYSTEM.colors.text.primary,
-                            fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                            lineHeight: DESIGN_SYSTEM.typography.lineHeight.loose
-                          }}>
-                            <strong style={{ color: DESIGN_SYSTEM.colors.text.primary }}>{inv.senderName}</strong> invited you to join <strong style={{ color: DESIGN_SYSTEM.colors.primary[500] }}>{inv.type} "{inv.targetName}"</strong>
-                          </p>
-                          <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.sm }}>
-                            <button
-                              onClick={() => handleInvitationResponse(inv.id, true)}
-                              disabled={loading}
-                              style={{
-                                ...getButtonStyle('primary', 'profile'),
-                                flex: 1,
-                                padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
-                                borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-                                fontSize: DESIGN_SYSTEM.typography.fontSize.sm
-                              }}
-                            >
-                              Accept
-                            </button>
-                            <button
-                              onClick={() => handleInvitationResponse(inv.id, false)}
-                              disabled={loading}
-                              style={{
-                                ...getButtonStyle('primary', 'profile'),
-                                background: DESIGN_SYSTEM.colors.error, // Use error color for reject
-                                flex: 1,
-                                padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
-                                borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-                                fontSize: DESIGN_SYSTEM.typography.fontSize.sm
-                              }}
-                            >
-                              Reject
-                            </button>
-                  </div>
+                  )}
                 </div>
-              ))}
+                <div>
+                  <div style={{ fontWeight: 700, color: DESIGN_SYSTEM.colors.text.primary, marginBottom: 6 }}>Forums</div>
+                  {(currentUser && currentUser.uid === userId ? myForums : sharedForums).length === 0 ? (
+                    <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>None</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {(currentUser && currentUser.uid === userId ? myForums : sharedForums).map(f => (
+                        <Link key={f.id} to={`/forum/${f.id}`} style={{ textDecoration: 'none' }}>
+                          <span style={{ display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#111827', fontSize: 12 }}>{f.name}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          ) : (
-                    <p style={{
-                      color: DESIGN_SYSTEM.colors.text.secondary,
-                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                      textAlign: 'center',
-                      padding: `${DESIGN_SYSTEM.spacing.lg} ${DESIGN_SYSTEM.spacing.base}`,
-                      background: DESIGN_SYSTEM.colors.background.secondary,
-                      borderRadius: DESIGN_SYSTEM.borderRadius.lg,
-                      margin: 0
-                    }}>
-                      No pending invitations
-                    </p>
-          )}
-        </div>
-              </>
-      )}
           </div>
         </div>
       </div>
@@ -707,6 +531,17 @@ export default function UserProfile() {
           loading={loading}
         />
       )}
+
+      {/* Confirmation Modal for success/info messages */}
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={confirmModalConfig.onConfirm}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        confirmText={confirmModalConfig.confirmText}
+        confirmButtonType={confirmModalConfig.confirmButtonType}
+      />
     </div>
   );
 }
@@ -717,7 +552,8 @@ function ComprehensiveEditProfileModal({
   editingProfile,
   setEditingProfile,
   onSave,
-  loading
+  loading,
+  userId
 }) {
   if (!isOpen) return null;
 
@@ -747,7 +583,7 @@ function ComprehensiveEditProfileModal({
           Edit Profile
         </h2>
 
-        {/* Profile Avatar Display - No Upload */}
+        {/* Profile Avatar Display + Upload */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -765,12 +601,11 @@ function ComprehensiveEditProfileModal({
             alignItems: 'center',
             marginBottom: DESIGN_SYSTEM.spacing.base
           }}>
-            <UserAvatar
-              user={editingProfile}
-              size={120}
-              showBorder={true}
-              borderColor={DESIGN_SYSTEM.colors.primary[500]}
-            />
+            {editingProfile.photoURL ? (
+              <img src={editingProfile.photoURL} alt="Profile" style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: DESIGN_SYSTEM.borderRadius.lg, border: `2px solid ${DESIGN_SYSTEM.colors.secondary[200]}` }} />
+            ) : (
+              <UserAvatar user={editingProfile} size={140} showBorder={true} borderColor={DESIGN_SYSTEM.colors.primary[500]} shape="square" />
+            )}
           </div>
           <h3 style={{
             margin: `${DESIGN_SYSTEM.spacing.base} 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
@@ -781,14 +616,26 @@ function ComprehensiveEditProfileModal({
           }}>
             Profile Avatar
           </h3>
-          <p style={{
-            margin: 0,
-            color: DESIGN_SYSTEM.colors.text.secondary,
-            fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-            textAlign: 'center'
-          }}>
-            Your avatar is automatically generated from your name initials
-          </p>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/webp"
+            onChange={async (e) => {
+              const file = e.target.files && e.target.files[0];
+              if (!file) return;
+              if (!file.type.startsWith('image/')) return;
+              try {
+                const path = `user_avatars/${userId}/${Date.now()}_${file.name}`;
+                const refObj = storageRef(storage, path);
+                await uploadBytes(refObj, file);
+                const url = await getDownloadURL(refObj);
+                setEditingProfile(prev => ({ ...prev, photoURL: url }));
+              } catch (err) {
+                console.error('Avatar upload failed', err);
+              }
+            }}
+            style={{ marginTop: DESIGN_SYSTEM.spacing.base }}
+            disabled={loading}
+          />
         </div>
 
         {/* Form Fields */}
@@ -1011,7 +858,7 @@ function ComprehensiveEditProfileModal({
             Cancel
           </button>
           <button
-            onClick={onSave}
+            onClick={() => onSave()}
             style={{
               ...getButtonStyle('primary', 'profile'),
               padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,

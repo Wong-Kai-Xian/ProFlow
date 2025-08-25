@@ -11,7 +11,7 @@ const stringToColor = (str) => {
 
 // Shared UserAvatar component for consistent avatar display across the app
 // Always shows initials only, no photo uploads
-const UserAvatar = ({ user, size = 40, showBorder = true, borderColor = 'rgba(255,255,255,0.3)', style = {} }) => {
+const UserAvatar = ({ user, size = 40, showBorder = true, borderColor = 'rgba(255,255,255,0.3)', shape = 'circle', style = {} }) => {
   const initials = user?.name 
     ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) 
     : user?.email?.slice(0, 2).toUpperCase() || 'U';
@@ -24,7 +24,7 @@ const UserAvatar = ({ user, size = 40, showBorder = true, borderColor = 'rgba(25
     <div style={{
       width: size,
       height: size,
-      borderRadius: '50%',
+      borderRadius: shape === 'circle' ? '50%' : '8px',
       backgroundColor,
       color: 'white',
       display: 'flex',
