@@ -24,7 +24,18 @@ export default function FinancePage() {
   const [editInvoice, setEditInvoice] = useState(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showFinanceDefaults, setShowFinanceDefaults] = useState(false);
-  const [financeDefaults, setFinanceDefaults] = useState({ taxRate: 0, discount: 0, recipients: '' });
+  const [financeDefaults, setFinanceDefaults] = useState({
+    taxRate: 0,
+    discount: 0,
+    recipients: '',
+    invoiceNumberPrefix: 'INV-',
+    nextInvoiceNumber: 1,
+    paymentProvider: 'paypal',
+    paypalBusinessEmail: '',
+    currency: 'USD', // default currency for new invoices
+    customPaymentBaseUrl: '',
+    reminderDays: '7,3,1'
+  });
   const [showQuoteTemplates, setShowQuoteTemplates] = useState(false);
   const [quoteTemplates, setQuoteTemplates] = useState([]);
   const [tplUploadBusy, setTplUploadBusy] = useState(false);
@@ -35,6 +46,79 @@ export default function FinancePage() {
   const [aiTplText, setAiTplText] = useState('');
   const [aiTplBusy, setAiTplBusy] = useState(false);
   const [aiTplError, setAiTplError] = useState('');
+  const [showNewInvoice, setShowNewInvoice] = useState(false);
+  const [newInvoice, setNewInvoice] = useState({ projectId: '', client: '', dueDate: '', items: [], taxRate: 0, discount: 0, currency: '' });
+  const [expenseAttachment, setExpenseAttachment] = useState({}); // { [rowIndex]: { file: File, uploading: boolean, url: string } }
+  const [invoiceAttachment, setInvoiceAttachment] = useState({}); // for new invoice modal
+  const [customersBook, setCustomersBook] = useState([]);
+  const [showCustomersModal, setShowCustomersModal] = useState(false);
+  const [editCustomer, setEditCustomer] = useState(null);
+  const [fxRates, setFxRates] = useState({ base: 'USD', rates: {} });
+  const [fxRatesEditBase, setFxRatesEditBase] = useState('USD');
+  const [fxRatesEditText, setFxRatesEditText] = useState('');
+  const [showRecurring, setShowRecurring] = useState(false);
+  const [recTemplates, setRecTemplates] = useState([]);
+  const [recBusy, setRecBusy] = useState(false);
+  const [recError, setRecError] = useState('');
+  const [newRec, setNewRec] = useState({ projectId: '', client: '', frequency: 'monthly', startDate: '', taxRate: 0, discount: 0, items: [] });
+  const [showReminders, setShowReminders] = useState(false);
+  const [showImportInvoices, setShowImportInvoices] = useState(false);
+  const [importInvoicesRows, setImportInvoicesRows] = useState([]);
+  const [importInvoicesBusy, setImportInvoicesBusy] = useState(false);
+  const [importInvoicesError, setImportInvoicesError] = useState('');
+  const [importInvoicesPreview, setImportInvoicesPreview] = useState([]); // [{row, errors:string[]}]
+  const [showImportExpenses, setShowImportExpenses] = useState(false);
+  const [importExpensesRows, setImportExpensesRows] = useState([]);
+  const [importExpensesBusy, setImportExpensesBusy] = useState(false);
+  const [importExpensesError, setImportExpensesError] = useState('');
+  const [importExpensesPreview, setImportExpensesPreview] = useState([]);
+
+  const resolveProject = (projectField) => {
+    if (!projectField) return null;
+    return projects.find(p => (p.name || p.id) === projectField || p.id === projectField) || null;
+  };
+
+  const isIsoDate = (s) => /^(\d{4})-(\d{2})-(\d{2})$/.test(String(s||''));
+
+  const prepareInvoiceImportPreview = (rows) => {
+    const preview = rows.map((r, idx) => {
+      const errors = [];
+      const project = resolveProject(r.project || r.projectId);
+      if (!project) errors.push('Unknown project');
+      if (!r.client) errors.push('Missing client');
+      if (r.dueDate && !isIsoDate(r.dueDate)) errors.push('Invalid date (YYYY-MM-DD)');
+      if (r.status && !['unpaid','paid'].includes(String(r.status).toLowerCase())) errors.push('Invalid status');
+      if (r.items && !Array.isArray(r.items)) errors.push('Items must be JSON array');
+      const items = Array.isArray(r.items) ? r.items : [];
+      const subtotal = items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0);
+      const taxRate = Number(r.taxRate || financeDefaults.taxRate || 0);
+      const taxAmount = subtotal * (taxRate/100);
+      const discount = Number(r.discount || 0);
+      const calculated = subtotal + taxAmount - discount;
+      const total = Number((r.total ?? calculated ?? 0));
+      if (!Number.isFinite(total)) errors.push('Invalid total');
+      return { row: r, errors, projectId: project?.id || null };
+    });
+    setImportInvoicesPreview(preview);
+  };
+
+  const prepareExpenseImportPreview = (rows) => {
+    const preview = rows.map((r) => {
+      const errors = [];
+      const project = resolveProject(r.project || r.projectId);
+      if (!project) errors.push('Unknown project');
+      if (!r.date || !isIsoDate(r.date)) errors.push('Invalid/missing date (YYYY-MM-DD)');
+      const amount = Number(r.amount || 0);
+      if (!Number.isFinite(amount) || amount === 0) errors.push('Invalid amount');
+      return { row: r, errors, projectId: project?.id || null };
+    });
+    setImportExpensesPreview(preview);
+  };
+  const [invoiceSort, setInvoiceSort] = useState({ key: 'projectName', dir: 'asc' });
+  const [expenseSort, setExpenseSort] = useState({ key: 'projectName', dir: 'asc' });
+  const [quoteSort, setQuoteSort] = useState({ key: 'client', dir: 'asc' });
+  const [expenseFilter, setExpenseFilter] = useState({ category: 'all' });
+  const [quoteFilter, setQuoteFilter] = useState({ status: 'all' });
   // Field mapper
   // Removed Map Fields flow per request
 
@@ -70,6 +154,17 @@ export default function FinancePage() {
   }, [currentUser?.uid]);
 
   useEffect(() => {
+    if (!currentUser?.uid) { setRecTemplates([]); return; }
+    const ref = collection(db, 'users', currentUser.uid, 'recurringInvoices');
+    const unsub = onSnapshot(ref, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setRecTemplates(list);
+    });
+    return () => unsub();
+  }, [currentUser?.uid]);
+
+  useEffect(() => {
     const loadTpl = async () => {
       try {
         if (!currentUser?.uid) return;
@@ -95,11 +190,43 @@ export default function FinancePage() {
         const snap = await getDoc(ref);
         if (snap.exists()) {
           const d = snap.data();
-          setFinanceDefaults({ taxRate: Number(d.taxRate||0), discount: Number(d.discount||0), recipients: d.recipients || '' });
+          setFinanceDefaults({
+            taxRate: Number(d.taxRate||0),
+            discount: Number(d.discount||0),
+            recipients: d.recipients || '',
+            invoiceNumberPrefix: d.invoiceNumberPrefix || 'INV-',
+            nextInvoiceNumber: Number(d.nextInvoiceNumber || 1),
+            paymentProvider: d.paymentProvider || 'paypal',
+            paypalBusinessEmail: d.paypalBusinessEmail || '',
+            currency: d.currency || 'USD',
+            customPaymentBaseUrl: d.customPaymentBaseUrl || '',
+            reminderDays: d.reminderDays || '7,3,1'
+          });
+          if (d.fxRates && typeof d.fxRates === 'object') setFxRates(d.fxRates);
+          if (d.fxRates?.base) setFxRatesEditBase(d.fxRates.base);
+          if (d.fxRates?.rates) setFxRatesEditText(JSON.stringify(d.fxRates.rates, null, 2));
         }
       } catch {}
     };
     loadDefaults();
+  }, [currentUser?.uid]);
+
+  useEffect(() => {
+    if (!currentUser?.uid) { setCustomersBook([]); return; }
+    const ref = collection(db, 'customerProfiles');
+    const unsub = onSnapshot(ref, (snap) => {
+      const list = snap.docs.map(d => {
+        const data = d.data() || {};
+        const name = data.customerProfile?.name || data.companyProfile?.company || d.id;
+        const email = data.customerProfile?.email || '';
+        const phone = data.customerProfile?.phone || '';
+        const currency = data.financeDefaults?.currency || data.customerProfile?.currency || '';
+        const taxRate = data.financeDefaults?.taxRate ?? data.customerProfile?.taxRate;
+        return { id: d.id, name, email, phone, currency, taxRate };
+      }).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+      setCustomersBook(list);
+    });
+    return () => unsub();
   }, [currentUser?.uid]);
 
   useEffect(() => {
@@ -109,7 +236,7 @@ export default function FinancePage() {
     const quoBundle = [];
     for (const p of projects) {
       const unsubExp = onSnapshot(collection(db, 'projects', p.id, 'expenses'), (s) => {
-        const list = s.docs.map(d => ({ type: 'expense', projectId: p.id, projectName: p.name || p.id, date: d.data().date || '', category: d.data().category || '', amount: Number(d.data().amount || 0), note: d.data().note || '' }));
+        const list = s.docs.map(d => ({ id: d.id, type: 'expense', projectId: p.id, projectName: p.name || p.id, date: d.data().date || '', category: d.data().category || '', amount: Number(d.data().amount || 0), note: d.data().note || '', receiptUrl: d.data().receiptUrl || '' }));
         // replace for project
         for (let i = expBundle.length - 1; i >= 0; i--) if (expBundle[i].projectId === p.id) expBundle.splice(i, 1);
         expBundle.push(...list);
@@ -154,6 +281,12 @@ export default function FinancePage() {
     return Array.from(set);
   }, [invoiceRows]);
 
+  const expenseCategories = useMemo(() => {
+    const set = new Set(['all']);
+    expensesRows.forEach(r => set.add(r.category || 'Uncategorized'));
+    return Array.from(set);
+  }, [expensesRows]);
+
   const customersRollup = useMemo(() => {
     const map = {};
     for (const r of invoiceRows) {
@@ -173,8 +306,123 @@ export default function FinancePage() {
     if (invoiceFilter.customer !== 'all' && (r.client || 'Unassigned') !== invoiceFilter.customer) return false;
     return true;
   });
+  const sortedInvoices = useMemo(() => {
+    const rows = [...filteredInvoices];
+    const { key, dir } = invoiceSort || { key: 'projectName', dir: 'asc' };
+    rows.sort((a, b) => {
+      if (key === 'total') {
+        const va = Number(a.total || 0);
+        const vb = Number(b.total || 0);
+        return dir === 'asc' ? va - vb : vb - va;
+      }
+      const va = (a[key] ?? '').toString().toLowerCase();
+      const vb = (b[key] ?? '').toString().toLowerCase();
+      if (va < vb) return dir === 'asc' ? -1 : 1;
+      if (va > vb) return dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return rows;
+  }, [filteredInvoices, invoiceSort]);
+  const toggleInvoiceSort = (key) => setInvoiceSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
+
+  const filteredExpenses = expensesRows.filter(r => {
+    if (expenseFilter.category !== 'all' && (r.category || 'Uncategorized') !== expenseFilter.category) return false;
+    return true;
+  });
+  const sortedExpenses = useMemo(() => {
+    const rows = [...filteredExpenses];
+    const { key, dir } = expenseSort || { key: 'projectName', dir: 'asc' };
+    rows.sort((a, b) => {
+      const vaRaw = a[key];
+      const vbRaw = b[key];
+      const isNum = typeof vaRaw === 'number' || typeof vbRaw === 'number';
+      if (isNum) {
+        const va = Number(vaRaw || 0);
+        const vb = Number(vbRaw || 0);
+        return dir === 'asc' ? va - vb : vb - va;
+      }
+      const va = (vaRaw ?? '').toString().toLowerCase();
+      const vb = (vbRaw ?? '').toString().toLowerCase();
+      if (va < vb) return dir === 'asc' ? -1 : 1;
+      if (va > vb) return dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return rows;
+  }, [filteredExpenses, expenseSort]);
+  const toggleExpenseSort = (key) => setExpenseSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
+
+  const filteredQuotes = quoteRows.filter(r => {
+    if (quoteFilter.status !== 'all' && (r.status || 'draft') !== quoteFilter.status) return false;
+    return true;
+  });
+  const sortedQuotes = useMemo(() => {
+    const rows = [...filteredQuotes];
+    const { key, dir } = quoteSort || { key: 'client', dir: 'asc' };
+    rows.sort((a, b) => {
+      const vaRaw = a[key];
+      const vbRaw = b[key];
+      const isNum = typeof vaRaw === 'number' || typeof vbRaw === 'number';
+      if (isNum) {
+        const va = Number(vaRaw || 0);
+        const vb = Number(vbRaw || 0);
+        return dir === 'asc' ? va - vb : vb - va;
+      }
+      const va = (vaRaw ?? '').toString().toLowerCase();
+      const vb = (vbRaw ?? '').toString().toLowerCase();
+      if (va < vb) return dir === 'asc' ? -1 : 1;
+      if (va > vb) return dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return rows;
+  }, [filteredQuotes, quoteSort]);
+  const toggleQuoteSort = (key) => setQuoteSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
+  const baseCurrency = financeDefaults.currency || 'USD';
+  const getFxRate = (code) => {
+    const c = (code || baseCurrency || 'USD').toUpperCase();
+    if (c === (baseCurrency || 'USD').toUpperCase()) return 1;
+    const rate = fxRates?.rates?.[c];
+    return Number(rate || 1);
+  };
   const invTotal = filteredInvoices.reduce((a,b) => a + (b.total||0), 0);
   const invUnpaid = filteredInvoices.filter(r => r.status !== 'paid').reduce((a,b) => a + (b.total||0), 0);
+  const invTotalBase = filteredInvoices.reduce((a,b) => a + (Number(b.total||0) * getFxRate(b.currency)), 0);
+  const invUnpaidBase = filteredInvoices.filter(r => r.status !== 'paid').reduce((a,b) => a + (Number(b.total||0) * getFxRate(b.currency)), 0);
+
+  const insights = useMemo(() => {
+    const now = new Date();
+    const parseDate = (s) => { try { return s ? new Date(s) : null; } catch { return null; } };
+    const daysBetween = (a, b) => Math.ceil((a - b) / (1000*60*60*24));
+    // Aging buckets for unpaid
+    const unpaid = invoiceRows.filter(r => r.status !== 'paid');
+    const buckets = { notDue: 0, d0_30: 0, d31_60: 0, d61_90: 0, d90p: 0 };
+    unpaid.forEach(r => {
+      const due = parseDate(r.dueDate);
+      const baseAmt = Number(r.total||0) * getFxRate(r.currency);
+      if (!due || due > now) { buckets.notDue += baseAmt; return; }
+      const days = daysBetween(now, due);
+      if (days <= 30) buckets.d0_30 += baseAmt;
+      else if (days <= 60) buckets.d31_60 += baseAmt;
+      else if (days <= 90) buckets.d61_90 += baseAmt;
+      else buckets.d90p += baseAmt;
+    });
+    // Revenue by month (paid)
+    const paid = invoiceRows.filter(r => r.status === 'paid');
+    const monthly = {};
+    paid.forEach(r => {
+      const d = parseDate(r.dueDate) || parseDate(r.createdAt?.toDate ? r.createdAt.toDate().toISOString().slice(0,10) : '') || now;
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const baseAmt = Number(r.total||0) * getFxRate(r.currency);
+      monthly[key] = (monthly[key] || 0) + baseAmt;
+    });
+    // Last 6 months timeline
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      months.push({ key, value: Number((monthly[key] || 0)) });
+    }
+    return { buckets, months };
+  }, [invoiceRows, fxRates, financeDefaults.currency]);
   const expTotal = expensesRows.reduce((a,b) => a + (b.amount||0), 0);
 
   const convertQuoteToInvoice = async (q) => {
@@ -218,8 +466,8 @@ export default function FinancePage() {
         ? items.map(it => `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td style="text-align:right">${Number(it.qty||0)}</td><td style="text-align:right">${Number(it.unitPrice||0).toFixed(2)}</td><td style="text-align:right">${(Number(it.qty||0)*Number(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('')
         : `<tr><td>Invoice Total</td><td style="text-align:right">${Number(inv.total||0).toFixed(2)}</td></tr>`;
       const totalsRow = hasItems
-        ? `<tr><td colspan="3" class="total">Total</td><td class="total" style="text-align:right">${Number(((inv.total ?? subtotal) || 0)).toFixed(2)}</td></tr>`
-        : `<tr><td class="total">Total</td><td class="total" style="text-align:right">${Number(inv.total||0).toFixed(2)}</td></tr>`;
+        ? `<tr><td colspan="3" class="total">Total</td><td class="total" style="text-align:right">${Number((inv.total ?? subtotal ?? 0)).toFixed(2)}</td></tr>`
+        : `<tr><td class="total">Total</td><td class="total" style="text-align:right">${Number((inv.total ?? 0)).toFixed(2)}</td></tr>`;
       const table = hasItems
         ? `<table><thead><tr><th>Description</th><th style="width:100px;text-align:right">Qty</th><th style="width:140px;text-align:right">Unit Price</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`
         : `<table><thead><tr><th>Description</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`;
@@ -252,6 +500,30 @@ export default function FinancePage() {
     } catch {}
   };
 
+  const buildPaymentUrl = (inv) => {
+    const amount = Number(inv.total || 0).toFixed(2);
+    const number = inv.number || `${inv.projectName || 'INV'}-${inv.id || ''}`;
+    if ((financeDefaults.paymentProvider || 'paypal') === 'paypal') {
+      const business = financeDefaults.paypalBusinessEmail || '';
+      const currency = financeDefaults.currency || 'USD';
+      const itemName = encodeURIComponent(`Invoice ${number}`);
+      return `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(business)}&item_name=${itemName}&amount=${encodeURIComponent(amount)}&currency_code=${encodeURIComponent(currency)}`;
+    }
+    const base = financeDefaults.customPaymentBaseUrl || '';
+    return base
+      .replace('{amount}', amount)
+      .replace('{number}', encodeURIComponent(number))
+      .replace('{project}', encodeURIComponent(inv.projectName || ''))
+      .replace('{client}', encodeURIComponent(inv.client || ''));
+  };
+
+  const openPaymentLink = (inv) => {
+    try { const url = buildPaymentUrl(inv); if (url) window.open(url, '_blank'); } catch {}
+  };
+
+  const [recordPaymentFor, setRecordPaymentFor] = useState(null);
+  const openRecordPayment = (inv) => setRecordPaymentFor(inv);
+
   const printQuote = (q) => {
     try {
       const items = Array.isArray(q.items) ? q.items : [];
@@ -261,8 +533,8 @@ export default function FinancePage() {
         ? items.map(it => `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td style="text-align:right">${Number(it.qty||0)}</td><td style="text-align:right">${Number(it.unitPrice||0).toFixed(2)}</td><td style="text-align:right">${(Number(it.qty||0)*Number(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('')
         : `<tr><td>Quoted Total</td><td style="text-align:right">${Number(q.total||0).toFixed(2)}</td></tr>`;
       const totalsRow = hasItems
-        ? `<tr><td colspan="3" class="total">Total</td><td class="total" style="text-align:right">${Number(((q.total ?? subtotal) || 0)).toFixed(2)}</td></tr>`
-        : `<tr><td class="total">Total</td><td class="total" style="text-align:right">${Number(q.total||0).toFixed(2)}</td></tr>`;
+        ? `<tr><td colspan="3" class="total">Total</td><td class="total" style="text-align:right">${Number((q.total ?? subtotal ?? 0)).toFixed(2)}</td></tr>`
+        : `<tr><td class="total">Total</td><td class="total" style="text-align:right">${Number((q.total ?? 0)).toFixed(2)}</td></tr>`;
       const table = hasItems
         ? `<table><thead><tr><th>Description</th><th style="width:100px;text-align:right">Qty</th><th style="width:140px;text-align:right">Unit Price</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`
         : `<table><thead><tr><th>Description</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`;
@@ -408,10 +680,10 @@ export default function FinancePage() {
       const trySet = (name, value) => {
         try { const f = form.getTextField(name); f.setText(String(value ?? '')); } catch {}
       };
-      trySet('client', overrides.client ?? (q.client || ''));
-      trySet('project', overrides.project ?? (q.projectName || ''));
-      trySet('validUntil', overrides.validUntil ?? (q.validUntil || ''));
-      trySet('status', overrides.status ?? (q.status || 'draft'));
+      trySet('client', overrides.client ?? (q.client ?? ''));
+      trySet('project', overrides.project ?? (q.projectName ?? ''));
+      trySet('validUntil', overrides.validUntil ?? (q.validUntil ?? ''));
+      trySet('status', overrides.status ?? (q.status ?? 'draft'));
       const items = Array.isArray(q.items) ? q.items : [];
       const total = (typeof q.total === 'number' ? q.total : (items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0))) || 0;
       trySet('total', overrides.total ?? Number(total||0).toFixed(2));
@@ -626,9 +898,9 @@ export default function FinancePage() {
               >{t}</button>
             ))}
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-              <Stat label="Expenses" value={expTotal} />
-              <Stat label="Invoiced" value={invTotal} />
-              <Stat label="Unpaid" value={invUnpaid} />
+              <Stat label={`Expenses (${baseCurrency})`} value={expTotal} />
+              <Stat label={`Invoiced (${baseCurrency})`} value={invTotalBase} />
+              <Stat label={`Unpaid (${baseCurrency})`} value={invUnpaidBase} />
             </div>
           </div>
 
@@ -653,26 +925,40 @@ export default function FinancePage() {
                 </div>
                 <div style={{ marginTop: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <button onClick={() => setShowEmailTpl(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Email Template</button>
-                    <button onClick={() => exportInvoicesCsv(filteredInvoices)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Export CSV</button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => setShowEmailTpl(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Email Template</button>
+                      <button onClick={() => exportInvoicesCsv(sortedInvoices)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Export CSV</button>
+                      <button onClick={() => setShowImportInvoices(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Import CSV</button>
+                    </div>
+                    <div>
+                      <button onClick={() => setShowNewInvoice(true)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>+ New Invoice</button>
+                    </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 200px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
-                    <div>Client</div>
-                    <div>Project</div>
-                    <div>Due</div>
-                    <div>Amount</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 200px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
+                    <div onClick={() => toggleInvoiceSort('projectName')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Project {invoiceSort.key === 'projectName' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <div onClick={() => toggleInvoiceSort('client')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Client {invoiceSort.key === 'client' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <div onClick={() => toggleInvoiceSort('dueDate')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Due {invoiceSort.key === 'dueDate' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <div onClick={() => toggleInvoiceSort('total')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Amount {invoiceSort.key === 'total' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
+                    </div>
                     <div>Actions</div>
                   </div>
                   <div style={{ marginTop: 6 }}>
                     {filteredInvoices.length === 0 ? (
                       <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No invoices</div>
                     ) : (
-                      filteredInvoices.map((r, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 260px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
-                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.client || 'Client'}</div>
+                      sortedInvoices.map((r, idx) => (
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 200px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.projectName}</div>
+                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.client || 'Client'}</div>
                           <div>{r.dueDate || '-'}</div>
-                          <div>{r.total.toFixed(2)}</div>
+                          <div>{r.total.toFixed(2)} {r.currency || financeDefaults.currency || 'USD'}</div>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             <button onClick={() => { setEditInvoice(r); setShowInvoiceModal(true); }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Edit</button>
                             <select value={r.status} onChange={(e) => updateInvoiceStatus(r, e.target.value)} style={{ padding: '4px 6px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
@@ -680,6 +966,8 @@ export default function FinancePage() {
                               <option value="paid">Paid</option>
                             </select>
                             <button onClick={() => sendInvoiceEmail(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Email</button>
+                            <button onClick={() => openPaymentLink(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Pay</button>
+                            <button onClick={() => openRecordPayment(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Record Payment</button>
                             <button onClick={() => printInvoice(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Print</button>
 
                           </div>
@@ -695,25 +983,57 @@ export default function FinancePage() {
               <>
                 <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: 8 }}>Expenses</div>
                 <div style={{ marginTop: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                    <button onClick={() => exportExpensesCsv(expensesRows)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Export CSV</button>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <label style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary }}>
+                        Category
+                        <select value={expenseFilter.category} onChange={(e) => setExpenseFilter(f => ({ ...f, category: e.target.value }))} style={{ display: 'block', marginTop: 4 }}>
+                          {expenseCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => exportExpensesCsv(sortedExpenses)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Export CSV</button>
+                      <button onClick={() => setShowImportExpenses(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Import CSV</button>
+                    </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 120px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
-                    <div>Project</div>
-                    <div>Category</div>
-                    <div>Date</div>
-                    <div>Amount</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 120px 160px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
+                    <div onClick={() => toggleExpenseSort('projectName')} style={{ cursor: 'pointer', userSelect: 'none' }}>Project {expenseSort.key === 'projectName' ? (expenseSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
+                    <div onClick={() => toggleExpenseSort('category')} style={{ cursor: 'pointer', userSelect: 'none' }}>Category {expenseSort.key === 'category' ? (expenseSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
+                    <div onClick={() => toggleExpenseSort('date')} style={{ cursor: 'pointer', userSelect: 'none' }}>Date {expenseSort.key === 'date' ? (expenseSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
+                    <div onClick={() => toggleExpenseSort('amount')} style={{ cursor: 'pointer', userSelect: 'none' }}>Amount {expenseSort.key === 'amount' ? (expenseSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
+                    <div>Receipt</div>
                   </div>
                   <div style={{ marginTop: 6 }}>
-                    {expensesRows.length === 0 ? (
+                    {sortedExpenses.length === 0 ? (
                       <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No expenses</div>
                     ) : (
-                      expensesRows.map((r, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 120px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                      sortedExpenses.map((r, idx) => (
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 120px 160px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.projectName}</div>
                           <div>{r.category || '-'}</div>
                           <div>{r.date || '-'}</div>
                           <div>{r.amount.toFixed(2)}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {r.receiptUrl ? (
+                              <a href={r.receiptUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>View</a>
+                            ) : (
+                              <span style={{ fontSize: 12, color: '#6b7280' }}>No receipt</span>
+                            )}
+                            {r.id && (
+                              <input type="file" accept="image/*,application/pdf" onChange={async (e) => {
+                                const file = e.target.files && e.target.files[0];
+                                if (!file) return;
+                                try {
+                                  const path = `expense_receipts/${r.projectId}/${r.id}_${Date.now()}_${file.name}`;
+                                  const sref = storageRef(storage, path);
+                                  await uploadBytes(sref, file);
+                                  const url = await getDownloadURL(sref);
+                                  await updateDoc(doc(db, 'projects', r.projectId, 'expenses', r.id), { receiptUrl: url, receiptPath: path });
+                                } catch {}
+                              }} />
+                            )}
+                          </div>
                         </div>
                       ))
                     )}
@@ -729,6 +1049,8 @@ export default function FinancePage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => setShowFinanceDefaults(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Finance Settings</button>
+                      <button onClick={() => setShowRecurring(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Recurring</button>
+                      <button onClick={() => setShowReminders(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Send Reminders</button>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => exportQuotesCsv(quoteRows)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Export CSV</button>
@@ -736,23 +1058,23 @@ export default function FinancePage() {
                       <button onClick={() => { setNewQuote({ projectId: '', client: '', validUntil: '', items: [], taxRate: financeDefaults.taxRate || 0, discount: financeDefaults.discount || 0 }); setShowQuoteModal(true); }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>+ New Quote</button>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 160px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
-                    <div>Client</div>
-                    <div>Project</div>
-                    <div>Valid Until</div>
-                    <div>Amount</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 160px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
+                    <div onClick={() => toggleQuoteSort('client')} style={{ cursor: 'pointer', userSelect: 'none' }}>Client {quoteSort.key === 'client' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
+                    <div onClick={() => toggleQuoteSort('projectName')} style={{ cursor: 'pointer', userSelect: 'none' }}>Project {quoteSort.key === 'projectName' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
+                    <div onClick={() => toggleQuoteSort('validUntil')} style={{ cursor: 'pointer', userSelect: 'none' }}>Valid Until {quoteSort.key === 'validUntil' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
+                    <div onClick={() => toggleQuoteSort('total')} style={{ cursor: 'pointer', userSelect: 'none' }}>Amount {quoteSort.key === 'total' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
                     <div>Actions</div>
                   </div>
                   <div style={{ marginTop: 6 }}>
-                    {quoteRows.length === 0 ? (
+                    {sortedQuotes.length === 0 ? (
                       <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No quotes</div>
                     ) : (
-                      quoteRows.map((r, idx) => (
+                      sortedQuotes.map((r, idx) => (
                         <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 160px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.client || 'Client'} ({r.status})</div>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.projectName}</div>
                           <div>{r.validUntil || '-'}</div>
-                          <div>{r.total.toFixed(2)}</div>
+                          <div>{r.total.toFixed(2)} {r.currency || financeDefaults.currency || 'USD'}</div>
                           <div style={{ display: 'flex', gap: 8 }}>
                             <button disabled={r.status === 'converted'} onClick={() => convertQuoteToInvoice(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: r.status === 'converted' ? 'not-allowed' : 'pointer', opacity: r.status === 'converted' ? 0.6 : 1, fontSize: 12 }}>{r.status === 'converted' ? 'Converted' : 'Convert to Invoice'}</button>
                             <button onClick={() => printQuote(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Print</button>
@@ -771,9 +1093,30 @@ export default function FinancePage() {
               <>
                 <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: 8 }}>Insights</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-                  <Stat label="Total Expenses" value={expTotal} />
-                  <Stat label="Total Invoiced" value={invTotal} />
-                  <Stat label="Unpaid Invoices" value={invUnpaid} />
+                  <Stat label={`Total Expenses (${baseCurrency})`} value={expTotal} />
+                  <Stat label={`Total Invoiced (${baseCurrency})`} value={invTotalBase} />
+                  <Stat label={`Unpaid Invoices (${baseCurrency})`} value={invUnpaidBase} />
+                </div>
+                <div style={{ marginTop: 12, background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>AR Aging ({baseCurrency})</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8 }}>
+                    <Stat label="Not due" value={insights.buckets.notDue} />
+                    <Stat label="0-30" value={insights.buckets.d0_30} />
+                    <Stat label="31-60" value={insights.buckets.d31_60} />
+                    <Stat label="61-90" value={insights.buckets.d61_90} />
+                    <Stat label=">90" value={insights.buckets.d90p} />
+                  </div>
+                </div>
+                <div style={{ marginTop: 12, background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Revenue (last 6 months, {baseCurrency})</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 8 }}>
+                    {insights.months.map(m => (
+                      <div key={m.key} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px' }}>
+                        <div style={{ fontSize: 12, color: '#6b7280' }}>{m.key}</div>
+                        <div style={{ fontWeight: 700 }}>{m.value.toFixed(2)}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </>
             )}
@@ -801,11 +1144,11 @@ export default function FinancePage() {
                       customersRollup.map((c, idx) => (
                         <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 120px 80px 120px 140px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                           <div>
-                            <a href={`#/finance?tab=invoices&customer=${encodeURIComponent(c.name)}`} style={{ color: '#2563eb', textDecoration: 'none' }}>{c.name}</a>
+                            <a href={`#/customer/${encodeURIComponent(c.name)}`} onClick={(e) => { e.preventDefault(); const cust = customersBook.find(x => x.name === c.name); if (cust) window.location.hash = `#/customer/${cust.id}`; else window.location.hash = `#/finance?tab=invoices&customer=${encodeURIComponent(c.name)}`; }} style={{ color: '#2563eb', textDecoration: 'none' }}>{c.name}</a>
                           </div>
-                          <div>{c.invoiced.toFixed(2)}</div>
-                          <div>{c.paid.toFixed(2)}</div>
-                          <div style={{ color: c.unpaid > 0 ? '#b91c1c' : DESIGN_SYSTEM.colors.text.primary }}>{c.unpaid.toFixed(2)}</div>
+                          <div>{c.invoiced.toFixed(2)} {financeDefaults.currency || 'USD'}</div>
+                          <div>{c.paid.toFixed(2)} {financeDefaults.currency || 'USD'}</div>
+                          <div style={{ color: c.unpaid > 0 ? '#b91c1c' : DESIGN_SYSTEM.colors.text.primary }}>{c.unpaid.toFixed(2)} {financeDefaults.currency || 'USD'}</div>
                           <div>{c.count}</div>
                           <div>{c.lastDue || '-'}</div>
                           <div>
@@ -837,11 +1180,22 @@ export default function FinancePage() {
           <div style={{ fontSize: 12, color: '#6b7280' }}>Placeholders: {`{client}`} {`{project}`} {`{dueDate}`} {`{total}`} {`{status}`}</div>
         </Modal>
       )}
+      {recordPaymentFor && (
+        <Modal title={`Record Payment - ${recordPaymentFor.number || recordPaymentFor.projectName || ''}`} onClose={() => setRecordPaymentFor(null)} onSave={async () => {}}>
+          <RecordPaymentForm invoice={recordPaymentFor} onClose={() => setRecordPaymentFor(null)} onSaved={() => setRecordPaymentFor(null)} />
+        </Modal>
+      )}
       {showFinanceDefaults && (
         <Modal title="Finance Settings" onClose={() => setShowFinanceDefaults(false)} onSave={async () => {
           try {
             if (!currentUser?.uid) return;
-            await setDoc(doc(db, 'users', currentUser.uid, 'settings', 'financeDefaults'), financeDefaults, { merge: true });
+            let ratesObj = {};
+            try { ratesObj = JSON.parse(fxRatesEditText || '{}'); } catch { ratesObj = {}; }
+            await setDoc(doc(db, 'users', currentUser.uid, 'settings', 'financeDefaults'), {
+              ...financeDefaults,
+              fxRates: { base: fxRatesEditBase || (financeDefaults.currency || 'USD'), rates: ratesObj }
+            }, { merge: true });
+            setFxRates({ base: fxRatesEditBase || (financeDefaults.currency || 'USD'), rates: ratesObj });
             setShowFinanceDefaults(false);
           } catch { setShowFinanceDefaults(false); }
         }}>
@@ -850,6 +1204,37 @@ export default function FinancePage() {
             <Field label="Default Discount"><input type="number" step="0.01" value={financeDefaults.discount} onChange={(e) => setFinanceDefaults(s => ({ ...s, discount: Number(e.target.value||0) }))} /></Field>
           </div>
           <Field label="Default Email Recipients (comma separated)"><input value={financeDefaults.recipients} onChange={(e) => setFinanceDefaults(s => ({ ...s, recipients: e.target.value }))} /></Field>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Field label="Invoice Number Prefix"><input value={financeDefaults.invoiceNumberPrefix} onChange={(e) => setFinanceDefaults(s => ({ ...s, invoiceNumberPrefix: e.target.value }))} /></Field>
+            <Field label="Next Invoice Number"><input type="number" value={financeDefaults.nextInvoiceNumber} onChange={(e) => setFinanceDefaults(s => ({ ...s, nextInvoiceNumber: Number(e.target.value||1) }))} /></Field>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Field label="Payment Provider">
+              <select value={financeDefaults.paymentProvider} onChange={(e) => setFinanceDefaults(s => ({ ...s, paymentProvider: e.target.value }))}>
+                <option value="paypal">PayPal</option>
+                <option value="custom">Custom Link</option>
+              </select>
+            </Field>
+            <Field label="Currency (ISO)"><input value={financeDefaults.currency} onChange={(e) => setFinanceDefaults(s => ({ ...s, currency: e.target.value }))} /></Field>
+          </div>
+          {financeDefaults.paymentProvider === 'paypal' && (
+            <Field label="PayPal Business Email"><input value={financeDefaults.paypalBusinessEmail} onChange={(e) => setFinanceDefaults(s => ({ ...s, paypalBusinessEmail: e.target.value }))} /></Field>
+          )}
+          {financeDefaults.paymentProvider === 'custom' && (
+            <Field label="Custom Payment Base URL"><input placeholder="https://pay.example.com/pay?amount={amount}&ref={number}" value={financeDefaults.customPaymentBaseUrl} onChange={(e) => setFinanceDefaults(s => ({ ...s, customPaymentBaseUrl: e.target.value }))} /></Field>
+          )}
+          <Field label="Reminder Days (comma separated)"><input value={financeDefaults.reminderDays} onChange={(e) => setFinanceDefaults(s => ({ ...s, reminderDays: e.target.value }))} /></Field>
+          <div style={{ fontWeight: 600, marginTop: 8 }}>FX Rates</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Field label="Base Currency"><input value={fxRatesEditBase} onChange={(e) => setFxRatesEditBase(e.target.value)} /></Field>
+          </div>
+          <Field label="Rates JSON">
+            <textarea value={fxRatesEditText} onChange={(e) => setFxRatesEditText(e.target.value)} style={{ width: '100%', minHeight: 120, boxSizing: 'border-box' }} />
+          </Field>
+          <div style={{ fontSize: 12, color: '#6b7280' }}>Example: {`{"EUR":0.93,"GBP":0.80}`}</div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={() => { try { const rates = JSON.parse(fxRatesEditText || '{}'); setFxRates({ base: fxRatesEditBase || 'USD', rates }); } catch {} }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Preview Rates</button>
+          </div>
         </Modal>
       )}
       {showQuoteTemplates && (
@@ -904,6 +1289,422 @@ export default function FinancePage() {
                 ))}
               </div>
             )}
+          </div>
+        </Modal>
+      )}
+      {showRecurring && (
+        <Modal title="Recurring Invoices" onClose={() => setShowRecurring(false)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontWeight: 600 }}>Create Template</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Field label="Project">
+                <select value={newRec.projectId} onChange={(e) => setNewRec(v => ({ ...v, projectId: e.target.value }))} style={{ width: '100%' }}>
+                  <option value="">Select project</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}
+                </select>
+              </Field>
+              <Field label="Client"><input value={newRec.client} onChange={(e) => setNewRec(v => ({ ...v, client: e.target.value }))} /></Field>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Field label="Frequency">
+                <select value={newRec.frequency} onChange={(e) => setNewRec(v => ({ ...v, frequency: e.target.value }))}>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </Field>
+              <Field label="Start Date"><input type="date" value={newRec.startDate || ''} onChange={(e) => setNewRec(v => ({ ...v, startDate: e.target.value }))} /></Field>
+              <Field label="Tax %"><input type="number" step="0.01" value={newRec.taxRate || 0} onChange={(e) => setNewRec(v => ({ ...v, taxRate: Number(e.target.value||0) }))} /></Field>
+              <Field label="Discount"><input type="number" step="0.01" value={newRec.discount || 0} onChange={(e) => setNewRec(v => ({ ...v, discount: Number(e.target.value||0) }))} /></Field>
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, margin: '8px 0' }}>Items</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 140px 80px', gap: 8, fontSize: 12, color: '#6b7280' }}>
+                <div>Description</div>
+                <div>Qty</div>
+                <div>Unit Price</div>
+                <div></div>
+              </div>
+              <div style={{ marginTop: 6 }}>
+                {(newRec.items || []).map((it, idx) => (
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 140px 80px', gap: 8, padding: '4px 0' }}>
+                    <input value={it.description || ''} onChange={(e) => setNewRec(v => { const items = [...(v.items||[])]; items[idx] = { ...items[idx], description: e.target.value }; return { ...v, items }; })} />
+                    <input type="number" step="1" value={it.qty ?? ''} onChange={(e) => setNewRec(v => { const items = [...(v.items||[])]; items[idx] = { ...items[idx], qty: Number(e.target.value||0) }; return { ...v, items }; })} />
+                    <input type="number" step="0.01" value={it.unitPrice ?? ''} onChange={(e) => setNewRec(v => { const items = [...(v.items||[])]; items[idx] = { ...items[idx], unitPrice: Number(e.target.value||0) }; return { ...v, items }; })} />
+                    <button onClick={() => setNewRec(v => { const items = [...(v.items||[])]; items.splice(idx,1); return { ...v, items }; })} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Remove</button>
+                  </div>
+                ))}
+                <div style={{ marginTop: 8 }}>
+                  <button onClick={() => setNewRec(v => ({ ...v, items: [...(v.items||[]), { description: '', qty: 1, unitPrice: 0 }] }))} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>+ Add Item</button>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button disabled={recBusy} onClick={async () => {
+                if (!currentUser?.uid || !newRec.projectId || !newRec.client || !newRec.frequency) return;
+                setRecBusy(true); setRecError('');
+                try {
+                  await addDoc(collection(db, 'users', currentUser.uid, 'recurringInvoices'), {
+                    ...newRec,
+                    createdAt: serverTimestamp()
+                  });
+                  setNewRec({ projectId: '', client: '', frequency: 'monthly', startDate: '', taxRate: 0, discount: 0, items: [] });
+                } catch { setRecError('Failed to save'); } finally { setRecBusy(false); }
+              }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>{recBusy ? 'Saving…' : 'Save Template'}</button>
+            </div>
+            {recError && <div style={{ color: '#991B1B', fontSize: 12 }}>{recError}</div>}
+            <div style={{ fontWeight: 600, marginTop: 8 }}>My Templates</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {recTemplates.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#6b7280' }}>No templates.</div>
+              ) : (
+                recTemplates.map(t => (
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e5e7eb', padding: 8, borderRadius: 8 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(projects.find(p=>p.id===t.projectId)?.name)||t.projectId} – {t.client} – {t.frequency}</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={async () => { try { await deleteDoc(doc(db, 'users', currentUser.uid, 'recurringInvoices', t.id)); } catch {} }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #fecaca', background: '#fee2e2', cursor: 'pointer', fontSize: 12, color: '#b91c1c' }}>Delete</button>
+                      <button onClick={async () => {
+                        // Generate one now
+                        try {
+                          const seq = Number(financeDefaults.nextInvoiceNumber || 1);
+                          const prefix = financeDefaults.invoiceNumberPrefix || 'INV-';
+                          const number = `${prefix}${String(seq).padStart(4,'0')}`;
+                          const items = Array.isArray(t.items) ? t.items : [];
+                          const subtotal = items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0);
+                          const taxRate = Number(t.taxRate || financeDefaults.taxRate || 0);
+                          const taxAmount = subtotal * (taxRate/100);
+                          const discount = Number(t.discount || 0);
+                          const total = subtotal + taxAmount - discount;
+                          await addDoc(collection(db, 'projects', t.projectId, 'invoices'), {
+                            number,
+                            client: t.client,
+                            dueDate: new Date().toISOString().slice(0,10),
+                            items,
+                            subtotal, taxRate, taxAmount, discount, total,
+                            status: 'unpaid',
+                            createdAt: serverTimestamp()
+                          });
+                          if (currentUser?.uid) {
+                            await setDoc(doc(db, 'users', currentUser.uid, 'settings', 'financeDefaults'), { nextInvoiceNumber: seq + 1 }, { merge: true });
+                          }
+                        } catch {}
+                      }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Generate Now</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+      {showReminders && (
+        <Modal title="Send Payment Reminders" onClose={() => setShowReminders(false)} onSave={async () => {
+          try {
+            const days = String(financeDefaults.reminderDays || '7,3,1').split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n));
+            const now = new Date();
+            const shouldRemind = (due) => {
+              if (!due) return false;
+              const dueDate = new Date(due);
+              const diffDays = Math.ceil((dueDate - now) / (1000*60*60*24));
+              return days.includes(diffDays);
+            };
+            const list = invoiceRows.filter(r => r.status !== 'paid' && shouldRemind(r.dueDate));
+            for (const inv of list) {
+              await sendInvoiceEmail(inv);
+            }
+            setShowReminders(false);
+          } catch { setShowReminders(false); }
+        }}>
+          <div style={{ fontSize: 12, color: '#6b7280' }}>Will send reminders for unpaid invoices whose due date is in the configured number of days: {String(financeDefaults.reminderDays||'7,3,1')}</div>
+        </Modal>
+      )}
+      {showCustomersModal && (
+        <Modal title="Customers" onClose={() => { setShowCustomersModal(false); setEditCustomer(null); }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => setEditCustomer({ name: '', email: '', phone: '', address: '', currency: financeDefaults.currency || 'USD', taxRate: financeDefaults.taxRate || 0 })} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>+ New Customer</button>
+          </div>
+          {editCustomer && (
+            <div style={{ marginTop: 8, border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Field label="Name"><input value={editCustomer.name} onChange={(e) => setEditCustomer(c => ({ ...c, name: e.target.value }))} /></Field>
+                <Field label="Email"><input value={editCustomer.email} onChange={(e) => setEditCustomer(c => ({ ...c, email: e.target.value }))} /></Field>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Field label="Phone"><input value={editCustomer.phone} onChange={(e) => setEditCustomer(c => ({ ...c, phone: e.target.value }))} /></Field>
+                <Field label="Currency"><input value={editCustomer.currency} onChange={(e) => setEditCustomer(c => ({ ...c, currency: e.target.value }))} /></Field>
+                <Field label="Default Tax %"><input type="number" step="0.01" value={editCustomer.taxRate} onChange={(e) => setEditCustomer(c => ({ ...c, taxRate: Number(e.target.value||0) }))} /></Field>
+              </div>
+              <Field label="Address"><input value={editCustomer.address} onChange={(e) => setEditCustomer(c => ({ ...c, address: e.target.value }))} /></Field>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button onClick={() => setEditCustomer(null)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+                <button onClick={async () => {
+                  try {
+                    if (!currentUser?.uid || !editCustomer?.name) return;
+                    const ref = collection(db, 'users', currentUser.uid, 'customers');
+                    if (editCustomer.id) {
+                      await setDoc(doc(ref, editCustomer.id), editCustomer, { merge: true });
+                    } else {
+                      await addDoc(ref, { ...editCustomer, createdAt: serverTimestamp() });
+                    }
+                    setEditCustomer(null);
+                  } catch {}
+                }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Save</button>
+              </div>
+            </div>
+          )}
+          <div style={{ marginTop: 8 }}>
+            {customersBook.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#6b7280' }}>No customers</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {customersBook.map(c => (
+                  <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 160px 120px', gap: 8, alignItems: 'center', border: '1px solid #e5e7eb', padding: 8, borderRadius: 8 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name} – {c.email}</div>
+                    <div>{c.currency || '-'}</div>
+                    <div>{c.phone || '-'}</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => setEditCustomer(c)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Edit</button>
+                      <button onClick={async () => { try { await deleteDoc(doc(db, 'users', currentUser.uid, 'customers', c.id)); } catch {} }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #fecaca', background: '#fee2e2', cursor: 'pointer', fontSize: 12, color: '#b91c1c' }}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+      {showNewInvoice && (
+        <Modal title="Create Invoice" onClose={() => setShowNewInvoice(false)} onSave={async () => {
+          try {
+            if (!newInvoice.projectId || !newInvoice.client) { setShowNewInvoice(false); return; }
+            const seq = Number(financeDefaults.nextInvoiceNumber || 1);
+            const prefix = financeDefaults.invoiceNumberPrefix || 'INV-';
+            const number = `${prefix}${String(seq).padStart(4, '0')}`;
+            const items = (newInvoice.items || []).map(it => ({ description: it.description || '', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) }));
+            const subtotal = items.reduce((a, it) => a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
+            const taxRate = Number(newInvoice.taxRate || financeDefaults.taxRate || 0);
+            const taxAmount = subtotal * (taxRate/100);
+            const discount = Number(newInvoice.discount || financeDefaults.discount || 0);
+            const total = subtotal + taxAmount - discount;
+            await addDoc(collection(db, 'projects', newInvoice.projectId, 'invoices'), {
+              number,
+              client: newInvoice.client,
+              dueDate: newInvoice.dueDate || '',
+              items,
+              subtotal,
+              taxRate,
+              taxAmount,
+              discount,
+              total,
+              currency: (newInvoice.currency || financeDefaults.currency || 'USD'),
+              fxBase: (fxRates.base || financeDefaults.currency || 'USD'),
+              fxRate: getFxRate(newInvoice.currency || financeDefaults.currency || 'USD'),
+              status: 'unpaid',
+              createdAt: serverTimestamp()
+            });
+            if (currentUser?.uid) {
+              await setDoc(doc(db, 'users', currentUser.uid, 'settings', 'financeDefaults'), {
+                nextInvoiceNumber: seq + 1
+              }, { merge: true });
+            }
+            setShowNewInvoice(false);
+            setNewInvoice({ projectId: '', client: '', dueDate: '', items: [], taxRate: 0, discount: 0, currency: '' });
+          } catch { setShowNewInvoice(false); }
+        }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Field label="Project">
+              <select value={newInvoice.projectId} onChange={(e) => setNewInvoice(v => ({ ...v, projectId: e.target.value }))} style={{ width: '100%' }}>
+                <option value="">Select project</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}
+              </select>
+            </Field>
+            <Field label="Client">
+              <select value={newInvoice.client} onChange={(e) => {
+                const name = e.target.value;
+                setNewInvoice(v => {
+                  const cust = customersBook.find(c => c.name === name);
+                  return { ...v, client: name, currency: cust?.currency || v.currency, taxRate: cust?.taxRate ?? v.taxRate };
+                });
+              }} style={{ width: '100%' }}>
+                <option value="">Select or type</option>
+                {customersBook.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Currency (ISO)"><input value={newInvoice.currency} onChange={(e) => setNewInvoice(v => ({ ...v, currency: e.target.value }))} /></Field>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Field label="Due Date"><input type="date" value={newInvoice.dueDate || ''} onChange={(e) => setNewInvoice(v => ({ ...v, dueDate: e.target.value }))} /></Field>
+            <Field label="Tax Rate %"><input type="number" step="0.01" value={newInvoice.taxRate ?? financeDefaults.taxRate} onChange={(e) => setNewInvoice(v => ({ ...v, taxRate: Number(e.target.value||0) }))} /></Field>
+            <Field label="Discount"><input type="number" step="0.01" value={newInvoice.discount ?? financeDefaults.discount} onChange={(e) => setNewInvoice(v => ({ ...v, discount: Number(e.target.value||0) }))} /></Field>
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, margin: '8px 0' }}>Items</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 140px 80px', gap: 8, fontSize: 12, color: '#6b7280' }}>
+              <div>Description</div>
+              <div>Qty</div>
+              <div>Unit Price</div>
+              <div></div>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              {(newInvoice.items || []).map((it, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 140px 80px', gap: 8, padding: '4px 0' }}>
+                  <input value={it.description || ''} onChange={(e) => setNewInvoice(v => { const items = [...(v.items||[])]; items[idx] = { ...items[idx], description: e.target.value }; return { ...v, items }; })} />
+                  <input type="number" step="1" value={it.qty ?? ''} onChange={(e) => setNewInvoice(v => { const items = [...(v.items||[])]; items[idx] = { ...items[idx], qty: Number(e.target.value||0) }; return { ...v, items }; })} />
+                  <input type="number" step="0.01" value={it.unitPrice ?? ''} onChange={(e) => setNewInvoice(v => { const items = [...(v.items||[])]; items[idx] = { ...items[idx], unitPrice: Number(e.target.value||0) }; return { ...v, items }; })} />
+                  <button onClick={() => setNewInvoice(v => { const items = [...(v.items||[])]; items.splice(idx,1); return { ...v, items }; })} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Remove</button>
+                </div>
+              ))}
+              <div style={{ marginTop: 8 }}>
+                <button onClick={() => setNewInvoice(v => ({ ...v, items: [...(v.items||[]), { description: '', qty: 1, unitPrice: 0 }] }))} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>+ Add Item</button>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 12, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fafafa' }}>
+              {(() => {
+                const items = newInvoice.items || [];
+                const subtotal = items.reduce((a, it) => a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
+                const taxRateEff = (newInvoice.taxRate ?? financeDefaults.taxRate ?? 0);
+                const discountEff = (newInvoice.discount ?? financeDefaults.discount ?? 0);
+                const tax = subtotal * (Number(taxRateEff)/100);
+                const discount = Number(discountEff);
+                const total = subtotal + tax - discount;
+                return (
+                  <>
+                    <div>Subtotal: {subtotal.toFixed(2)}</div>
+                    <div>Tax: {tax.toFixed(2)}</div>
+                    <div>Discount: {discount.toFixed(2)}</div>
+                    <div style={{ fontWeight: 700 }}>Total: {total.toFixed(2)}</div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </Modal>
+      )}
+      {showImportInvoices && (
+        <Modal title="Import Invoices (CSV)" onClose={() => { setShowImportInvoices(false); setImportInvoicesRows([]); setImportInvoicesError(''); setImportInvoicesPreview([]); }} onSave={async () => {
+          const valid = importInvoicesPreview.filter(p => p.errors.length === 0);
+          if (!valid.length) { setShowImportInvoices(false); return; }
+          setImportInvoicesBusy(true); setImportInvoicesError('');
+          try {
+            for (const { row, projectId } of valid) {
+              const project = projects.find(p => p.id === projectId);
+              if (!project) continue;
+              const items = Array.isArray(row.items) ? row.items : [];
+              const subtotal = items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0);
+              const taxRate = Number(row.taxRate || financeDefaults.taxRate || 0);
+              const taxAmount = subtotal * (taxRate/100);
+              const discount = Number(row.discount || 0);
+              const calculated = subtotal + taxAmount - discount;
+              const total = Number((row.total ?? calculated ?? 0));
+              await addDoc(collection(db, 'projects', project.id, 'invoices'), {
+                number: row.number || undefined,
+                client: row.client || '',
+                dueDate: row.dueDate || '',
+                status: row.status || 'unpaid',
+                items, subtotal, taxRate, taxAmount, discount, total,
+                createdAt: serverTimestamp()
+              });
+            }
+            setShowImportInvoices(false); setImportInvoicesRows([]); setImportInvoicesPreview([]);
+          } catch (e) {
+            setImportInvoicesError('Failed to import some rows');
+          } finally { setImportInvoicesBusy(false); }
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <input type="file" accept=".csv" onChange={async (e) => {
+              setImportInvoicesError('');
+              try {
+                const f = e.target.files && e.target.files[0];
+                if (!f) return;
+                const text = await f.text();
+                const rows = parseCsv(text);
+                setImportInvoicesRows(rows);
+                prepareInvoiceImportPreview(rows);
+              } catch { setImportInvoicesError('Failed to parse CSV'); }
+            }} />
+            {importInvoicesError && <div style={{ color: '#991B1B', fontSize: 12 }}>{importInvoicesError}</div>}
+            {importInvoicesBusy && <div style={{ color: '#6b7280', fontSize: 12 }}>Importing…</div>}
+            {importInvoicesPreview.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>{importInvoicesPreview.length} rows loaded</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 100px', gap: 8, fontSize: 12, color: '#6b7280', fontWeight: 600 }}>
+                  <div>Client</div>
+                  <div>Project</div>
+                  <div>Issues</div>
+                </div>
+                <div>
+                  {importInvoicesPreview.map((p, idx) => (
+                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 100px', gap: 8, padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
+                      <div>{p.row.client || ''}</div>
+                      <div>{p.row.project || p.row.projectId || ''}</div>
+                      <div style={{ color: p.errors.length ? '#991B1B' : '#065F46' }}>{p.errors.length ? p.errors.join('; ') : 'OK'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ fontSize: 12, color: '#6b7280' }}>Expected columns: project/client/dueDate/status/total. Optional: number,taxRate,discount,items(JSON)</div>
+          </div>
+        </Modal>
+      )}
+      {showImportExpenses && (
+        <Modal title="Import Expenses (CSV)" onClose={() => { setShowImportExpenses(false); setImportExpensesRows([]); setImportExpensesError(''); setImportExpensesPreview([]); }} onSave={async () => {
+          const valid = importExpensesPreview.filter(p => p.errors.length === 0);
+          if (!valid.length) { setShowImportExpenses(false); return; }
+          setImportExpensesBusy(true); setImportExpensesError('');
+          try {
+            for (const { row, projectId } of valid) {
+              const project = projects.find(p => p.id === projectId);
+              if (!project) continue;
+              await addDoc(collection(db, 'projects', project.id, 'expenses'), {
+                date: row.date || '',
+                category: row.category || '',
+                amount: Number(row.amount || 0),
+                note: row.note || '',
+                createdAt: serverTimestamp()
+              });
+            }
+            setShowImportExpenses(false); setImportExpensesRows([]); setImportExpensesPreview([]);
+          } catch (e) {
+            setImportExpensesError('Failed to import some rows');
+          } finally { setImportExpensesBusy(false); }
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <input type="file" accept=".csv" onChange={async (e) => {
+              setImportExpensesError('');
+              try {
+                const f = e.target.files && e.target.files[0];
+                if (!f) return;
+                const text = await f.text();
+                const rows = parseCsv(text);
+                setImportExpensesRows(rows);
+                prepareExpenseImportPreview(rows);
+              } catch { setImportExpensesError('Failed to parse CSV'); }
+            }} />
+            {importExpensesError && <div style={{ color: '#991B1B', fontSize: 12 }}>{importExpensesError}</div>}
+            {importExpensesBusy && <div style={{ color: '#6b7280', fontSize: 12 }}>Importing…</div>}
+            {importExpensesPreview.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>{importExpensesPreview.length} rows loaded</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 200px', gap: 8, fontSize: 12, color: '#6b7280', fontWeight: 600 }}>
+                  <div>Project</div>
+                  <div>Date</div>
+                  <div>Amount</div>
+                  <div>Issues</div>
+                </div>
+                <div>
+                  {importExpensesPreview.map((p, idx) => (
+                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 200px', gap: 8, padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
+                      <div>{p.row.project || p.row.projectId || ''}</div>
+                      <div>{p.row.date || ''}</div>
+                      <div>{Number(p.row.amount || 0).toFixed(2)}</div>
+                      <div style={{ color: p.errors.length ? '#991B1B' : '#065F46' }}>{p.errors.length ? p.errors.join('; ') : 'OK'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ fontSize: 12, color: '#6b7280' }}>Expected columns: project/date/category/amount. Optional: note</div>
           </div>
         </Modal>
       )}
@@ -1022,6 +1823,11 @@ Sample:\n\n${aiTplText}`;
               await updateDoc(doc(db, 'projects', editInvoice.projectId, 'invoices', editInvoice.id), {
                 client: val.client || '',
                 dueDate: val.dueDate || '',
+                status: val.status || 'unpaid',
+                reference: val.reference || '',
+                poNumber: val.poNumber || '',
+                notes: val.notes || '',
+                terms: val.terms || '',
                 items, subtotal, taxRate, taxAmount, discount, total
               });
               setShowInvoiceModal(false); setEditInvoice(null);
@@ -1055,6 +1861,7 @@ export function QuoteModal({ isOpen, onClose, projects, value, onChange, onSave 
           </select>
         </Field>
         <Field label="Client"><input value={value.client} onChange={(e) => onChange(v => ({ ...v, client: e.target.value }))} /></Field>
+        <Field label="Currency (ISO)"><input value={value.currency || ''} onChange={(e) => onChange(v => ({ ...v, currency: e.target.value }))} /></Field>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <Field label="Valid Until"><input type="date" value={value.validUntil || ''} onChange={(e) => onChange(v => ({ ...v, validUntil: e.target.value }))} /></Field>
@@ -1143,6 +1950,50 @@ function downloadCsv(matrix, filename) {
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
 }
 
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if (lines.length === 0) return [];
+  const parseLine = (line) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (line[i+1] === '"') { current += '"'; i++; }
+          else { inQuotes = false; }
+        } else { current += ch; }
+      } else {
+        if (ch === ',') { result.push(current); current = ''; }
+        else if (ch === '"') { inQuotes = true; }
+        else { current += ch; }
+      }
+    }
+    result.push(current);
+    return result;
+  };
+  const header = parseLine(lines[0]).map(h => h.trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseLine(lines[i]);
+    if (cols.length === 1 && cols[0].trim() === '') continue;
+    const obj = {};
+    header.forEach((h, idx) => { obj[h] = (cols[idx] ?? '').trim(); });
+    // Parse JSON items if present
+    if (obj.items) {
+      try {
+        const arr = JSON.parse(obj.items);
+        if (Array.isArray(arr)) obj.items = arr.map(it => ({ description: it.description || '', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) }));
+      } catch { obj.items = []; }
+    }
+    // Coerce numerics
+    ['total','taxRate','discount','amount'].forEach(k => { if (obj[k] !== undefined) obj[k] = Number(obj[k] || 0); });
+    rows.push(obj);
+  }
+  return rows;
+}
+
 function Modal({ title, onClose, children, onSave }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 3600, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
@@ -1171,13 +2022,72 @@ function Field({ label, children }) {
   );
 }
 
+function RecordPaymentForm({ invoice, onClose, onSaved }) {
+  const [amount, setAmount] = useState(Number(invoice?.total || 0));
+  const [date, setDate] = useState('');
+  const [method, setMethod] = useState('cash');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    try {
+      if (!invoice?.projectId || !invoice?.id) return;
+      setBusy(true);
+      await addDoc(collection(db, 'projects', invoice.projectId, 'invoices', invoice.id, 'payments'), {
+        amount: Number(amount || 0),
+        date: date || new Date().toISOString().slice(0,10),
+        method,
+        note,
+        createdAt: serverTimestamp()
+      });
+      // Optionally mark paid if fully paid
+      const paidTotal = Number(amount || 0);
+      if (paidTotal >= Number(invoice.total || 0)) {
+        try { await updateDoc(doc(db, 'projects', invoice.projectId, 'invoices', invoice.id), { status: 'paid' }); } catch {}
+      }
+      onSaved && onSaved();
+    } catch {
+      setBusy(false);
+    }
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Field label="Amount"><input type="number" step="0.01" value={amount} onChange={(e) => setAmount(Number(e.target.value||0))} /></Field>
+        <Field label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Field label="Method">
+          <select value={method} onChange={(e) => setMethod(e.target.value)}>
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+            <option value="bank">Bank Transfer</option>
+            <option value="paypal">PayPal</option>
+            <option value="other">Other</option>
+          </select>
+        </Field>
+        <Field label="Note"><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button onClick={onClose} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+        <button disabled={busy} onClick={save} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>{busy ? 'Saving…' : 'Save Payment'}</button>
+      </div>
+    </div>
+  );
+}
+
 function InvoiceModal({ isOpen, onClose, invoice, onSave }) {
   const [form, setForm] = useState(() => ({
     client: invoice?.client || '',
     dueDate: invoice?.dueDate || '',
     items: Array.isArray(invoice?.items) ? invoice.items.map(it => ({ description: it.description || '', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) })) : [],
     taxRate: invoice?.taxRate || 0,
-    discount: invoice?.discount || 0
+    discount: invoice?.discount || 0,
+    status: invoice?.status || 'unpaid',
+    reference: invoice?.reference || '',
+    poNumber: invoice?.poNumber || '',
+    notes: invoice?.notes || '',
+    terms: invoice?.terms || '',
+    currency: invoice?.currency || ''
   }));
   if (!isOpen) return null;
   return (
@@ -1187,6 +2097,17 @@ function InvoiceModal({ isOpen, onClose, invoice, onSave }) {
         <Field label="Due Date"><input type="date" value={form.dueDate} onChange={(e) => setForm(f => ({ ...f, dueDate: e.target.value }))} /></Field>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
+        <Field label="Status">
+          <select value={form.status} onChange={(e) => setForm(f => ({ ...f, status: e.target.value }))}>
+            <option value="unpaid">Unpaid</option>
+            <option value="paid">Paid</option>
+          </select>
+        </Field>
+        <Field label="Reference"><input value={form.reference} onChange={(e) => setForm(f => ({ ...f, reference: e.target.value }))} /></Field>
+        <Field label="Currency (ISO)"><input value={form.currency} onChange={(e) => setForm(f => ({ ...f, currency: e.target.value }))} /></Field>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Field label="PO Number"><input value={form.poNumber} onChange={(e) => setForm(f => ({ ...f, poNumber: e.target.value }))} /></Field>
         <Field label="Tax Rate %"><input type="number" step="0.01" value={form.taxRate} onChange={(e) => setForm(f => ({ ...f, taxRate: e.target.value }))} /></Field>
         <Field label="Discount"><input type="number" step="0.01" value={form.discount} onChange={(e) => setForm(f => ({ ...f, discount: e.target.value }))} /></Field>
       </div>
@@ -1210,6 +2131,46 @@ function InvoiceModal({ isOpen, onClose, invoice, onSave }) {
           <div style={{ marginTop: 8 }}>
             <button onClick={() => setForm(f => ({ ...f, items: [...(f.items||[]), { description: '', qty: 1, unitPrice: 0 }] }))} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>+ Add Item</button>
           </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <Field label="Notes"><textarea value={form.notes} onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))} style={{ width: '100%', minHeight: 80, boxSizing: 'border-box' }} /></Field>
+          <Field label="Terms"><textarea value={form.terms} onChange={(e) => setForm(f => ({ ...f, terms: e.target.value }))} style={{ width: '100%', minHeight: 80, boxSizing: 'border-box' }} /></Field>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 12, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fafafa' }}>
+          {(() => {
+            const items = form.items || [];
+            const subtotal = items.reduce((a, it) => a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
+            const tax = subtotal * (Number(form.taxRate||0)/100);
+            const discount = Number(form.discount||0);
+            const total = subtotal + tax - discount;
+            return (
+              <>
+                <div>Subtotal: {subtotal.toFixed(2)}</div>
+                <div>Tax: {tax.toFixed(2)}</div>
+                <div>Discount: {discount.toFixed(2)}</div>
+                <div style={{ fontWeight: 700 }}>Total: {total.toFixed(2)}</div>
+              </>
+            );
+          })()}
+        </div>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <div style={{ fontWeight: 600, margin: '8px 0' }}>Attachments</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="file" accept="image/*,application/pdf" onChange={async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file || !invoice?.projectId || !invoice?.id) return;
+            try {
+              const path = `invoice_attachments/${invoice.projectId}/${invoice.id}_${Date.now()}_${file.name}`;
+              const sref = storageRef(storage, path);
+              await uploadBytes(sref, file);
+              const url = await getDownloadURL(sref);
+              await updateDoc(doc(db, 'projects', invoice.projectId, 'invoices', invoice.id), { attachmentUrl: url, attachmentPath: path });
+            } catch {}
+          }} />
+          {invoice?.attachmentUrl && (
+            <a href={invoice.attachmentUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>View current</a>
+          )}
         </div>
       </div>
     </Modal>

@@ -1,16 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
 import { DESIGN_SYSTEM } from '../../styles/designSystem';
 import ProjectQuotesPanel from './ProjectQuotesPanel';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function FinancePanel({ projectId }) {
+  const { currentUser } = useAuth();
   const [tab, setTab] = useState('expenses'); // 'expenses' | 'invoices' | 'quotes'
   const [expenses, setExpenses] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
+  const [projectCustomer, setProjectCustomer] = useState({ name: '', currency: '', taxRate: undefined });
+  const [customersBook, setCustomersBook] = useState([]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -24,6 +28,48 @@ export default function FinancePanel({ projectId }) {
     });
     return () => { unsubExp(); unsubInv(); };
   }, [projectId]);
+
+  useEffect(() => {
+    const loadProjectCustomer = async () => {
+      try {
+        if (!projectId) return;
+        const pref = doc(db, 'projects', projectId);
+        const psnap = await (await import('firebase/firestore')).getDoc(pref);
+        const pdata = psnap.exists() ? psnap.data() : {};
+        const customerId = pdata.customerId;
+        if (!customerId) { setProjectCustomer({ name: pdata.customerName || '', currency: '', taxRate: undefined }); return; }
+        const cref = doc(db, 'customerProfiles', customerId);
+        const csnap = await (await import('firebase/firestore')).getDoc(cref);
+        if (csnap.exists()) {
+          const c = csnap.data() || {};
+          setProjectCustomer({
+            name: c.customerProfile?.name || c.companyProfile?.company || '',
+            currency: c.financeDefaults?.currency || c.customerProfile?.currency || '',
+            taxRate: c.financeDefaults?.taxRate ?? c.customerProfile?.taxRate
+          });
+        } else {
+          setProjectCustomer({ name: pdata.customerName || '', currency: '', taxRate: undefined });
+        }
+      } catch { setProjectCustomer({ name: '', currency: '', taxRate: undefined }); }
+    };
+    loadProjectCustomer();
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!currentUser?.uid) { setCustomersBook([]); return; }
+    const qref = query(collection(db, 'customerProfiles'), where('userId', '==', currentUser.uid));
+    const unsub = onSnapshot(qref, snap => {
+      const list = snap.docs.map(d => {
+        const data = d.data() || {};
+        const name = data.customerProfile?.name || data.companyProfile?.company || d.id;
+        const currency = data.financeDefaults?.currency || data.customerProfile?.currency || '';
+        const taxRate = data.financeDefaults?.taxRate ?? data.customerProfile?.taxRate;
+        return { id: d.id, name, currency, taxRate };
+      }).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+      setCustomersBook(list);
+    });
+    return () => unsub();
+  }, [currentUser?.uid]);
 
   const totalExpenses = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const totalInvoiced = invoices.reduce((s, inv) => s + (Number(inv.total) || 0), 0);
@@ -67,7 +113,7 @@ export default function FinancePanel({ projectId }) {
         <ExpenseModal projectId={projectId} onClose={() => setShowExpenseModal(false)} />
       )}
       {showInvoiceModal && (
-        <InvoiceModal projectId={projectId} onClose={() => setShowInvoiceModal(false)} />
+        <InvoiceModal projectId={projectId} onClose={() => setShowInvoiceModal(false)} initialClient={projectCustomer.name} initialCurrency={projectCustomer.currency} initialTaxRate={projectCustomer.taxRate} customersBook={customersBook} />
       )}
     </div>
   );
@@ -169,23 +215,36 @@ function ExpenseModal({ projectId, onClose }) {
   );
 }
 
-function InvoiceModal({ projectId, onClose }) {
-  const [client, setClient] = useState('');
+function InvoiceModal({ projectId, onClose, initialClient, initialCurrency, initialTaxRate, customersBook = [] }) {
+  const [client, setClient] = useState(initialClient || '');
   const [dueDate, setDueDate] = useState('');
   const [total, setTotal] = useState('');
   const [status, setStatus] = useState('unpaid');
   const [notes, setNotes] = useState('');
+  const [currency, setCurrency] = useState(initialCurrency || '');
+  const [taxRate, setTaxRate] = useState(typeof initialTaxRate === 'number' ? initialTaxRate : 0);
   const save = async () => {
     if (!projectId || !client || !total) return;
     try {
-      await addDoc(collection(db, 'projects', projectId, 'invoices'), { client, dueDate, total: Number(total), status, notes, createdAt: serverTimestamp() });
+      const subtotal = Number(total);
+      const taxAmount = subtotal * (Number(taxRate || 0) / 100);
+      await addDoc(collection(db, 'projects', projectId, 'invoices'), { client, dueDate, total: Number(total), status, notes, currency: currency || undefined, taxRate: Number(taxRate || 0), taxAmount, createdAt: serverTimestamp() });
       onClose();
     } catch {}
   };
   return (
     <Modal title="Create Invoice" onClose={onClose} onSave={save}>
       <div style={{ display: 'flex', gap: 8 }}>
-        <Field label="Client"><input value={client} onChange={(e) => setClient(e.target.value)} style={inputStyle} /></Field>
+        <Field label="Client">
+          <select value={client} onChange={(e) => {
+            const name = e.target.value; setClient(name);
+            const c = customersBook.find(x => x.name === name);
+            if (c) { if (c.currency) setCurrency(c.currency); if (typeof c.taxRate === 'number') setTaxRate(c.taxRate); }
+          }} style={inputStyle}>
+            <option value="">Select customer</option>
+            {customersBook.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
+        </Field>
         <Field label="Due Date"><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={inputStyle} /></Field>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -196,6 +255,8 @@ function InvoiceModal({ projectId, onClose }) {
             <option value="paid">Paid</option>
           </select>
         </Field>
+        <Field label="Currency"><input value={currency} onChange={(e) => setCurrency(e.target.value)} style={inputStyle} /></Field>
+        <Field label="Tax %"><input type="number" step="0.01" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} style={inputStyle} /></Field>
       </div>
       <Field label="Notes"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, minHeight: 80 }} /></Field>
     </Modal>
