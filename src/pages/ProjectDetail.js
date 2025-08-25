@@ -1123,6 +1123,47 @@ export default function ProjectDetail() {
           </div>
           </div>
           
+          {/* Project Files Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flexShrink: 0
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Project Files
+              </h3>
+            </div>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
+              {Array.isArray(projectData?.files) && projectData.files.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+                  {projectData.files.map((f, i) => (
+                    <div key={i} style={{ display: 'contents' }}>
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {(f.type === 'image' ? '🖼️' : '📄')} {f.name || 'File'}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {f.url && (
+                          <a href={f.url} target="_blank" rel="noreferrer" style={{ ...getButtonStyle('secondary', 'projects'), padding: '4px 8px', fontSize: 12 }}>Open</a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>No files attached.</div>
+              )}
+            </div>
+          </div>
+
           {/* Team Members Section */}
           <div style={{
             ...getCardStyle('projects'),
@@ -1158,132 +1199,130 @@ export default function ProjectDetail() {
             </div>
           </div>
 
-          {/* Project Quotes Section moved into Finance tab */}
-
-            {/* Meeting Transcripts Section */}
+          {/* Meeting Transcripts Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flex: "1 1 280px",
+            minHeight: "200px",
+            display: "flex",
+            flexDirection: "column"
+          }}>
             <div style={{
-              ...getCardStyle('projects'),
-              flex: "1 1 280px",
-              minHeight: "200px",
-              display: "flex",
-              flexDirection: "column"
+              background: DESIGN_SYSTEM.pageThemes.projects.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
             }}>
-              <div style={{
-                background: DESIGN_SYSTEM.pageThemes.projects.gradient,
-                color: DESIGN_SYSTEM.colors.text.inverse,
-                padding: DESIGN_SYSTEM.spacing.base,
-                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
               }}>
-                <h3 style={{
-                  margin: 0,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-                }}>
-                  Meeting Transcripts
-                </h3>
-              </div>
-              <div style={{ padding: DESIGN_SYSTEM.spacing.base, maxHeight: 260, overflowY: 'auto' }}>
-                {meetingTranscriptsList.length === 0 ? (
-                  <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>No transcripts yet. Click Save Transcript to save one.</div>
-                ) : (
-                  meetingTranscriptsList.map(file => (
-                    <div key={file.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, marginBottom: 8, background: '#fff' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontWeight: 600 }}>{file.name}</span>
-                        <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((file.createdAt?.seconds||0)*1000).toLocaleString()}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => {
-                          const blob = new Blob([file.content || ''], { type: 'text/plain' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = file.name || 'transcript.txt';
-                          a.click();
-                          URL.revokeObjectURL(url);
-                        }} style={{ 
-                          ...getButtonStyle('secondary', 'projects'),
-                          padding: '4px 8px',
-                          fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                          borderRadius: 9999,
-                          background: '#fff',
-                          color: '#111827',
-                          border: '1px solid #e5e7eb'
-                        }}>⬇️ Download</button>
-                        <button onClick={() => { setAiModalTranscriptDoc(file); setAiModalOpen(true); setAiModalItems([]); setAiModalSelection({}); setAiModalTarget('tasks'); setAiModalError(''); }} style={{ 
-                          ...getButtonStyle('secondary', 'projects'),
-                          padding: '4px 8px',
-                          fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                          borderRadius: 9999,
-                          background: '#111827',
-                          color: '#fff',
-                          border: '1px solid #111827'
-                        }}>🤖 AI Actions</button>
-                        <button onClick={async () => {
-                          try {
-                            await deleteDoc(doc(db, 'projects', projectId, 'meetingTranscripts', file.id));
-                            // Optimistically update local list
-                            setMeetingTranscriptsList(prev => prev.filter(f => f.id !== file.id));
-                          } catch (e) {
-                            alert('Failed to delete transcript');
-                          }
-                        }} style={{ 
-                          ...getButtonStyle('secondary', 'projects'),
-                          padding: '4px 8px',
-                          fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                          borderRadius: 9999,
-                          background: '#fee2e2',
-                          border: '1px solid #fecaca',
-                          color: '#b91c1c'
-                        }}>🗑️ Delete</button>
-                      </div>
+                Meeting Transcripts
+              </h3>
+            </div>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base, maxHeight: 260, overflowY: 'auto' }}>
+              {meetingTranscriptsList.length === 0 ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>No transcripts yet. Click Save Transcript to save one.</div>
+              ) : (
+                meetingTranscriptsList.map(file => (
+                  <div key={file.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, marginBottom: 8, background: '#fff' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontWeight: 600 }}>{file.name}</span>
+                      <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>{new Date((file.createdAt?.seconds||0)*1000).toLocaleString()}</span>
                     </div>
-                  ))
-                )}
-              </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => {
+                        const blob = new Blob([file.content || ''], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.name || 'transcript.txt';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }} style={{ 
+                        ...getButtonStyle('secondary', 'projects'),
+                        padding: '4px 8px',
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                        borderRadius: 9999,
+                        background: '#fff',
+                        color: '#111827',
+                        border: '1px solid #e5e7eb'
+                      }}>⬇️ Download</button>
+                      <button onClick={() => { setAiModalTranscriptDoc(file); setAiModalOpen(true); setAiModalItems([]); setAiModalSelection({}); setAiModalTarget('tasks'); setAiModalError(''); }} style={{ 
+                        ...getButtonStyle('secondary', 'projects'),
+                        padding: '4px 8px',
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                        borderRadius: 9999,
+                        background: '#111827',
+                        color: '#fff',
+                        border: '1px solid #111827'
+                      }}>🤖 AI Actions</button>
+                      <button onClick={async () => {
+                        try {
+                          await deleteDoc(doc(db, 'projects', projectId, 'meetingTranscripts', file.id));
+                          // Optimistically update local list
+                          setMeetingTranscriptsList(prev => prev.filter(f => f.id !== file.id));
+                        } catch (e) {
+                          alert('Failed to delete transcript');
+                        }
+                      }} style={{ 
+                        ...getButtonStyle('secondary', 'projects'),
+                        padding: '4px 8px',
+                        fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                        borderRadius: 9999,
+                        background: '#fee2e2',
+                        border: '1px solid #fecaca',
+                        color: '#b91c1c'
+                      }}>🗑️ Delete</button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
+          </div>
 
-            {/* Leave Project Button at bottom of left panel */}
-            <div style={{
-              marginTop: 'auto',
-              padding: DESIGN_SYSTEM.spacing.base
-            }}>
-              <button
-                onClick={() => {
-                  if (!currentUser || !projectData?.id) return;
-                  setConfirmModalConfig({
-                    title: 'Leave Project',
-                    message: 'Leave this project? You will be removed from the team.',
-                    confirmText: 'Leave',
-                    confirmButtonType: 'danger',
-                    onConfirm: async () => {
-                      setShowConfirmModal(false);
-                      try {
-                        await updateDoc(doc(db, 'projects', projectData.id), {
-                          team: (projectData.team || []).filter(uid => uid !== currentUser.uid)
-                        });
-                        navigate('/project');
-                      } catch (e) {
-                        alert('Failed to leave project.');
-                      }
+          {/* Leave Project Button at bottom of left panel */}
+          <div style={{
+            marginTop: 'auto',
+            padding: DESIGN_SYSTEM.spacing.base
+          }}>
+            <button
+              onClick={() => {
+                if (!currentUser || !projectData?.id) return;
+                setConfirmModalConfig({
+                  title: 'Leave Project',
+                  message: 'Leave this project? You will be removed from the team.',
+                  confirmText: 'Leave',
+                  confirmButtonType: 'danger',
+                  onConfirm: async () => {
+                    setShowConfirmModal(false);
+                    try {
+                      await updateDoc(doc(db, 'projects', projectData.id), {
+                        team: (projectData.team || []).filter(uid => uid !== currentUser.uid)
+                      });
+                      navigate('/project');
+                    } catch (e) {
+                      alert('Failed to leave project.');
                     }
-                  });
-                  setShowConfirmModal(true);
-                }}
-                style={{
-                  ...getButtonStyle('secondary', 'projects'),
-                  background: '#fee2e2',
-                  color: '#b91c1c',
-                  border: '1px solid #fecaca',
-                  width: '100%',
-                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
-                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-                }}
-              >
-                Leave Project
-              </button>
-            </div>
+                  }
+                });
+                setShowConfirmModal(true);
+              }}
+              style={{
+                ...getButtonStyle('secondary', 'projects'),
+                background: '#fee2e2',
+                color: '#b91c1c',
+                border: '1px solid #fecaca',
+                width: '100%',
+                padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}
+            >
+              Leave Project
+            </button>
+          </div>
         </div>
 
         {/* Right Column */}

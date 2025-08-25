@@ -493,10 +493,23 @@ export default function ApprovalPage() {
             team: [selectedRequest.requestedBy]
           };
           const projRef = await addDoc(collection(db, 'projects'), projectPayload);
-          // Link project to customer profile for dropdown
-          await updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId), {
-            projects: arrayUnion(projRef.id)
-          });
+          // Link project to customer profile for dropdown and snapshot stages if present
+          try {
+            const custSnap = await getDoc(doc(db, 'customerProfiles', selectedRequest.customerId));
+            const custData = custSnap.exists() ? custSnap.data() : {};
+            const stages = custData.stages || ['Working','Qualified','Converted'];
+            const stageData = custData.stageData || { Working:{notes:[],tasks:[],completed:false}, Qualified:{notes:[],tasks:[],completed:false}, Converted:{notes:[],tasks:[],completed:false} };
+            const currentStage = custData.currentStage || stages[0];
+            const snapshot = { stages, stageData, currentStage, reminders: custData.reminders || [], files: custData.files || [], activities: custData.activities || [] };
+            await updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId), {
+              projects: arrayUnion(projRef.id),
+              projectSnapshots: { ...(custData.projectSnapshots || {}), [projRef.id]: snapshot }
+            });
+          } catch {
+            await updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId), {
+              projects: arrayUnion(projRef.id)
+            });
+          }
 
           // Migrate only unassigned quotesDrafts from customer to this project and tag them with projectId
           try {
@@ -538,6 +551,15 @@ export default function ApprovalPage() {
               );
             });
             if (moves.length > 0) await Promise.all(moves);
+          } catch {}
+
+          // Move attached files to the project for history
+          try {
+            const custSnap2 = await getDoc(doc(db, 'customerProfiles', selectedRequest.customerId));
+            const files = (custSnap2.exists() ? (custSnap2.data().files || []) : []);
+            if (files && files.length > 0) {
+              await updateDoc(doc(db, 'projects', projRef.id), { files });
+            }
           } catch {}
         } catch (e) {
           console.error('Failed to create/link project after approval', e);

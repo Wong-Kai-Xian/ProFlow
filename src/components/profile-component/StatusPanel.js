@@ -378,7 +378,6 @@ export default function StatusPanel({
   };
 
   const handleStageClick = (stage, clickedIndex) => {
-    if (readOnly) return;
     const currentIndex = stages.indexOf(currentStage);
 
     if (clickedIndex < currentIndex) {
@@ -397,7 +396,7 @@ export default function StatusPanel({
         }
       }
 
-      if (canProceed) {
+      if (canProceed || readOnly) {
         setCurrentStage(stage);
       } else {
         setShowIncompleteStageModal(true);

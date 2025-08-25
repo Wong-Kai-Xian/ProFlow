@@ -21,7 +21,6 @@ export default function ProjectWorkspacePanel({
   customerId,
   customerProfile,
   onConvertToProject,
-  onSendApprovalRequest,
   // Stages (customer pipeline)
   stages,
   currentStage,
@@ -49,6 +48,8 @@ export default function ProjectWorkspacePanel({
   const switchTimerRef = useRef(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // { scope: 'project'|'customer', file }
   const [confirmDeleteStep, setConfirmDeleteStep] = useState(0);
+  const [projectFiles, setProjectFiles] = useState([]);
+  const [snapshotViewStage, setSnapshotViewStage] = useState('');
 
   useEffect(() => {
     // Show loading indicator on project change
@@ -64,6 +65,16 @@ export default function ProjectWorkspacePanel({
       setTranscripts(files);
       // Data arrived; hide loading
       setIsSwitching(false);
+    });
+    return () => unsub();
+  }, [selectedProjectId]);
+
+  // Load project files when a project is selected
+  useEffect(() => {
+    if (!selectedProjectId) { setProjectFiles([]); return; }
+    const unsub = onSnapshot(doc(db, 'projects', selectedProjectId), snap => {
+      const data = snap.data() || {};
+      setProjectFiles(Array.isArray(data.files) ? data.files : []);
     });
     return () => unsub();
   }, [selectedProjectId]);
@@ -130,6 +141,7 @@ export default function ProjectWorkspacePanel({
                   stage={stage}
                   stageData={currentStageData}
                   setStageData={setCurrentStageData}
+                  readOnly={true}
                 />
               )}
             />
@@ -139,12 +151,13 @@ export default function ProjectWorkspacePanel({
               if (!snap) return <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>Open the project to manage stages.</div>;
               const snapStages = snap.stages || [];
               const snapStageData = snap.stageData || {};
-              const snapCurrent = snap.currentStage || (snapStages[0] || '');
+              const snapCurrent = snapshotViewStage || snap.currentStage || (snapStages[0] || '');
+              if (!snapshotViewStage && snapCurrent) setSnapshotViewStage(snapCurrent);
               return (
                 <StatusPanel
                   stages={snapStages}
                   currentStage={snapCurrent}
-                  setCurrentStage={() => {}}
+                  setCurrentStage={setSnapshotViewStage}
                   stageData={snapStageData}
                   setStageData={() => {}}
                   setStages={() => {}}
@@ -157,6 +170,7 @@ export default function ProjectWorkspacePanel({
                       stage={stage}
                       stageData={currentStageData}
                       setStageData={() => {}}
+                      readOnly={true}
                     />
                   )}
                 />
@@ -238,13 +252,36 @@ export default function ProjectWorkspacePanel({
         )}
 
         {activeTab === 'Files' && (
-          <AttachedFiles
-            files={files}
-            onFileAdd={onFileAdd}
-            onFileRemove={onFileRemove}
-            onFileRename={onFileRename}
-            readOnly={readOnlyCustomer}
-          />
+          selectedProjectId ? (
+            <div>
+              {projectFiles.length === 0 ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No files attached.</div>
+              ) : (
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+                  {projectFiles.map((f, idx) => (
+                    <li key={idx} style={{ display: 'contents' }}>
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {(f.type === 'image' ? '🖼️' : '📄')} {f.name || 'File'}
+                      </div>
+                      <div>
+                        {f.url && (
+                          <a href={f.url} target="_blank" rel="noreferrer" style={{ padding: '4px 8px', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 6, fontSize: 12 }}>Open</a>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <AttachedFiles
+              files={files}
+              onFileAdd={onFileAdd}
+              onFileRemove={onFileRemove}
+              onFileRename={onFileRename}
+              readOnly={readOnlyCustomer}
+            />
+          )
         )}
 
         {activeTab === 'Quotes' && (

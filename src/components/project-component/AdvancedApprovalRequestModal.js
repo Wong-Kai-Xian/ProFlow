@@ -24,7 +24,9 @@ export default function AdvancedApprovalRequestModal({
   companyProfileData = null,
   quoteProjectId = null,
   quoteProjectName = "",
-  selectedQuote = null
+  selectedQuote = null,
+  showCreateProjectFields = true,
+  showNoApprovalToggle = true
 }) {
   // Form data states
   const [requestTitle, setRequestTitle] = useState("");
@@ -771,7 +773,7 @@ export default function AdvancedApprovalRequestModal({
               fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
               color: DESIGN_SYSTEM.colors.text.primary
             }}>
-              {(!isStageAdvancement && requestType === 'Customer') ? 'Project Conversion' : (isStageAdvancement ? "Request Approval & Advance Stage" : "Send Approval Request")}
+              {(!isStageAdvancement && requestType === 'Customer') ? 'Project Conversion' : (isStageAdvancement ? "Get approval & advance stage" : "Send approval")}
             </h2>
           </div>
           <p style={{
@@ -810,21 +812,23 @@ export default function AdvancedApprovalRequestModal({
           overflow: "auto",
           flex: 1
         }}>
-          {/* No approval needed toggle (always at top) */}
-          <div style={{
-            marginBottom: DESIGN_SYSTEM.spacing.base,
-            padding: DESIGN_SYSTEM.spacing.sm,
-            border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
-            borderRadius: DESIGN_SYSTEM.borderRadius.base,
-            background: DESIGN_SYSTEM.colors.background.secondary
-          }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <input type="checkbox" checked={noApprovalNeeded} onChange={(e) => setNoApprovalNeeded(e.target.checked)} />
-              <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>
-                No approval needed ({isStageAdvancement ? 'advance immediately' : 'do not send approval'})
-              </span>
-            </label>
-          </div>
+          {/* No approval needed toggle */}
+          {showNoApprovalToggle && (
+            <div style={{
+              marginBottom: DESIGN_SYSTEM.spacing.base,
+              padding: DESIGN_SYSTEM.spacing.sm,
+              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+              borderRadius: DESIGN_SYSTEM.borderRadius.base,
+              background: DESIGN_SYSTEM.colors.background.secondary
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={noApprovalNeeded} onChange={(e) => setNoApprovalNeeded(e.target.checked)} />
+                <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>
+                  No approval needed ({isStageAdvancement ? 'advance immediately' : 'do not send approval'})
+                </span>
+              </label>
+            </div>
+          )}
 
           {!noApprovalNeeded && (
             <>
@@ -1233,7 +1237,8 @@ export default function AdvancedApprovalRequestModal({
             </>
           )}
 
-          {/* Inline Create Project (same fields as Project List create) */}
+          {/* Inline Create Project (conversion only) */}
+          {(!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields) && (
           <div style={{
             marginTop: DESIGN_SYSTEM.spacing.lg,
             padding: DESIGN_SYSTEM.spacing.base,
@@ -1324,6 +1329,7 @@ export default function AdvancedApprovalRequestModal({
               )}
             </div>
           </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -1352,10 +1358,10 @@ export default function AdvancedApprovalRequestModal({
             Cancel
           </button>
           <button
-            onClick={noApprovalNeeded ? cpSubmitCreateProject : handleSubmit}
-            disabled={noApprovalNeeded
+            onClick={(!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded) ? cpSubmitCreateProject : handleSubmit}
+            disabled={(!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded)
               ? (!onCreateProject || !cpProjectName.trim())
-              : (loading || (!requestTitle.trim() || !selectedDecisionMaker) || (!cpProjectName.trim()))}
+              : (loading || (!requestTitle.trim() || !selectedDecisionMaker))}
             style={{
               padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
               border: "none",
@@ -1366,12 +1372,12 @@ export default function AdvancedApprovalRequestModal({
               color: DESIGN_SYSTEM.colors.text.inverse,
               fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
               fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
-              cursor: (noApprovalNeeded ? (!onCreateProject || !cpProjectName.trim()) : loading) ? "not-allowed" : "pointer",
-              opacity: (noApprovalNeeded ? (!onCreateProject || !cpProjectName.trim()) : (loading || (!requestTitle.trim() || !selectedDecisionMaker))) ? 0.6 : 1,
+              cursor: ((!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded) ? (!onCreateProject || !cpProjectName.trim()) : loading) ? "not-allowed" : "pointer",
+              opacity: ((!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded) ? (!onCreateProject || !cpProjectName.trim()) : (loading || (!requestTitle.trim() || !selectedDecisionMaker))) ? 0.6 : 1,
               minWidth: "140px"
             }}
           >
-            {noApprovalNeeded ? 'Create Project' : (loading ? (uploading ? 'Uploading...' : 'Sending...') : 'Send Request')}
+            {(!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded) ? 'Create Project' : (loading ? (uploading ? 'Uploading...' : 'Sending...') : 'Send Request')}
           </button>
         </div>
       </div>

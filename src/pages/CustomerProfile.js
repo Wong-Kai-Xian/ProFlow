@@ -786,6 +786,13 @@ export default function CustomerProfile() {
       });
       setProjectSnapshots(prev => ({ ...(prev || {}), [newProjectRef.id]: snapshot }));
 
+      // Move attached files to the project record for project history visibility
+      try {
+        await updateDoc(doc(db, 'projects', newProjectRef.id), {
+          files: Array.isArray(files) ? files : []
+        });
+      } catch {}
+
       // Copy only unassigned customer draft quotes into the new project's quotes collection and tag them with this projectId
       try {
         const draftsSnap = await getDocs(collection(db, 'customerProfiles', id, 'quotesDrafts'));
@@ -1049,10 +1056,18 @@ export default function CustomerProfile() {
                 </select>
                 <div style={{ flex: 1 }} />
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => { setApprovalModalType('general'); setShowProjectConversionApprovalModal(true); }} style={{ ...getButtonStyle('primary', 'customers') }} disabled={hasPendingConversionRequest && !hasApprovedConversion}>
-                    {hasApprovedConversion ? 'Approved - Create Project' : (hasPendingConversionRequest ? 'Awaiting Approval' : 'Convert to Project')}
+                  <button
+                    onClick={() => { setApprovalModalType('general'); setShowProjectConversionApprovalModal(true); }}
+                    style={{ ...getButtonStyle('primary', 'customers') }}
+                    disabled={Boolean(selectedProjectId) || (hasPendingConversionRequest && !hasApprovedConversion)}
+                  >
+                    {selectedProjectId
+                      ? 'Converted'
+                      : ((hasApprovedConversion && (projects || []).length === 0)
+                          ? 'Approved - Create Project'
+                          : (hasPendingConversionRequest ? 'Awaiting Approval' : 'Convert to Project'))}
                   </button>
-                  <button onClick={handleSendApprovalRequest} style={{ ...getButtonStyle('secondary', 'customers') }}>Send for Approval</button>
+                  <button onClick={() => { setApprovalModalType('general'); setShowAdvancedApprovalModal(true); }} style={{ ...getButtonStyle('secondary', 'customers') }}>Send Approval</button>
                 </div>
                 <div style={{ width: 8 }} />
                 <button
@@ -1076,7 +1091,6 @@ export default function CustomerProfile() {
                 customerId={id}
                 customerProfile={customerProfile}
                 onConvertToProject={handleConvertToProject}
-                onSendApprovalRequest={handleSendApprovalRequest}
                 stages={stages}
                 currentStage={currentStage}
                 setCurrentStage={setCurrentStage}
@@ -1086,7 +1100,6 @@ export default function CustomerProfile() {
                 onStagesUpdate={handleStagesUpdate}
                 hasApprovedConversion={hasApprovedConversion}
                 onCreateProjectAfterApproval={handleCreateProjectAfterApproval}
-                onRequestApproval={handleRequestApproval}
                 customerName={getCustomerName()}
                 projectSnapshots={projectSnapshots}
                 customerReminders={reminders}
@@ -1329,7 +1342,9 @@ export default function CustomerProfile() {
         currentStage={currentStage}
         nextStage={stages[stages.indexOf(currentStage) + 1] || ""}
         isStageAdvancement={approvalModalType === 'stage'}
-      />
+        showCreateProjectFields={false}
+        showNoApprovalToggle={false}
+        />
 
       <AdvancedApprovalRequestModal
         isOpen={showProjectConversionApprovalModal}

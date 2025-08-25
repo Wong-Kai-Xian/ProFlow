@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { COLORS, BUTTON_STYLES, LAYOUT } from "./constants"; // Import LAYOUT
 
-export default function TaskManager({ stage, stageData, setStageData }) {
+export default function TaskManager({ stage, stageData, setStageData, readOnly = false }) {
   const tasks = stageData[stage]?.tasks || [];
   const [showAddModal, setShowAddModal] = useState(false);
   const [newTaskName, setNewTaskName] = useState("");
 
   const confirmAddTask = () => {
+    if (readOnly) return;
     const taskName = newTaskName;
     if (taskName && taskName.trim()) {
       const newTasks = [...tasks, { name: taskName.trim(), done: false }];
@@ -23,6 +24,7 @@ export default function TaskManager({ stage, stageData, setStageData }) {
   };
 
   const toggleTask = (taskIndex) => {
+    if (readOnly) return;
     const newTasks = [...tasks];
     newTasks[taskIndex].done = !newTasks[taskIndex].done;
     setStageData({ 
@@ -35,6 +37,7 @@ export default function TaskManager({ stage, stageData, setStageData }) {
   };
 
   const removeTask = (taskIndex) => {
+    if (readOnly) return;
     const newTasks = tasks.filter((_, index) => index !== taskIndex);
     setStageData({ 
       ...stageData, 
@@ -47,22 +50,24 @@ export default function TaskManager({ stage, stageData, setStageData }) {
 
   return (
     <div>
-      <div style={{ 
-        display: "flex", 
-        justifyContent: "flex-end",
-        marginBottom: LAYOUT.smallGap
-      }}>
-        <button
-          onClick={() => setShowAddModal(true)}
-          style={{
-            ...BUTTON_STYLES.primary,
-            padding: "6px 12px",
-            fontSize: "12px"
-          }}
-        >
-          + Add Task
-        </button>
-      </div>
+      {!readOnly && (
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "flex-end",
+          marginBottom: LAYOUT.smallGap
+        }}>
+          <button
+            onClick={() => setShowAddModal(true)}
+            style={{
+              ...BUTTON_STYLES.primary,
+              padding: "6px 12px",
+              fontSize: "12px"
+            }}
+          >
+            + Add Task
+          </button>
+        </div>
+      )}
 
       {tasks.length === 0 ? (
         <p style={{ 
@@ -96,7 +101,8 @@ export default function TaskManager({ stage, stageData, setStageData }) {
                 type="checkbox"
                 checked={task.done}
                 onChange={() => toggleTask(index)}
-                style={{ cursor: "pointer" }}
+                disabled={readOnly}
+                style={{ cursor: readOnly ? "default" : "pointer" }}
               />
               <span style={{
                 flex: 1,
@@ -106,26 +112,28 @@ export default function TaskManager({ stage, stageData, setStageData }) {
               }}>
                 {task.name}
               </span>
-              <button
-                onClick={() => removeTask(index)}
-                style={{
-                  ...BUTTON_STYLES.secondary,
-                  background: "none", // No background for 'x' button
-                  border: "none", // No border
-                  color: COLORS.danger, // Red color for 'x'
-                  padding: "2px", // Minimal padding
-                  fontSize: "16px",
-                  borderRadius: "3px"
-                }}
-                title="Remove task"
-              >
-                ×
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => removeTask(index)}
+                  style={{
+                    ...BUTTON_STYLES.secondary,
+                    background: "none",
+                    border: "none",
+                    color: COLORS.danger,
+                    padding: "2px",
+                    fontSize: "16px",
+                    borderRadius: "3px"
+                  }}
+                  title="Remove task"
+                >
+                  ×
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
-      {showAddModal && (
+      {showAddModal && !readOnly && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}>
           <div style={{ background: "#fff", borderRadius: 8, padding: 16, width: 360, maxWidth: "95vw", boxShadow: "0 10px 25px rgba(0,0,0,0.15)" }}>
             <div style={{ fontWeight: 700, marginBottom: 8 }}>Add Task</div>
