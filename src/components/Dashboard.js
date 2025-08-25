@@ -38,7 +38,7 @@ const Widget = ({ children, onRemove, isEditing }) => (
   </div>
 );
 
-export default function Dashboard() {
+export default function Dashboard({ scope = 'private' }) {
   const [data, setData] = useState({
     totalProjects: 0,
     activeProjects: 0,
@@ -56,43 +56,55 @@ export default function Dashboard() {
   const [editMode, setEditMode] = useState(false);
   const [dashboardWidgets, setDashboardWidgets] = useState([]); // New state for managing widgets
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const isPrivate = scope === 'private';
+  const canEdit = !!currentUser;
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!currentUser) {
-        setData({
-          totalProjects: 0,
-          activeProjects: 0,
-          completedProjects: 0,
-          totalClients: 0,
-          revenue: "$0",
-          pendingTasks: 0,
-          projectCompletionData: [
-            { name: 'Total', value: 0, fill: COLORS.primary },
-            { name: 'Active', value: 0, fill: COLORS.success },
-            { name: 'Completed', value: 0, fill: COLORS.secondary },
-          ]
-        });
-        setDashboardWidgets([]);
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       try {
-        // Fetch projects data
-        const projectsQuery = query(collection(db, 'projects'), where('userId', '==', currentUser.uid));
-        const projectsSnapshot = await getDocs(projectsQuery);
+        // Fetch projects data (private: current user; public: all)
+        let projectsSnapshot;
+        if (isPrivate) {
+          if (!currentUser) {
+            setData({
+              totalProjects: 0,
+              activeProjects: 0,
+              completedProjects: 0,
+              totalClients: 0,
+              revenue: "$0",
+              pendingTasks: 0,
+              projectCompletionData: [
+                { name: 'Total', value: 0, fill: COLORS.primary },
+                { name: 'Active', value: 0, fill: COLORS.success },
+                { name: 'Completed', value: 0, fill: COLORS.secondary },
+              ]
+            });
+            setDashboardWidgets([]);
+            setLoading(false);
+            return;
+          }
+          const projectsQuery = query(collection(db, 'projects'), where('userId', '==', currentUser.uid));
+          projectsSnapshot = await getDocs(projectsQuery);
+        } else {
+          projectsSnapshot = await getDocs(collection(db, 'projects'));
+        }
         const projects = projectsSnapshot.docs.map(doc => doc.data());
 
         const totalProjects = projects.length;
         const activeProjects = projects.filter(p => p.status === 'Active' || p.status === 'Working').length;
         const completedProjects = projects.filter(p => p.status === 'Completed' || p.status === 'Converted').length;
 
-        // Fetch clients data
-        const clientsQuery = query(collection(db, 'customerProfiles'), where('userId', '==', currentUser.uid));
-        const clientsSnapshot = await getDocs(clientsQuery);
-        const totalClients = clientsSnapshot.docs.length;
+        // Fetch clients data (private: current user; public: all)
+        let totalClients = 0;
+        if (isPrivate) {
+          const clientsQuery = query(collection(db, 'customerProfiles'), where('userId', '==', currentUser.uid));
+          const clientsSnapshot = await getDocs(clientsQuery);
+          totalClients = clientsSnapshot.docs.length;
+        } else {
+          const clientsSnapshot = await getDocs(collection(db, 'customerProfiles'));
+          totalClients = clientsSnapshot.docs.length;
+        }
 
         // For now, revenue and pending tasks are mock data or need more complex aggregation
         // You would expand this logic to calculate actual revenue and pending tasks from your project/task data
@@ -130,7 +142,7 @@ export default function Dashboard() {
     };
 
     fetchData();
-  }, [currentUser]); // Re-run effect when currentUser changes
+  }, [currentUser, isPrivate]); // Re-run when currentUser or scope changes
 
   const handleAddWidget = (type) => {
     const newWidget = {
@@ -162,7 +174,7 @@ export default function Dashboard() {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: LAYOUT.smallGap }}>
         <h2 style={{ margin: 0, color: COLORS.text, fontSize: "18px" }}>Company Dashboard</h2>
-        {currentUser && (
+        {canEdit && (
           <button 
             onClick={() => setEditMode(!editMode)}
             style={{ ...BUTTON_STYLES.secondary, padding: "4px 8px", fontSize: "12px" }}
@@ -171,9 +183,9 @@ export default function Dashboard() {
           </button>
         )}
       </div>
-      {currentUser ? (
+      {(isPrivate ? !!currentUser : true) ? (
         <>
-          {editMode && (
+          {canEdit && editMode && (
             <div style={{ marginBottom: LAYOUT.gap }}>
               <h3 style={{ color: COLORS.text, marginBottom: LAYOUT.smallGap }}>Add Widget:</h3>
               <div style={{ display: "flex", gap: LAYOUT.smallGap }}>
@@ -185,7 +197,7 @@ export default function Dashboard() {
           )}
 
           {dashboardWidgets.map(widget => (
-            <Widget key={widget.id} onRemove={() => handleRemoveWidget(widget.id)} isEditing={editMode}>
+            <Widget key={widget.id} onRemove={() => handleRemoveWidget(widget.id)} isEditing={canEdit && editMode}>
               {widget.type === 'metrics' && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: LAYOUT.smallGap }}>
                   <div style={{ background: COLORS.cardBackground, padding: LAYOUT.gap, borderRadius: LAYOUT.borderRadius, textAlign: 'center', boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
