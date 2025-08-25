@@ -368,87 +368,99 @@ export default function ApprovalPage() {
 
   const generatePdfFromQuote = async (quoteData) => {
     try {
-      const pdfLib = await import('pdf-lib');
-      const { PDFDocument, StandardFonts, rgb } = pdfLib;
-      const pdfDoc = await PDFDocument.create();
-      const page = pdfDoc.addPage([595, 842]);
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      let y = 800;
-      const left = 50;
-      const line = (text, opts = {}) => {
-        const { bold = false, size = 12, color = rgb(0, 0, 0) } = opts;
-        page.drawText(String(text || ''), { x: left, y, size, font: bold ? fontBold : font, color });
-        y -= size + 6;
-      };
-      line(quoteData.name || 'Quotation', { bold: true, size: 18 });
-      line(`Client: ${quoteData.client || ''}`);
-      if (quoteData.validUntil) line(`Valid Until: ${quoteData.validUntil}`);
-      line('');
-      line('Items:', { bold: true });
-      const items = Array.isArray(quoteData.items) ? quoteData.items : [];
-      items.slice(0, 30).forEach((it, idx) => {
-        const desc = it.description || `Item ${idx + 1}`;
-        const qty = Number(it.qty || 1);
-        const unit = Number(it.unitPrice || 0);
-        const total = (qty * unit).toFixed(2);
-        line(`- ${desc}  x${qty}  @ ${unit} = ${total}`);
-      });
-      line('');
-      const subtotal = items.reduce((s, it) => s + Number(it.qty || 1) * Number(it.unitPrice || 0), 0);
-      const grand = Number(quoteData.total ?? subtotal);
-      line(`Subtotal: ${subtotal.toFixed(2)}`);
-      line(`Total: ${grand.toFixed(2)}`, { bold: true });
-      const bytes = await pdfDoc.save();
-      const blob = new Blob([bytes], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } catch (e) {
-      // Fallback to HTML preview if pdf-lib isn't available
-      try {
-        const data = quoteData || {};
-        const items = Array.isArray(data.items) ? data.items : [];
-        const rows = items.map((it, i) => `
-          <tr>
-            <td style="padding:6px;border:1px solid #e5e7eb">${it.description || `Item ${i+1}`}</td>
-            <td style="padding:6px;border:1px solid #e5e7eb;text-align:right">${Number(it.qty||1)}</td>
-            <td style="padding:6px;border:1px solid #e5e7eb;text-align:right">${Number(it.unitPrice||0).toFixed(2)}</td>
-            <td style="padding:6px;border:1px solid #e5e7eb;text-align:right">${(Number(it.qty||1)*Number(it.unitPrice||0)).toFixed(2)}</td>
-          </tr>`).join('');
-        const subtotal = items.reduce((s,it)=> s + Number(it.qty||1)*Number(it.unitPrice||0),0);
-        const total = Number(data.total ?? subtotal);
-        const html = `
-          <html>
-          <head><meta charset="utf-8"/><title>Quotation</title></head>
-          <body style="font-family:Arial,Helvetica,sans-serif;padding:20px">
-            <h2 style="margin:0 0 10px">${data.name || 'Quotation'}</h2>
-            <div style="margin:0 0 6px">Client: ${data.client || ''}</div>
-            ${data.validUntil ? `<div style="margin:0 0 10px">Valid Until: ${data.validUntil}</div>` : ''}
-            <table style="border-collapse:collapse;width:100%;margin-top:10px">
+      const data = quoteData || {};
+      const items = Array.isArray(data.items) ? data.items : [];
+      const rows = items.map((it, i) => `
+        <tr>
+          <td>${it.description || `Item ${i+1}`}</td>
+          <td class="num">${Number(it.qty||1)}</td>
+          <td class="num">${Number(it.unitPrice||0).toFixed(2)}</td>
+          <td class="num">${(Number(it.qty||1)*Number(it.unitPrice||0)).toFixed(2)}</td>
+        </tr>`).join('');
+      const subtotal = items.reduce((s,it)=> s + Number(it.qty||1)*Number(it.unitPrice||0),0);
+      const total = Number(data.total ?? subtotal);
+      const today = new Date();
+      const dateStr = today.toLocaleDateString();
+      const logoUrl = '/proflow-logo.png';
+      const html = `
+        <html>
+        <head>
+          <meta charset="utf-8"/>
+          <title>${data.name || 'Quotation'}</title>
+          <style>
+            *{box-sizing:border-box}
+            body{font-family:Arial,Helvetica,sans-serif;color:#111827;margin:0;padding:24px;background:#f9fafb}
+            .sheet{width:820px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:24px}
+            .header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:16px}
+            .brand{display:flex;gap:12px;align-items:center}
+            .brand img{height:36px;width:auto}
+            .brand h1{font-size:20px;margin:0}
+            .meta{font-size:12px;color:#6b7280;text-align:right}
+            h2{font-size:18px;margin:12px 0}
+            .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+            .card{border:1px solid #e5e7eb;border-radius:8px;padding:12px}
+            table{width:100%;border-collapse:collapse;margin-top:8px}
+            thead th{background:#f3f4f6;border:1px solid #e5e7eb;padding:8px;text-align:left;font-size:12px}
+            tbody td{border:1px solid #e5e7eb;padding:8px;font-size:12px}
+            td.num{text-align:right}
+            .totals{margin-top:12px;display:flex;justify-content:flex-end}
+            .totals-box{min-width:240px;border:1px solid #e5e7eb;border-radius:8px;padding:12px;background:#f9fafb}
+            .row{display:flex;justify-content:space-between;margin:4px 0}
+            .row.total{font-weight:600}
+            .footer{margin-top:16px;font-size:12px;color:#6b7280;text-align:center}
+            @media print{body{background:#fff} .sheet{border:none}}
+          </style>
+        </head>
+        <body>
+          <div class="sheet">
+            <div class="header">
+              <div class="brand">
+                <img src="${logoUrl}" alt="Logo"/>
+                <h1>${data.name || 'Quotation'}</h1>
+              </div>
+              <div class="meta">
+                <div>Date: ${dateStr}</div>
+                ${data.validUntil ? `<div>Valid Until: ${data.validUntil}</div>` : ''}
+              </div>
+            </div>
+            <div class="grid">
+              <div class="card">
+                <div style="font-weight:600;margin-bottom:6px">Customer</div>
+                <div>${data.client || ''}</div>
+              </div>
+              <div class="card">
+                <div style="font-weight:600;margin-bottom:6px">Reference</div>
+                <div>${data.reference || ''}</div>
+              </div>
+            </div>
+            <h2>Items</h2>
+            <table>
               <thead>
                 <tr>
-                  <th style="padding:6px;border:1px solid #e5e7eb;text-align:left">Description</th>
-                  <th style="padding:6px;border:1px solid #e5e7eb;text-align:right">Qty</th>
-                  <th style="padding:6px;border:1px solid #e5e7eb;text-align:right">Unit</th>
-                  <th style="padding:6px;border:1px solid #e5e7eb;text-align:right">Total</th>
+                  <th>Description</th>
+                  <th class="num">Qty</th>
+                  <th class="num">Unit</th>
+                  <th class="num">Total</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
             </table>
-            <div style="margin-top:10px;text-align:right">
-              <div>Subtotal: ${subtotal.toFixed(2)}</div>
-              <div style="font-weight:bold">Total: ${total.toFixed(2)}</div>
+            <div class="totals">
+              <div class="totals-box">
+                <div class="row"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+                <div class="row total"><span>Total</span><span>${total.toFixed(2)}</span></div>
+              </div>
             </div>
-            <script>window.print()</script>
-          </body>
-          </html>`;
-        const w = window.open('', '_blank');
-        if (w) { w.document.write(html); w.document.close(); } else { alert('Pop-up blocked. Allow pop-ups to view.'); }
-      } catch (err) {
-        console.error('Failed to show quotation preview', err);
-        alert('Unable to preview quotation');
-      }
+            <div class="footer">Generated by ProFlow</div>
+          </div>
+          <script>window.print && window.print()</script>
+        </body>
+        </html>`;
+      const w = window.open('', '_blank');
+      if (w) { w.document.write(html); w.document.close(); } else { alert('Pop-up blocked. Allow pop-ups to view.'); }
+    } catch (err) {
+      console.error('Failed to show quotation preview', err);
+      alert('Unable to preview quotation');
     }
   };
 
@@ -519,6 +531,19 @@ export default function ApprovalPage() {
       setPdfRenderFailed(true);
       // Fallback: keep old canvas init so at least signing works in overlay
       initCanvas();
+    }
+  };
+
+  const refreshPdfLayout = async () => {
+    try {
+      setPdfRenderFailed(false);
+      if (pdfDocProxy) {
+        await renderAllPages(pdfDocProxy);
+      } else if (signTarget?.fileUrl) {
+        await initPdfJs(signTarget.fileUrl);
+      }
+    } catch (e) {
+      console.error('Refresh PDF failed', e);
     }
   };
 
@@ -1428,114 +1453,117 @@ export default function ApprovalPage() {
                           </p>
                         </div>
 
-                        {/* Attached Files */}
-                        {/* Quotation (files or data preview) */}
-                        {(request.quotationFiles?.length > 0 || request.quotationData) && (
-                          <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
-                            <h4 style={{
-                              margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
-                              fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                              fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
-                              color: DESIGN_SYSTEM.colors.text.primary
-                            }}>
-                              Quotation
-                            </h4>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: DESIGN_SYSTEM.spacing.xs }}>
-                              {(request.quotationFiles || []).map((fileUrl, index) => (
-                                <button
-                                  key={index}
-                                  onClick={() => {
-                                    const name = request.quotationFileNames?.[index] || `Quotation ${index + 1}`;
-                                    downloadFile(fileUrl, name);
-                                  }}
-                                  style={{
-                                    padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
-                                    backgroundColor: DESIGN_SYSTEM.colors.primary[100],
-                                    color: DESIGN_SYSTEM.colors.primary[700],
-                                    border: `1px solid ${DESIGN_SYSTEM.colors.primary[300]}`,
-                                    borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                                    fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
-                                    cursor: 'pointer',
-                                    textDecoration: 'none'
-                                  }}
-                                >
-                                  {request.quotationFileNames?.[index] || `Quotation ${index + 1}`}
-                                </button>
-                              ))}
-                              {/* If there is no quotation file but quotationData exists, allow viewing as PDF */}
-                              {(!(request.quotationFiles && request.quotationFiles.length > 0) && request.quotationData) && (
-                                <button
-                                  onClick={() => generatePdfFromQuote(request.quotationData)}
-                                  style={{
-                                    padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
-                                    backgroundColor: DESIGN_SYSTEM.colors.secondary[100],
-                                    color: DESIGN_SYSTEM.colors.text.primary,
-                                    border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
-                                    borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                                    fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  View as PDF
-                                </button>
-                              )}
+                        {(request.quotationFiles?.length > 0 || request.quotationData || request.attachedFiles?.length > 0) && (
+                          <div style={{
+                            marginBottom: DESIGN_SYSTEM.spacing.base,
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            columnGap: DESIGN_SYSTEM.spacing.lg,
+                            alignItems: 'start'
+                          }}>
+                            {/* Left: Quotation */}
+                            <div>
+                              <h4 style={{
+                                margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
+                                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                                fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
+                                color: DESIGN_SYSTEM.colors.text.primary
+                              }}>
+                                Quotation
+                              </h4>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: DESIGN_SYSTEM.spacing.xs }}>
+                                {(request.quotationFiles || []).map((fileUrl, index) => (
+                                  <button
+                                    key={index}
+                                    onClick={() => {
+                                      const name = request.quotationFileNames?.[index] || `Quotation ${index + 1}`;
+                                      downloadFile(fileUrl, name);
+                                    }}
+                                    style={{
+                                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                                      backgroundColor: DESIGN_SYSTEM.colors.primary[100],
+                                      color: DESIGN_SYSTEM.colors.primary[700],
+                                      border: `1px solid ${DESIGN_SYSTEM.colors.primary[300]}`,
+                                      borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                                      fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                                      cursor: 'pointer',
+                                      textDecoration: 'none'
+                                    }}
+                                  >
+                                    {request.quotationFileNames?.[index] || `Quotation ${index + 1}`}
+                                  </button>
+                                ))}
+                                {(!(request.quotationFiles && request.quotationFiles.length > 0) && request.quotationData) && (
+                                  <button
+                                    onClick={() => generatePdfFromQuote(request.quotationData)}
+                                    style={{
+                                      padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                                      backgroundColor: DESIGN_SYSTEM.colors.secondary[100],
+                                      color: DESIGN_SYSTEM.colors.text.primary,
+                                      border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                                      borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                                      fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    View as PDF
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        )}
-
-                        {/* Other Attachments */}
-                        {request.attachedFiles?.length > 0 && (
-                          <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
-                            <h4 style={{
-                              margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
-                              fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                              fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
-                              color: DESIGN_SYSTEM.colors.text.primary
-                            }}>
-                              Attachments
-                            </h4>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.xs }}>
-                              {(request.attachedFiles || []).map((fileUrl, index) => {
-                                const name = request.attachedFileNames?.[index] || `File ${index + 1}`;
-                                const isPdf = (name || '').toLowerCase().endsWith('.pdf');
-                                return (
-                                  <div key={index} style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.xs, alignItems: 'center' }}>
-                                    <button
-                                      onClick={() => {
-                                        downloadFile(fileUrl, name);
-                                      }}
-                                      style={{
-                                        padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
-                                        backgroundColor: DESIGN_SYSTEM.colors.secondary[100],
-                                        color: DESIGN_SYSTEM.colors.text.primary,
-                                        border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
-                                        borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                                        fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
-                                        cursor: 'pointer',
-                                        textDecoration: 'none'
-                                      }}
-                                    >
-                                      {name}
-                                    </button>
-                                    {isPdf && (
+                            {/* Right: Attachments */}
+                            <div>
+                              <h4 style={{
+                                margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
+                                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                                fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
+                                color: DESIGN_SYSTEM.colors.text.primary
+                              }}>
+                                Attachments
+                              </h4>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.xs }}>
+                                {(request.attachedFiles || []).map((fileUrl, index) => {
+                                  const name = request.attachedFileNames?.[index] || `File ${index + 1}`;
+                                  const isPdf = (name || '').toLowerCase().endsWith('.pdf');
+                                  return (
+                                    <div key={index} style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.xs, alignItems: 'center' }}>
                                       <button
-                                        onClick={() => openSignModal(request.id, fileUrl, name)}
+                                        onClick={() => {
+                                          downloadFile(fileUrl, name);
+                                        }}
                                         style={{
                                           padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
-                                          backgroundColor: DESIGN_SYSTEM.colors.success + '20',
-                                          color: DESIGN_SYSTEM.colors.success,
-                                          border: `1px solid ${DESIGN_SYSTEM.colors.success}`,
+                                          backgroundColor: DESIGN_SYSTEM.colors.secondary[100],
+                                          color: DESIGN_SYSTEM.colors.text.primary,
+                                          border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
                                           borderRadius: DESIGN_SYSTEM.borderRadius.base,
                                           fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
-                                          cursor: 'pointer'
+                                          cursor: 'pointer',
+                                          textDecoration: 'none'
                                         }}
                                       >
-                                        Sign
+                                        {name}
                                       </button>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                                      {isPdf && (
+                                        <button
+                                          onClick={() => openSignModal(request.id, fileUrl, name)}
+                                          style={{
+                                            padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                                            backgroundColor: DESIGN_SYSTEM.colors.success + '20',
+                                            color: DESIGN_SYSTEM.colors.success,
+                                            border: `1px solid ${DESIGN_SYSTEM.colors.success}`,
+                                            borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                                            fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          Sign
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -2018,6 +2046,7 @@ export default function ApprovalPage() {
             <div style={{ padding: DESIGN_SYSTEM.spacing.base, borderBottom: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm }}>
               <div style={{ fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>Sign PDF: {signTarget.fileName}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm }}>
+                <button onClick={refreshPdfLayout} style={{ ...getButtonStyle('secondary', 'neutral') }}>Refresh</button>
                 <button onClick={() => setShowSignModal(false)} style={{ ...getButtonStyle('secondary', 'neutral') }}>Close</button>
               </div>
             </div>
