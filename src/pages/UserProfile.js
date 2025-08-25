@@ -400,12 +400,27 @@ export default function UserProfile() {
             </h1>
 
             <p style={{
-              margin: `0 0 ${DESIGN_SYSTEM.spacing.lg} 0`,
+              margin: `0 0 ${DESIGN_SYSTEM.spacing.xs} 0`,
               color: DESIGN_SYSTEM.colors.text.secondary,
               fontSize: DESIGN_SYSTEM.typography.fontSize.sm
             }}>
               {userProfile.company || 'Company not specified'}
             </p>
+
+            {(userProfile.jobTitle || userProfile.phone) && (
+              <div style={{ marginBottom: DESIGN_SYSTEM.spacing.lg }}>
+                {userProfile.jobTitle && (
+                  <div style={{ color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>
+                    {userProfile.jobTitle}
+                  </div>
+                )}
+                {userProfile.phone && (
+                  <div style={{ color: DESIGN_SYSTEM.colors.text.primary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>
+                    {userProfile.phone}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div style={{
               display: 'grid',
@@ -696,7 +711,7 @@ function ComprehensiveEditProfileModal({
               border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
               borderRadius: DESIGN_SYSTEM.borderRadius.base,
               padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
-              placeholder="+1 (555) 123-4567"
+              placeholder="+60 12-345 6789"
               disabled={loading}
             />
           </div>

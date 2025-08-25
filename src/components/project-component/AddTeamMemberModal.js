@@ -52,6 +52,7 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
   const handleAddMember = async () => {
     setLoading(true);
     setError(null);
+    let success = false;
 
     // Check if user selected from dropdown or entered email
     let memberUid = selectedUserId;
@@ -66,7 +67,7 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
         if (querySnapshot.empty) {
           setError("No user found with this email.");
           setLoading(false);
-          return;
+          return false;
         }
 
         const memberDoc = querySnapshot.docs[0];
@@ -74,14 +75,14 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
       } catch (emailError) {
         setError("Error finding user by email.");
         setLoading(false);
-        return;
+        return false;
       }
     }
 
     if (!memberUid) {
       setError("Please select a user or enter an email.");
       setLoading(false);
-      return;
+      return false;
     }
 
     try {
@@ -97,7 +98,7 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
         if (currentTeam.includes(memberUid)) {
           setError("This user is already a member of this project.");
           setLoading(false);
-          return;
+          return false;
         }
 
         // 3. Add the memberUid to the project's team array
@@ -108,6 +109,7 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
         onTeamMemberAdded(memberUid); // Notify parent component
         setMemberEmail('');
         setSelectedUserId('');
+        success = true;
         onClose();
       } else {
         setError("Project not found.");
@@ -118,6 +120,7 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
       setError("Failed to add team member: " + err.message);
     } finally {
       setLoading(false);
+      return success;
     }
   };
 
@@ -201,8 +204,8 @@ export default function AddTeamMemberModal({ isOpen, onClose, projectId, onTeamM
             Cancel
           </button>
           <button onClick={async () => {
-            await handleAddMember();
-            if (!error) {
+            const wasAdded = await handleAddMember();
+            if (wasAdded) {
               const popup = document.createElement('div');
               popup.textContent = 'Member added successfully!';
               popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:20px;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.15);z-index:1100;color:#16a34a;font-weight:600';

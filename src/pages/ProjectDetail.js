@@ -690,27 +690,35 @@ export default function ProjectDetail() {
       alert("You don't have permission to remove team members from this project.");
       return;
     }
-
-    if (true) {
-      try {
-        const projectRef = doc(db, "projects", projectData.id);
-        await updateDoc(projectRef, {
-          team: projectData.team.filter(uid => uid !== memberUid)
-        });
-        setProjectData(prevData => ({ 
-          ...prevData, 
-          team: prevData.team.filter(uid => uid !== memberUid) 
-        }));
-        const popup = document.createElement('div');
-        popup.textContent = 'Team member removed';
-        popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:20px;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.15);z-index:1100;color:#ef4444;font-weight:600';
-        document.body.appendChild(popup);
-        setTimeout(() => document.body.removeChild(popup), 1200);
-      } catch (error) {
-        console.error("Error removing team member:", error);
-        alert("Failed to remove team member.");
+    setConfirmModalConfig({
+      title: 'Remove team member',
+      message: 'Are you sure you want to remove this member from the project?',
+      confirmText: 'Remove',
+      confirmButtonType: 'danger',
+      onConfirm: async () => {
+        try {
+          const projectRef = doc(db, "projects", projectData.id);
+          await updateDoc(projectRef, {
+            team: projectData.team.filter(uid => uid !== memberUid)
+          });
+          setProjectData(prevData => ({ 
+            ...prevData, 
+            team: prevData.team.filter(uid => uid !== memberUid) 
+          }));
+          const popup = document.createElement('div');
+          popup.textContent = 'Team member removed';
+          popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:20px;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.15);z-index:1100;color:#ef4444;font-weight:600';
+          document.body.appendChild(popup);
+          setTimeout(() => document.body.removeChild(popup), 1200);
+        } catch (error) {
+          console.error("Error removing team member:", error);
+          alert("Failed to remove team member.");
+        } finally {
+          setShowConfirmModal(false);
+        }
       }
-    }
+    });
+    setShowConfirmModal(true);
   };
 
   // Live meeting participants

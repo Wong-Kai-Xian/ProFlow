@@ -4,10 +4,12 @@ import { FaCopy } from 'react-icons/fa';
 import { Link } from 'react-router-dom'; // Import Link
 import { getAcceptedTeamMembers } from '../../services/teamService';
 import { db } from '../../firebase';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function InviteMemberModal({ isOpen, onClose, forumId, forumName, members, onAddMember, currentUser }) {
   const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState('');
   const [activeTab, setActiveTab] = useState('shareId'); // 'shareId' or 'addExisting'
   const [acceptedMembers, setAcceptedMembers] = useState([]);
@@ -70,11 +72,45 @@ export default function InviteMemberModal({ isOpen, onClose, forumId, forumName,
     }
   };
 
-  const handleInvite = () => {
-    if (newMemberEmail.trim()) {
-      onAddMember(newMemberEmail.trim());
+  const handleInvite = async () => {
+    setError('');
+    const email = newMemberEmail.trim();
+    if (!email) return;
+    try {
+      setLoading(true);
+      // Lookup user by email
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', email));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        setError('No user found with this email.');
+        setLoading(false);
+        return;
+      }
+      const userDoc = snap.docs[0];
+      const uid = userDoc.data().uid || userDoc.id;
+      // Prevent duplicate
+      const alreadyMember = (members || []).some(m => (m.id || m.uid) === uid);
+      if (alreadyMember) {
+        setError('This user is already a member of this forum.');
+        setLoading(false);
+        return;
+      }
+      // Add to forum members array
+      const forumRef = doc(db, 'forums', forumId);
+      await updateDoc(forumRef, { members: arrayUnion(uid) });
       setNewMemberEmail('');
       onClose();
+      // Optional: toast
+      const popup = document.createElement('div');
+      popup.textContent = 'Member added to forum';
+      Object.assign(popup.style, { position: 'fixed', bottom: '20px', right: '20px', background: '#111827', color: '#fff', padding: '10px 12px', borderRadius: '8px', zIndex: 4000 });
+      document.body.appendChild(popup); setTimeout(() => document.body.removeChild(popup), 1200);
+    } catch (e) {
+      console.error('Invite by email failed', e);
+      setError('Failed to add member. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -256,8 +292,7 @@ export default function InviteMemberModal({ isOpen, onClose, forumId, forumName,
           </div>
         )}
 
-        {/* Invite by Email (optional, if direct invite is desired) */}
-        {/*
+        {/* Invite by Email */}
         <div style={{ marginBottom: '20px' }}>
           <label style={{
             display: 'block',
@@ -266,20 +301,21 @@ export default function InviteMemberModal({ isOpen, onClose, forumId, forumName,
             fontSize: '16px',
             fontWeight: '600'
           }}>
-            Invite by Email
+            Add by Email
           </label>
           <div style={{ display: 'flex', gap: '8px' }}>
             <input
               type="email"
               value={newMemberEmail}
               onChange={(e) => setNewMemberEmail(e.target.value)}
-              placeholder="Enter member email"
+              placeholder="user@example.com"
               style={{
                 ...INPUT_STYLES.base,
                 flex: 1,
                 fontSize: '16px',
                 padding: '12px'
               }}
+              disabled={loading}
             />
             <button
               onClick={handleInvite}
@@ -288,12 +324,13 @@ export default function InviteMemberModal({ isOpen, onClose, forumId, forumName,
                 padding: '12px 24px',
                 fontSize: '16px'
               }}
+              disabled={loading || !newMemberEmail.trim()}
             >
-              Invite
+              {loading ? 'Adding...' : 'Add'}
             </button>
           </div>
+          {error && <div style={{ color: COLORS.danger, marginTop: '8px', fontSize: '14px' }}>{error}</div>}
         </div>
-        */}
 
         {/* Current Members List (optional, showing for context) */}
         <div style={{ marginBottom: '24px' }}>
