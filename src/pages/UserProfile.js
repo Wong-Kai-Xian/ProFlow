@@ -127,23 +127,26 @@ export default function UserProfile() {
     const run = async () => {
       try {
         if (!currentUser || !userId || (currentUser.uid === userId)) { setSharedProjects([]); setSharedForums([]); return; }
-        // Ensure we have the viewed user's email for project matching
-        const targetEmail = (userProfile && (userProfile.email || '')) || '';
-        // Shared Projects (projects.team contains emails)
-        try {
-          const projSnap = await getDocs(query(collection(db, 'projects'), where('team', 'array-contains', currentUser.email || '')));
-          const commons = [];
-          projSnap.forEach(p => {
-            const d = p.data();
-            const teamArr = Array.isArray(d.team) ? d.team : [];
-            if (targetEmail && teamArr.includes(targetEmail)) {
-              commons.push({ id: p.id, name: d.name || 'Project' });
-            }
-          });
-          setSharedProjects(commons);
-        } catch {
-          setSharedProjects([]);
-        }
+        const resultsMap = new Map();
+        const push = (snap) => {
+          snap.forEach(p => { const d = p.data(); resultsMap.set(p.id, { id: p.id, data: d }); });
+        };
+        try { push(await getDocs(query(collection(db, 'projects'), where('team', 'array-contains', currentUser.uid)))); } catch {}
+        try { push(await getDocs(query(collection(db, 'projects'), where('createdBy', '==', currentUser.uid)))); } catch {}
+        try { push(await getDocs(query(collection(db, 'projects'), where('userId', '==', currentUser.uid)))); } catch {}
+        try { push(await getDocs(query(collection(db, 'projects'), where('ownerId', '==', currentUser.uid)))); } catch {}
+
+        const shared = [];
+        resultsMap.forEach((val, id) => {
+          const d = val.data || {};
+          const teamArr = Array.isArray(d.team) ? d.team : [];
+          const ownedByViewed = (d.createdBy === userId) || (d.userId === userId) || (d.ownerId === userId);
+          if (teamArr.includes(userId) || ownedByViewed) {
+            shared.push({ id, name: d.name || 'Project' });
+          }
+        });
+        setSharedProjects(shared);
+
         // Shared Forums (forums.members contains UIDs)
         try {
           const forumSnap = await getDocs(query(collection(db, 'forums'), where('members', 'array-contains', currentUser.uid)));
