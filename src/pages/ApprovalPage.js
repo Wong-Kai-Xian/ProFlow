@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import { DESIGN_SYSTEM, getPageContainerStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
@@ -19,7 +19,20 @@ import {
   getDocs,
   arrayUnion
 } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, getBlob, ref as storageRefFromPath } from 'firebase/storage';
+import { PDFDocument } from 'pdf-lib';
+
+// Configure pdf.js worker globally using URL pattern supported by CRA
+// eslint-disable-next-line no-unused-vars
+let pdfjsLibStatic;
+try {
+  // Prefer ESM entry; fallback gracefully if not available
+  // eslint-disable-next-line global-require
+  pdfjsLibStatic = require('pdfjs-dist/build/pdf');
+  // eslint-disable-next-line global-require
+  const workerSrc = require('pdfjs-dist/build/pdf.worker.js');
+  try { pdfjsLibStatic.GlobalWorkerOptions.workerSrc = workerSrc; } catch {}
+} catch {}
 
 export default function ApprovalPage() {
   const navigate = useNavigate();
@@ -48,6 +61,18 @@ export default function ApprovalPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [requestToDelete, setRequestToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // eSign modal state
+  const [showSignModal, setShowSignModal] = useState(false);
+  const [signTarget, setSignTarget] = useState({ fileUrl: '', fileName: '', requestId: '' });
+  const signCanvasRef = useRef(null);
+  const [isSigning, setIsSigning] = useState(false);
+  const [signMode, setSignMode] = useState(false);
+  const pdfContainerRef = useRef(null);
+  const [pdfjsApi, setPdfjsApi] = useState(null);
+  const [pdfDocProxy, setPdfDocProxy] = useState(null);
+  const [pageViews, setPageViews] = useState([]); // {pageNum, canvas, overlay, hasInk}
+  const [pdfRenderFailed, setPdfRenderFailed] = useState(false);
 
   const REQUESTS_PER_PAGE = 10;
 
@@ -424,6 +449,307 @@ export default function ApprovalPage() {
         console.error('Failed to show quotation preview', err);
         alert('Unable to preview quotation');
       }
+    }
+  };
+
+  // eSign helpers
+  const openSignModal = (requestId, fileUrl, fileName) => {
+    setSignTarget({ requestId, fileUrl, fileName });
+    setShowSignModal(true);
+    setSignMode(true);
+    setTimeout(() => { try { initPdfJs(fileUrl); } catch {} try { initCanvas(); } catch {} }, 0);
+  };
+
+  // Initialize PDF.js and render pages
+  const initPdfJs = async (urlOverride) => {
+    try {
+      const url = urlOverride || signTarget.fileUrl;
+      if (!url) return;
+      setPdfRenderFailed(false);
+      // Configure worker to local file in public to avoid CDN/module issues
+      try {
+        if (pdfjsLibStatic && pdfjsLibStatic.GlobalWorkerOptions) {
+          pdfjsLibStatic.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+        }
+      } catch {}
+      const pdfjsLib = pdfjsLibStatic || (await import('pdfjs-dist/build/pdf'));
+      setPdfjsApi(pdfjsLib);
+      // Resolve bytes via Firebase Storage SDK only (no direct fetch to avoid CORS)
+      const resolveBytes = async () => {
+        try {
+          // 1) Try using the SDK with the full download URL
+          try {
+            const directRef = ref(storage, url);
+            const blob = await getBlob(directRef);
+            return await blob.arrayBuffer();
+          } catch {}
+          // 2) Convert googleapis URL to gs://<bucket>/<object> and retry
+          try {
+            const m = url.match(/\/v0\/b\/([^/]+)\/o\/([^?]+)/);
+            if (m && m[1] && m[2]) {
+              let bucket = m[1];
+              const objectPath = decodeURIComponent(m[2]);
+              if (bucket.endsWith('.firebasestorage.app')) {
+                bucket = bucket.replace(/\.firebasestorage\.app$/, '.appspot.com');
+              }
+              const gsUrl = `gs://${bucket}/${objectPath}`;
+              const gsRef = ref(storage, gsUrl);
+              const blob = await getBlob(gsRef);
+              return await blob.arrayBuffer();
+            }
+          } catch {}
+          // Give up (show fallback link)
+          return null;
+        } catch { return null; }
+      };
+
+      let bytes = await resolveBytes();
+      let pdf;
+      if (bytes) {
+        const loadingTaskA = pdfjsLib.getDocument({ data: bytes, disableWorker: true });
+        pdf = await loadingTaskA.promise;
+      } else {
+        // If we could not obtain bytes (likely due to CORS), show fallback UI
+        throw new Error('Unable to load PDF bytes (CORS).');
+      }
+      setPdfDocProxy(pdf);
+      await renderAllPages(pdf);
+    } catch (err) {
+      console.error('PDF.js init failed, falling back to iframe/object', err);
+      setPdfRenderFailed(true);
+      // Fallback: keep old canvas init so at least signing works in overlay
+      initCanvas();
+    }
+  };
+
+  const renderAllPages = async (pdf) => {
+    try {
+      const container = pdfContainerRef.current;
+      if (!container) return;
+      container.innerHTML = '';
+      const newViews = [];
+      const containerWidth = container.clientWidth || 800;
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const unscaled = page.getViewport({ scale: 1 });
+        const scale = containerWidth / unscaled.width;
+        const viewport = page.getViewport({ scale });
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+        wrapper.style.marginBottom = '12px';
+        wrapper.style.width = `${viewport.width}px`;
+        wrapper.style.height = `${viewport.height}px`;
+        wrapper.style.maxWidth = '100%';
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
+        wrapper.appendChild(canvas);
+        const overlay = document.createElement('canvas');
+        overlay.width = canvas.width;
+        overlay.height = canvas.height;
+        overlay.style.position = 'absolute';
+        overlay.style.left = '0';
+        overlay.style.top = '0';
+        overlay.style.width = `${viewport.width}px`;
+        overlay.style.height = `${viewport.height}px`;
+        overlay.style.cursor = signMode ? 'crosshair' : 'default';
+        overlay.style.pointerEvents = signMode ? 'auto' : 'none';
+        overlay.style.touchAction = 'none';
+        wrapper.appendChild(overlay);
+        container.appendChild(wrapper);
+        try {
+          await page.render({ canvasContext: ctx, viewport }).promise;
+        } catch (e) {
+          console.error('Page render failed', e);
+        }
+        const view = { pageNum: i, canvas, overlay, hasInk: false };
+        wireOverlay(view);
+        newViews.push(view);
+      }
+      setPageViews(newViews);
+    } catch (e) {
+      console.error('Render pages failed', e);
+    }
+  };
+
+  const wireOverlay = (view) => {
+    try {
+      const overlay = view.overlay;
+      const ctx = overlay.getContext('2d');
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#111827';
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      let drawing = false;
+      const getPos = (e) => {
+        const rect = overlay.getBoundingClientRect();
+        const clientX = (e.touches ? e.touches[0].clientX : (e.clientX ?? 0));
+        const clientY = (e.touches ? e.touches[0].clientY : (e.clientY ?? 0));
+        return { x: clientX - rect.left, y: clientY - rect.top };
+      };
+      const start = (e) => { if (!signMode) return; drawing = true; setIsSigning(true); view.hasInk = true; const { x, y } = getPos(e); ctx.beginPath(); ctx.moveTo(x, y); e.preventDefault(); };
+      const move = (e) => { if (!signMode || !drawing) return; const { x, y } = getPos(e); ctx.lineTo(x, y); ctx.stroke(); e.preventDefault(); };
+      const end = () => { drawing = false; };
+      overlay.onpointerdown = start;
+      overlay.onpointermove = move;
+      overlay.onpointerup = end;
+      overlay.onpointercancel = end;
+    } catch {}
+  };
+
+  // When toggling sign mode, update overlays pointer events
+  useEffect(() => {
+    try {
+      pageViews.forEach(v => {
+        if (v.overlay) {
+          v.overlay.style.pointerEvents = 'auto';
+          v.overlay.style.cursor = 'crosshair';
+        }
+      });
+    } catch {}
+  }, [pageViews]);
+
+  const initCanvas = () => {
+    try {
+      const canvas = signCanvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      // Transparent background overlay
+      const setSize = () => {
+        const w = canvas.clientWidth || 640;
+        const h = canvas.clientHeight || 480;
+        canvas.width = Math.max(1, Math.floor(w));
+        canvas.height = Math.max(1, Math.floor(h));
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#111827';
+        ctx.lineWidth = 2;
+      };
+      setSize();
+      try { window.removeEventListener('resize', setSize); } catch {}
+      window.addEventListener('resize', setSize);
+      canvas.style.touchAction = 'none';
+      let drawing = false;
+      const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = (e.touches ? e.touches[0].clientX : (e.clientX ?? 0));
+        const clientY = (e.touches ? e.touches[0].clientY : (e.clientY ?? 0));
+        return { x: clientX - rect.left, y: clientY - rect.top };
+      };
+      const start = (e) => { drawing = true; setIsSigning(true); try { canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); } catch {} const { x, y } = getPos(e); ctx.beginPath(); ctx.moveTo(x, y); };
+      const move = (e) => { if (!drawing) return; const { x, y } = getPos(e); ctx.lineTo(x, y); ctx.stroke(); };
+      const end = (e) => { drawing = false; try { canvas.releasePointerCapture && canvas.releasePointerCapture(e?.pointerId); } catch {} };
+      canvas.onpointerdown = start;
+      canvas.onpointermove = move;
+      canvas.onpointerup = end;
+      canvas.onpointercancel = end;
+    } catch {}
+  };
+
+  const clearSignature = () => {
+    if (pageViews && pageViews.length) {
+      pageViews.forEach(v => {
+        try { v.overlay?.getContext('2d')?.clearRect(0, 0, v.overlay.width, v.overlay.height); } catch {}
+        v.hasInk = false;
+      });
+      setIsSigning(false);
+      return;
+    }
+    // Fallback for old single overlay
+    const canvas = signCanvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setIsSigning(false);
+  };
+
+  const applySignature = async () => {
+    try {
+      // Load original PDF bytes via Storage SDK (avoid direct fetch)
+      const loadBytes = async () => {
+        try {
+          const directRef = ref(storage, signTarget.fileUrl);
+          const blob = await getBlob(directRef);
+          return await blob.arrayBuffer();
+        } catch {}
+        try {
+          const m = (signTarget.fileUrl || '').match(/\/v0\/b\/([^/]+)\/o\/([^?]+)/);
+          if (m && m[1] && m[2]) {
+            const bucket = m[1];
+            const objectPath = decodeURIComponent(m[2]);
+            const gsUrl = `gs://${bucket}/${objectPath}`;
+            const gsRef = ref(storage, gsUrl);
+            const blob = await getBlob(gsRef);
+            return await blob.arrayBuffer();
+          }
+        } catch {}
+        // As a last resort, try network fetch (CORS should be set now)
+        try {
+          let url = signTarget.fileUrl || '';
+          if (url.includes('firebasestorage.googleapis.com') && !/alt=media/.test(url)) {
+            url += (url.includes('?') ? '&' : '?') + 'alt=media';
+          }
+          const resp = await fetch(url, { method: 'GET', credentials: 'omit' });
+          if (resp.ok) {
+            return await resp.arrayBuffer();
+          }
+        } catch {}
+        throw new Error('Unable to load original PDF bytes');
+      };
+      const arrayBuf = await loadBytes();
+      const pdfDoc = await PDFDocument.load(arrayBuf);
+      // If we have per-page overlays, composite them page by page
+      if (pageViews && pageViews.length) {
+        const pages = pdfDoc.getPages();
+        let anyInk = false;
+        for (let i = 0; i < Math.min(pages.length, pageViews.length); i++) {
+          const v = pageViews[i];
+          const overlay = v.overlay;
+          if (!overlay) continue;
+          // Skip empty overlays
+          if (!v.hasInk) continue;
+          anyInk = true;
+          const pngBlob = await new Promise((resolve) => overlay.toBlob(resolve, 'image/png'));
+          if (!pngBlob) continue;
+          const pngBytes = await pngBlob.arrayBuffer();
+          const pngImage = await pdfDoc.embedPng(pngBytes);
+          const page = pages[i];
+          const { width, height } = page.getSize();
+          // Overlay canvas is rendered at same pixel dimensions as page viewport scale; fit to full page
+          page.drawImage(pngImage, { x: 0, y: 0, width, height, opacity: 0.98 });
+        }
+        if (!anyInk) {
+          alert('No signature drawn. Please sign before applying.');
+          return;
+        }
+      } else {
+        // Fallback to single overlay behavior (place at bottom-right)
+        const canvas = signCanvasRef.current; if (!canvas) return;
+        const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+        if (!pngBlob) throw new Error('Unable to capture signature image');
+        const pngBytes = await pngBlob.arrayBuffer();
+        const pngImage = await pdfDoc.embedPng(pngBytes);
+        const pages = pdfDoc.getPages();
+        const page = pages[pages.length - 1];
+        const { width } = page.getSize();
+        const sigWidth = Math.min(300, width * 0.5);
+        const sigHeight = (pngImage.height / pngImage.width) * sigWidth;
+        const margin = 36;
+        page.drawImage(pngImage, { x: width - sigWidth - margin, y: margin, width: sigWidth, height: sigHeight, opacity: 0.95 });
+      }
+      const signedBytes = await pdfDoc.save();
+      const blob = new Blob([signedBytes], { type: 'application/pdf' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (signTarget.fileName?.replace(/\.pdf$/i, '') || 'document') + '-signed.pdf';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setShowSignModal(false);
+      setSignTarget({ fileUrl: '', fileName: '', requestId: '' });
+      setIsSigning(false);
+    } catch (e) {
+      console.error('Failed to sign PDF', e);
+      alert('Failed to sign PDF: ' + (e && e.message ? e.message : 'Unknown error'));
     }
   };
 
@@ -1168,29 +1494,48 @@ export default function ApprovalPage() {
                             }}>
                               Attachments
                             </h4>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: DESIGN_SYSTEM.spacing.xs }}>
-                              {request.attachedFiles.map((fileUrl, index) => (
-                                <button
-                                  key={index}
-                                  onClick={() => {
-                                    const name = request.attachedFileNames?.[index] || `File ${index + 1}`;
-                                    console.log('Downloading attached file:', fileUrl, name);
-                                    downloadFile(fileUrl, name);
-                                  }}
-                                  style={{
-                                    padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
-                                    backgroundColor: DESIGN_SYSTEM.colors.secondary[100],
-                                    color: DESIGN_SYSTEM.colors.text.primary,
-                                    border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
-                                    borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                                    fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
-                                    cursor: 'pointer',
-                                    textDecoration: 'none'
-                                  }}
-                                >
-                                  {request.attachedFileNames?.[index] || `File ${index + 1}`}
-                                </button>
-                              ))}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.xs }}>
+                              {(request.attachedFiles || []).map((fileUrl, index) => {
+                                const name = request.attachedFileNames?.[index] || `File ${index + 1}`;
+                                const isPdf = (name || '').toLowerCase().endsWith('.pdf');
+                                return (
+                                  <div key={index} style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.xs, alignItems: 'center' }}>
+                                    <button
+                                      onClick={() => {
+                                        downloadFile(fileUrl, name);
+                                      }}
+                                      style={{
+                                        padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                                        backgroundColor: DESIGN_SYSTEM.colors.secondary[100],
+                                        color: DESIGN_SYSTEM.colors.text.primary,
+                                        border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                                        borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                                        fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                                        cursor: 'pointer',
+                                        textDecoration: 'none'
+                                      }}
+                                    >
+                                      {name}
+                                    </button>
+                                    {isPdf && (
+                                      <button
+                                        onClick={() => openSignModal(request.id, fileUrl, name)}
+                                        style={{
+                                          padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.sm}`,
+                                          backgroundColor: DESIGN_SYSTEM.colors.success + '20',
+                                          color: DESIGN_SYSTEM.colors.success,
+                                          border: `1px solid ${DESIGN_SYSTEM.colors.success}`,
+                                          borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                                          fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        Sign
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -1666,6 +2011,39 @@ export default function ApprovalPage() {
           }
         `}
       </style>
+      {/* eSign Modal */}
+      {showSignModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+          <div style={{ background: '#fff', borderRadius: 12, width: '96%', maxWidth: 1200, maxHeight: '90vh', overflow: 'auto', boxShadow: DESIGN_SYSTEM.shadows.lg, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base, borderBottom: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm }}>
+              <div style={{ fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>Sign PDF: {signTarget.fileName}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm }}>
+                <button onClick={() => setShowSignModal(false)} style={{ ...getButtonStyle('secondary', 'neutral') }}>Close</button>
+              </div>
+            </div>
+            <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
+              <div style={{ marginBottom: DESIGN_SYSTEM.spacing.sm, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>
+                Review the document (full width with scrolling) and draw your signature below, then click Apply. A signed copy will be downloaded.
+              </div>
+              <div style={{ position: 'relative', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8, marginBottom: DESIGN_SYSTEM.spacing.sm, overflow: 'auto', height: '70vh' }}>
+                <div ref={pdfContainerRef} style={{ position: 'relative', width: '100%', margin: '0 auto' }} />
+                {pdfRenderFailed && (
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.8)' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ marginBottom: 8 }}>PDF preview failed.</div>
+                      <button onClick={() => window.open(signTarget.fileUrl, '_blank', 'noopener,noreferrer')} style={{ ...getButtonStyle('secondary', 'neutral') }}>Open PDF</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.sm, marginTop: DESIGN_SYSTEM.spacing.sm, position: 'sticky', bottom: 0, background: '#fff', paddingTop: DESIGN_SYSTEM.spacing.sm }}>
+                <button onClick={clearSignature} style={{ ...getButtonStyle('secondary', 'neutral') }}>Clear</button>
+                <button onClick={applySignature} disabled={!isSigning} style={{ ...getButtonStyle('primary', 'neutral'), opacity: isSigning ? 1 : 0.6, cursor: isSigning ? 'pointer' : 'not-allowed' }}>Apply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
