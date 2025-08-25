@@ -286,7 +286,7 @@ export default function ProjectWorkspacePanel({
 
         {activeTab === 'Quotes' && (
           selectedProjectId ? (
-            <ProjectQuotesPanel projectId={selectedProjectId} />
+            <ProjectQuotesPanel projectId={selectedProjectId} hideConvert={true} />
           ) : (
             <CustomerQuotesPanel
               customerId={customerId}

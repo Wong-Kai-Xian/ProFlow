@@ -3,7 +3,7 @@ import { db } from '../../firebase';
 import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
 import { DESIGN_SYSTEM, getCardStyle, getButtonStyle } from '../../styles/designSystem';
 
-export default function ProjectQuotesPanel({ projectId }) {
+export default function ProjectQuotesPanel({ projectId, hideConvert = false }) {
   const [quotes, setQuotes] = useState([]);
   const [toasts, setToasts] = useState([]);
 
@@ -127,7 +127,9 @@ export default function ProjectQuotesPanel({ projectId }) {
                 <div>{Number(q.total||0).toFixed(2)}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button onClick={() => printQuote(q)} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>Print</button>
-                  <button onClick={() => convertToInvoice(q)} style={{ ...getButtonStyle('primary', 'projects'), padding: '6px 10px', fontSize: 12 }}>Convert to Invoice</button>
+                  {!hideConvert && (
+                    <button disabled={q.status === 'converted'} onClick={() => convertToInvoice(q)} style={{ ...getButtonStyle('primary', 'projects'), padding: '6px 10px', fontSize: 12, opacity: q.status === 'converted' ? 0.6 : 1, cursor: q.status === 'converted' ? 'not-allowed' : 'pointer' }}>{q.status === 'converted' ? 'Converted' : 'Convert to Invoice'}</button>
+                  )}
                 </div>
               </div>
             ))
