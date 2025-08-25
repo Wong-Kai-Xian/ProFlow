@@ -4,6 +4,7 @@ import { db, storage } from '../../firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, where, updateDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getAcceptedTeamMembersForProject } from "../../services/teamService";
+import { getAcceptedTeamMembers } from "../../services/teamService";
 
 export default function AdvancedApprovalRequestModal({
   isOpen,
@@ -16,12 +17,19 @@ export default function AdvancedApprovalRequestModal({
   currentUser,
   currentStage = "",
   nextStage = "",
-  isStageAdvancement = true // New prop to determine if this is for stage advancement
+  isStageAdvancement = true, // New prop to determine if this is for stage advancement
+  autoAttachQuotation = false,
+  onCreateProject = null,
+  customerProfileData = null,
+  companyProfileData = null,
+  quoteProjectId = null,
+  quoteProjectName = ""
 }) {
   // Form data states
   const [requestTitle, setRequestTitle] = useState("");
   const [requestDescription, setRequestDescription] = useState("");
   const [attachedFiles, setAttachedFiles] = useState([]);
+  const [autoAttachedFiles, setAutoAttachedFiles] = useState([]); // URLs prefilled by system
   const [selectedDecisionMaker, setSelectedDecisionMaker] = useState(null);
   const [selectedViewers, setSelectedViewers] = useState([]);
   const [allRecipients, setAllRecipients] = useState([]);
@@ -38,10 +46,96 @@ export default function AdvancedApprovalRequestModal({
   const [showViewersDropdown, setShowViewersDropdown] = useState(false);
   const [noApprovalNeeded, setNoApprovalNeeded] = useState(false);
 
+  // Inline Create Project form states (mirror CreateProjectModal)
+  const [cpProjectName, setCpProjectName] = useState("");
+  const [cpCompanyName, setCpCompanyName] = useState("");
+  const [cpCustomerEmail, setCpCustomerEmail] = useState("");
+  const [cpCustomerName, setCpCustomerName] = useState("");
+  const [cpTeamMembersEmails, setCpTeamMembersEmails] = useState([]);
+  const [cpTeamMembers, setCpTeamMembers] = useState([]);
+  const [cpNewMemberId, setCpNewMemberId] = useState("");
+  const [cpSelectedStage, setCpSelectedStage] = useState("Planning");
+  const [cpDeadline, setCpDeadline] = useState("");
+  const [cpDescription, setCpDescription] = useState("");
+  const [cpAllowJoinById, setCpAllowJoinById] = useState(true);
+  const [cpAcceptedTeamMembers, setCpAcceptedTeamMembers] = useState([]);
+  const [cpLoadingAcceptedMembers, setCpLoadingAcceptedMembers] = useState(false);
+
+  // Helper: generate a simple PDF from quote data
+  const generatePdfFromQuote = async (quoteData, displayName = 'Quotation') => {
+    try {
+      const pdfLib = await import('pdf-lib');
+      const { PDFDocument, StandardFonts, rgb } = pdfLib;
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([595, 842]); // A4 portrait
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+      let y = 800;
+      const left = 50;
+      const line = (text, opts = {}) => {
+        const { bold = false, size = 12, color = rgb(0, 0, 0) } = opts;
+        page.drawText(String(text || ''), {
+          x: left,
+          y,
+          size,
+          font: bold ? fontBold : font,
+          color
+        });
+        y -= size + 6;
+      };
+
+      line(displayName, { bold: true, size: 18 });
+      line(`Client: ${quoteData.client || quoteData.customer || ''}`);
+      line(`Date: ${new Date().toLocaleDateString()}`);
+      line('');
+      line('Items:', { bold: true });
+      const items = Array.isArray(quoteData.items) ? quoteData.items : [];
+      items.slice(0, 20).forEach((it, idx) => {
+        const desc = it.description || it.name || `Item ${idx + 1}`;
+        const qty = Number(it.qty || it.quantity || 1);
+        const unit = Number(it.unitPrice || it.price || it.rate || 0);
+        const total = (qty * unit).toFixed(2);
+        line(`- ${desc}  x${qty}  @ ${unit} = ${total}`);
+      });
+      line('');
+      const subtotal = items.reduce((s, it) => s + Number(it.qty || it.quantity || 1) * Number(it.unitPrice || it.price || it.rate || 0), 0);
+      const taxRate = Number(quoteData.taxRate || 0);
+      const discount = Number(quoteData.discount || 0);
+      const taxed = subtotal * (taxRate / 100);
+      const grand = subtotal + taxed - discount;
+      line(`Subtotal: ${subtotal.toFixed(2)}`);
+      line(`Tax (${taxRate}%): ${taxed.toFixed(2)}`);
+      line(`Discount: ${discount.toFixed(2)}`);
+      line(`Total: ${grand.toFixed(2)}`, { bold: true });
+
+      const bytes = await pdfDoc.save();
+      return new Blob([bytes], { type: 'application/pdf' });
+    } catch (e) {
+      console.warn('Failed to generate PDF from quote', e);
+      return null;
+    }
+  };
+
   // Request type - Project or Customer
   const requestType = projectId ? 'Project' : 'Customer';
-  const entityName = projectId ? projectName : customerName;
   const entityId = projectId || customerId;
+  const clean = (s) => {
+    const t = (s || '').trim();
+    if (!t) return '';
+    if (/^unknown\b/i.test(t)) return '';
+    return t;
+  };
+  const effectiveEntityName = requestType === 'Project'
+    ? (projectName || quoteProjectName || 'Project')
+    : (
+        clean(customerName)
+        || customerProfileData?.name
+        || `${(customerProfileData?.firstName||'').trim()} ${(customerProfileData?.lastName||'').trim()}`.trim()
+        || companyProfileData?.companyName
+        || companyProfileData?.company
+        || 'Customer'
+      );
 
   // Fetch available recipients when modal opens
   useEffect(() => {
@@ -132,12 +226,13 @@ export default function AdvancedApprovalRequestModal({
     fetchRecipients();
   }, [isOpen, currentUser, projectId, customerId]);
 
-  // Reset form when modal opens/closes
+  // Reset form and optionally auto-attach quotation when modal opens/closes
   useEffect(() => {
-    if (isOpen) {
+    const maybeAttachQuotation = async () => {
       setRequestTitle("");
       setRequestDescription("");
       setAttachedFiles([]);
+      setAutoAttachedFiles([]);
       setSelectedDecisionMaker(null);
       setSelectedViewers([]);
       setDecisionMakerSearchTerm("");
@@ -147,21 +242,193 @@ export default function AdvancedApprovalRequestModal({
       setNoApprovalNeeded(false);
       
       // Set default title based on type and purpose
-                    if (isStageAdvancement) {
-                if (requestType === 'Project') {
-                  setRequestTitle(`Advance ${entityName} from ${currentStage} to ${nextStage}`);
-                } else {
-                  setRequestTitle(`Advance ${entityName} to Next Stage`);
-                }
+      if (isStageAdvancement) {
+        if (requestType === 'Project') {
+          setRequestTitle(`Advance ${effectiveEntityName} from ${currentStage} to ${nextStage}`);
+        } else {
+          setRequestTitle(`Advance ${effectiveEntityName} to Next Stage`);
+        }
+      } else {
+        // Conversion flow (customer) vs generic approval
+        if (requestType === 'Project') {
+          setRequestTitle(`Approval Request for ${effectiveEntityName}`);
+        } else {
+          setRequestTitle(`Convert Customer "${effectiveEntityName}" to Project`);
+        }
+      }
+
+      // Prefill minimal customer/company into inline project fields (leave name empty per requirement)
+      setCpProjectName("");
+      setCpCompanyName(companyProfileData?.company || companyProfileData?.companyName || "");
+      setCpCustomerEmail(customerProfileData?.email || "");
+      setCpCustomerName((customerProfileData?.name || `${customerProfileData?.firstName||''} ${customerProfileData?.lastName||''}`.trim()) || "");
+      setCpTeamMembersEmails([]);
+      setCpTeamMembers([]);
+      setCpNewMemberId("");
+      setCpSelectedStage("Planning");
+      setCpDeadline("");
+      setCpDescription(companyProfileData?.description || "");
+      setCpAllowJoinById(true);
+
+      // Auto-attach quotation based on selected project (if provided) else fallback to customer drafts
+      if (isOpen && autoAttachQuotation) {
+        try {
+          if (quoteProjectId) {
+            // Fetch latest quote from selected project
+            const projQuotesSnap = await getDocs(collection(db, 'projects', quoteProjectId, 'quotes'));
+            if (!projQuotesSnap.empty) {
+              const docs = projQuotesSnap.docs;
+              const last = docs[docs.length - 1];
+              const q = last.data() || {};
+              const pdfUrl = q.pdfUrl || q.fileUrl || q.attachmentUrl || q.renderedPdfUrl || q.renderedPdf;
+              if (pdfUrl) {
+                const fileName = `quotation-${quoteProjectName || 'project'}.pdf`;
+                setAutoAttachedFiles([{ url: pdfUrl, name: fileName }]);
               } else {
-                if (requestType === 'Project') {
-                  setRequestTitle(`Approval Request for ${entityName}`);
-                } else {
-                  setRequestTitle(`Convert Customer "${entityName}" to Project`);
+                // Generate PDF on the fly
+                const pdfBlob = await generatePdfFromQuote(q, `Quotation - ${quoteProjectName || 'Project'}`);
+                if (pdfBlob) {
+                  const fileName = `quotation-${quoteProjectName || 'project'}.pdf`;
+                  const storageRef = ref(storage, `approval_files/${Date.now()}_${fileName}`);
+                  const uploadTask = uploadBytesResumable(storageRef, pdfBlob);
+                  await new Promise((resolve, reject) => {
+                    uploadTask.on('state_changed', () => {}, reject, async () => {
+                      const url = await getDownloadURL(uploadTask.snapshot.ref);
+                      setAutoAttachedFiles([{ url, name: fileName }]);
+                      resolve();
+                    });
+                  });
                 }
               }
+            }
+          } else if (customerId && requestType === 'Customer') {
+            // Fallback to customer quotation drafts
+            const draftsSnap = await getDocs(collection(db, 'customerProfiles', customerId, 'quotesDrafts'));
+            if (!draftsSnap.empty) {
+              const docs = draftsSnap.docs;
+              const last = docs[docs.length - 1];
+              const q = last.data() || {};
+              const pdfUrl = q.pdfUrl || q.fileUrl || q.attachmentUrl || q.renderedPdfUrl || q.renderedPdf;
+              if (pdfUrl) {
+                const fileName = `quotation-${effectiveEntityName || 'customer'}.pdf`;
+                setAutoAttachedFiles([{ url: pdfUrl, name: fileName }]);
+              } else {
+                const pdfBlob = await generatePdfFromQuote(q, `Quotation - ${effectiveEntityName || 'Customer'}`);
+                if (pdfBlob) {
+                  const fileName = `quotation-${effectiveEntityName || 'customer'}.pdf`;
+                  const storageRef = ref(storage, `approval_files/${Date.now()}_${fileName}`);
+                  const uploadTask = uploadBytesResumable(storageRef, pdfBlob);
+                  await new Promise((resolve, reject) => {
+                    uploadTask.on('state_changed', () => {}, reject, async () => {
+                      const url = await getDownloadURL(uploadTask.snapshot.ref);
+                      setAutoAttachedFiles([{ url, name: fileName }]);
+                      resolve();
+                    });
+                  });
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to auto-attach quotation:', err);
+        }
+      }
+    };
+
+    if (isOpen) {
+      maybeAttachQuotation();
     }
-  }, [isOpen, requestType, entityName, currentStage, nextStage]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Load accepted team members for inline project form
+  useEffect(() => {
+    const loadAccepted = async () => {
+      if (!isOpen || !currentUser) return;
+      setCpLoadingAcceptedMembers(true);
+      try {
+        const members = await getAcceptedTeamMembers(currentUser);
+        setCpAcceptedTeamMembers(members || []);
+      } catch {
+        setCpAcceptedTeamMembers([]);
+      } finally {
+        setCpLoadingAcceptedMembers(false);
+      }
+    };
+    loadAccepted();
+  }, [isOpen, currentUser]);
+
+  // Resolve selected emails to user objects for chips
+  useEffect(() => {
+    const resolveMembers = async () => {
+      // Map emails to display objects using accepted list (best-effort)
+      const mapped = cpTeamMembersEmails.map(email => {
+        const hit = cpAcceptedTeamMembers.find(m => m.email === email);
+        return {
+          uid: hit?.id || null,
+          email,
+          displayName: hit?.name || (email ? email.split('@')[0] : 'member')
+        };
+      });
+      setCpTeamMembers(mapped);
+    };
+    resolveMembers();
+  }, [cpTeamMembersEmails, cpAcceptedTeamMembers]);
+
+  const cpAddMember = () => {
+    if (!cpNewMemberId) return;
+    const selected = cpAcceptedTeamMembers.find(m => m.id === cpNewMemberId);
+    if (selected && !cpTeamMembersEmails.includes(selected.email)) {
+      setCpTeamMembersEmails(prev => [...prev, selected.email]);
+      setCpNewMemberId("");
+    }
+  };
+
+  const cpRemoveMember = (email) => {
+    setCpTeamMembersEmails(prev => prev.filter(e => e !== email));
+  };
+
+  const cpSubmitCreateProject = async () => {
+    if (!onCreateProject || !cpProjectName.trim() || !currentUser) return;
+    // Resolve emails -> UIDs
+    let resolvedTeam = [];
+    try {
+      const chunkSize = 10;
+      for (let i = 0; i < cpTeamMembersEmails.length; i += chunkSize) {
+        const chunk = cpTeamMembersEmails.slice(i, i + chunkSize);
+        const usersQuery = query(collection(db, "users"), where("email", "in", chunk));
+        const usersSnapshot = await getDocs(usersQuery);
+        const uidByEmail = new Map();
+        usersSnapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.email) uidByEmail.set(data.email, data.uid || docSnap.id);
+        });
+        chunk.forEach(email => {
+          const uid = uidByEmail.get(email);
+          if (uid) resolvedTeam.push(uid);
+        });
+      }
+    } catch {}
+
+    await Promise.resolve(onCreateProject({
+      name: cpProjectName.trim(),
+      company: cpCompanyName.trim(),
+      contactEmail: cpCustomerEmail.trim(),
+      customerName: cpCustomerName.trim(),
+      companyInfo: {
+        companyName: cpCompanyName.trim(),
+        customerEmail: cpCustomerEmail.trim(),
+        customerName: cpCustomerName.trim()
+      },
+      team: resolvedTeam,
+      stage: cpSelectedStage,
+      description: cpDescription,
+      deadline: cpDeadline || '',
+      ownerId: currentUser.uid,
+      allowJoinById: cpAllowJoinById
+    })).catch(()=>{});
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -219,10 +486,10 @@ export default function AdvancedApprovalRequestModal({
       if (onSuccess) {
         onSuccess({
           type: requestType,
-          entityName,
+          entityName: effectiveEntityName,
           decisionMaker: 'n/a',
           viewerCount: 0,
-          title: requestTitle || `Advance ${entityName} to ${nextStage}`,
+          title: requestTitle || `Advance ${effectiveEntityName} to ${nextStage}`,
           bypassed: true,
           nextStage
         });
@@ -255,6 +522,14 @@ export default function AdvancedApprovalRequestModal({
       // Upload files first
       const fileUrls = [];
       const fileNames = [];
+
+      // Include auto-attached files
+      (autoAttachedFiles || []).forEach(f => {
+        if (f?.url && f?.name) {
+          fileUrls.push(f.url);
+          fileNames.push(f.name);
+        }
+      });
 
       for (let i = 0; i < attachedFiles.length; i++) {
         const file = attachedFiles[i];
@@ -292,7 +567,7 @@ export default function AdvancedApprovalRequestModal({
           
           // Entity information
           entityId,
-          entityName,
+          entityName: effectiveEntityName,
           projectId: projectId || null,
           projectName: projectName || "",
           customerId: customerId || null,
@@ -353,7 +628,7 @@ export default function AdvancedApprovalRequestModal({
             createdAt: serverTimestamp(),
             origin: 'approval',
             title: 'Approval request',
-            message: `${currentUser.displayName || currentUser.email} requested your approval: ${requestTitle} (${requestType}: ${entityName})`,
+            message: `${currentUser.displayName || currentUser.email} requested your approval: ${requestTitle} (${requestType}: ${effectiveEntityName})`,
             refType: 'approval',
             approvalId: approvalRequest.id,
             projectId: projectId || null,
@@ -368,7 +643,7 @@ export default function AdvancedApprovalRequestModal({
               createdAt: serverTimestamp(),
               origin: 'approval',
               title: 'Approval shared',
-              message: `You were added as a viewer: ${requestTitle} (${requestType}: ${entityName})`,
+              message: `You were added as a viewer: ${requestTitle} (${requestType}: ${effectiveEntityName})`,
               refType: 'approval',
               approvalId: approvalRequest.id,
               projectId: projectId || null,
@@ -394,7 +669,7 @@ export default function AdvancedApprovalRequestModal({
       if (onSuccess) {
         onSuccess({
           type: requestType,
-          entityName,
+          entityName: effectiveEntityName,
           decisionMaker: selectedDecisionMaker.name,
           viewerCount: selectedViewers.length,
           title: requestTitle
@@ -466,7 +741,7 @@ export default function AdvancedApprovalRequestModal({
               fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
               color: DESIGN_SYSTEM.colors.text.primary
             }}>
-              {isStageAdvancement ? "Request Approval & Advance Stage" : "Send Approval Request"}
+              {(!isStageAdvancement && requestType === 'Customer') ? 'Project Conversion' : (isStageAdvancement ? "Request Approval & Advance Stage" : "Send Approval Request")}
             </h2>
           </div>
           <p style={{
@@ -474,8 +749,33 @@ export default function AdvancedApprovalRequestModal({
             fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
             color: DESIGN_SYSTEM.colors.text.secondary
           }}>
-            {entityName} {isStageAdvancement && currentStage && nextStage && `• ${currentStage} → ${nextStage}`}
+            {effectiveEntityName} {isStageAdvancement && currentStage && nextStage && `• ${currentStage} → ${nextStage}`}
           </p>
+          {autoAttachedFiles.length > 0 && (
+            <div style={{ marginTop: DESIGN_SYSTEM.spacing.xs }}>
+              <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.xs, color: DESIGN_SYSTEM.colors.text.secondary }}>
+                Attached quotation:
+              </span>
+              <span style={{ marginLeft: 6 }}>
+                {autoAttachedFiles.map((f, idx) => (
+                  <a
+                    key={idx}
+                    href={f.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.xs,
+                      color: DESIGN_SYSTEM.colors.primary[600],
+                      textDecoration: 'underline',
+                      marginRight: 8
+                    }}
+                  >
+                    {f.name}
+                  </a>
+                ))}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -616,6 +916,30 @@ export default function AdvancedApprovalRequestModal({
               }}
               disabled={loading}
             />
+            
+            {/* Prefilled auto-attachments */}
+            {autoAttachedFiles.length > 0 && (
+              <div style={{ marginTop: DESIGN_SYSTEM.spacing.sm }}>
+                {autoAttachedFiles.map((file, index) => (
+                  <div key={`auto-${index}`} style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: DESIGN_SYSTEM.spacing.xs,
+                    backgroundColor: DESIGN_SYSTEM.colors.background.secondary,
+                    borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                    marginBottom: DESIGN_SYSTEM.spacing.xs
+                  }}>
+                    <span style={{
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                      color: DESIGN_SYSTEM.colors.text.secondary
+                    }}>
+                      {file.name} (auto-attached)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             
             {/* File List */}
             {attachedFiles.length > 0 && (
@@ -813,6 +1137,98 @@ export default function AdvancedApprovalRequestModal({
           </div>
             </>
           )}
+
+          {/* Inline Create Project (same fields as Project List create) */}
+          <div style={{
+            marginTop: DESIGN_SYSTEM.spacing.lg,
+            padding: DESIGN_SYSTEM.spacing.base,
+            border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+            borderRadius: DESIGN_SYSTEM.borderRadius.base,
+            background: DESIGN_SYSTEM.colors.background.secondary
+          }}>
+            <div style={{
+              fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+              marginBottom: DESIGN_SYSTEM.spacing.base,
+              color: DESIGN_SYSTEM.colors.text.primary
+            }}>Create Project</div>
+
+            <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>Project Name *</label>
+              <input type="text" value={cpProjectName} onChange={(e) => setCpProjectName(e.target.value)} placeholder="Enter project name" style={{ width: '100%', padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }} />
+            </div>
+
+            <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>Description</label>
+              <textarea value={cpDescription} onChange={(e) => setCpDescription(e.target.value)} placeholder="Enter project description" style={{ width: '100%', minHeight: 80, padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8, resize: 'vertical' }} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DESIGN_SYSTEM.spacing.base }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>Company</label>
+                <input type="text" value={cpCompanyName} onChange={(e) => setCpCompanyName(e.target.value)} placeholder="Company name" style={{ width: '100%', padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>Customer Name</label>
+                <input type="text" value={cpCustomerName} onChange={(e) => setCpCustomerName(e.target.value)} placeholder="Customer full name" style={{ width: '100%', padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }} />
+              </div>
+            </div>
+
+            <div style={{ marginTop: DESIGN_SYSTEM.spacing.base }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>Customer Email</label>
+              <input type="email" value={cpCustomerEmail} onChange={(e) => setCpCustomerEmail(e.target.value)} placeholder="customer@example.com" style={{ width: '100%', padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DESIGN_SYSTEM.spacing.base, marginTop: DESIGN_SYSTEM.spacing.base }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>Stage</label>
+                <select value={cpSelectedStage} onChange={(e) => setCpSelectedStage(e.target.value)} style={{ width: '100%', padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }}>
+                  <option value="Planning">Planning</option>
+                  <option value="Development">Development</option>
+                  <option value="Testing">Testing</option>
+                  <option value="Completed">Completed</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>Deadline</label>
+                <input type="date" value={cpDeadline} onChange={(e) => setCpDeadline(e.target.value)} style={{ width: '100%', padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: DESIGN_SYSTEM.spacing.base }}>
+              <input type="checkbox" id="cpAllowJoinById" checked={cpAllowJoinById} onChange={(e) => setCpAllowJoinById(e.target.checked)} />
+              <label htmlFor="cpAllowJoinById" style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>Allow others to join by Project ID</label>
+            </div>
+
+            <div style={{ marginTop: DESIGN_SYSTEM.spacing.base }}>
+              <div style={{ marginBottom: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary, fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium }}>Team Members</div>
+              {cpLoadingAcceptedMembers ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Loading accepted team members...</div>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <select value={cpNewMemberId} onChange={(e) => setCpNewMemberId(e.target.value)} style={{ flex: 1, padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }}>
+                    <option value="">-- Select from accepted team --</option>
+                    {cpAcceptedTeamMembers
+                      .filter(member => !cpTeamMembersEmails.includes(member.email))
+                      .map(member => (
+                        <option key={member.id} value={member.id}>{member.name} ({member.email})</option>
+                      ))}
+                  </select>
+                  <button onClick={cpAddMember} disabled={!cpNewMemberId} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary }}>Add</button>
+                </div>
+              )}
+
+              {cpTeamMembers.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {cpTeamMembers.map((m, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, background: DESIGN_SYSTEM.colors.background.primary, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, borderRadius: 16, padding: '4px 10px' }}>
+                      <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>{m.displayName}</span>
+                      <button onClick={() => cpRemoveMember(m.email)} style={{ background: 'none', border: 'none', color: DESIGN_SYSTEM.colors.error, cursor: 'pointer' }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Footer */}
@@ -841,8 +1257,8 @@ export default function AdvancedApprovalRequestModal({
             Cancel
           </button>
           <button
-            onClick={handleSubmit}
-            disabled={loading || (!noApprovalNeeded && (!requestTitle.trim() || !selectedDecisionMaker))}
+            onClick={noApprovalNeeded ? cpSubmitCreateProject : handleSubmit}
+            disabled={noApprovalNeeded ? (!onCreateProject || !cpProjectName.trim()) : (loading || (!requestTitle.trim() || !selectedDecisionMaker))}
             style={{
               padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
               border: "none",
@@ -853,12 +1269,12 @@ export default function AdvancedApprovalRequestModal({
               color: DESIGN_SYSTEM.colors.text.inverse,
               fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
               fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading || (!noApprovalNeeded && (!requestTitle.trim() || !selectedDecisionMaker)) ? 0.6 : 1,
-              minWidth: "120px"
+              cursor: (noApprovalNeeded ? (!onCreateProject || !cpProjectName.trim()) : loading) ? "not-allowed" : "pointer",
+              opacity: (noApprovalNeeded ? (!onCreateProject || !cpProjectName.trim()) : (loading || (!requestTitle.trim() || !selectedDecisionMaker))) ? 0.6 : 1,
+              minWidth: "140px"
             }}
           >
-            {noApprovalNeeded ? (loading ? "Advancing..." : "Advance Stage") : (loading ? "Sending..." : uploading ? "Uploading..." : "Send Request")}
+            {noApprovalNeeded ? 'Create Project' : (loading ? (uploading ? 'Uploading...' : 'Sending...') : 'Send Request')}
           </button>
         </div>
       </div>

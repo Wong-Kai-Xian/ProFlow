@@ -17,6 +17,7 @@ import SendApprovalModal from "../components/project-component/SendApprovalModal
 import CreateProjectModal from "../components/project-component/CreateProjectModal";
 import AdvancedApprovalRequestModal from "../components/project-component/AdvancedApprovalRequestModal";
 import { db } from "../firebase";
+import { getAcceptedTeamMembers, getAcceptedTeamMembersForProject } from '../services/teamService';
 import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc, query, where, getDocs, deleteDoc, onSnapshot, arrayUnion, arrayRemove } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getPageHeaderStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
@@ -54,6 +55,10 @@ export default function CustomerProfile() {
   const [projectMeetingTranscripts, setProjectMeetingTranscripts] = useState([]);
   const [lastContact, setLastContact] = useState("N/A"); // Default last contact
   const [customerTeamMembersDetails, setCustomerTeamMembersDetails] = useState([]); // State for enriched team member details
+  const [approverMembers, setApproverMembers] = useState([]); // Team members for approver selection
+  const [showConvertPanel, setShowConvertPanel] = useState(false);
+  const [autoCreatedFromApproval, setAutoCreatedFromApproval] = useState(false);
+  const [convertForm, setConvertForm] = useState({ name: '', description: '', startDate: '', endDate: '', budget: '', priority: 'Normal', recipientUids: [] });
 
   // Meeting state (mirrors ProjectDetail)
   const [showMeeting, setShowMeeting] = useState(false);
@@ -137,8 +142,8 @@ export default function CustomerProfile() {
   };
 
   const handleConvertToProject = () => {
-    // Open the standard Create Project form directly (prefilled from customer/company)
-    setShowCreateProjectModal(true);
+    // Open combined convert panel
+    setShowConvertPanel(true);
   };
 
   const handleProjectConversionApprovalSuccess = (result) => {
@@ -148,8 +153,21 @@ export default function CustomerProfile() {
     alert("Conversion approval request sent successfully! You'll be able to create the project once it's approved.");
   };
 
+  // Auto-create project once approved
+  useEffect(() => {
+    const tryAutoCreate = async () => {
+      if (!hasApprovedConversion || autoCreatedFromApproval) return;
+      // Minimal project data from customer/company
+      const projectName = companyProfile?.company || companyProfile?.companyName || customerProfile?.name || 'New Project';
+      await handleSaveProjectFromConversion({ name: projectName, team: [currentUser?.uid].filter(Boolean) });
+      setAutoCreatedFromApproval(true);
+    };
+    tryAutoCreate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasApprovedConversion]);
+
   const handleCreateProjectAfterApproval = () => {
-    setShowCreateProjectModal(true);
+    setShowConvertPanel(true);
   };
 
   // Helper function to get proper customer name
@@ -537,6 +555,23 @@ export default function CustomerProfile() {
 
   // Do not auto-select a project; default stays as "No Project" until user selects
 
+  // Load approver team members based on selected project (or all accepted team if none)
+  useEffect(() => {
+    let isCancelled = false;
+    const load = async () => {
+      try {
+        const members = selectedProjectId
+          ? await getAcceptedTeamMembersForProject(currentUser, selectedProjectId)
+          : await getAcceptedTeamMembers(currentUser);
+        if (!isCancelled) setApproverMembers(members || []);
+      } catch {
+        if (!isCancelled) setApproverMembers([]);
+      }
+    };
+    load();
+    return () => { isCancelled = true; };
+  }, [selectedProjectId, currentUser]);
+
   // Load meeting transcripts for selected project
   useEffect(() => {
     if (!selectedProjectId) { setProjectMeetingTranscripts([]); return; }
@@ -721,6 +756,11 @@ export default function CustomerProfile() {
         updatedAt: serverTimestamp(),
         customerId: id, // Link to the current customer
         convertedFromCustomer: true,
+        description: projectData.description || '',
+        startDate: projectData.startDate || '',
+        endDate: projectData.endDate || '',
+        budget: projectData.budget || '',
+        priority: projectData.priority || 'Normal',
         
         // Ensure project appears in ProjectList queries
         userId: currentUser.uid, // Legacy field for compatibility
@@ -963,371 +1003,290 @@ export default function CustomerProfile() {
             )}
           </div>
         )}
-        <div style={{ 
-          display: "grid", 
-          gridTemplateColumns: "350px 1fr 350px", 
-          gap: DESIGN_SYSTEM.spacing.xl,
-          width: "100%",
-          maxWidth: "100%",
-          overflowX: "hidden"
-        }}>
-        
-        {/* Middle + Right: Toolbar and Project Workspace (moved up near TopBar) */}
-        <div style={{ gridColumn: "2 / span 2", gridRow: "1", display: "grid", gridTemplateColumns: "1fr 350px", gap: DESIGN_SYSTEM.spacing.lg, alignItems: "start", alignSelf: 'start' }}>
-          {/* Toolbar only for middle+right columns */}
-          <div style={{ gridColumn: "1 / span 2", marginBottom: DESIGN_SYSTEM.spacing.sm }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: 10,
-              borderRadius: 12,
-              boxShadow: DESIGN_SYSTEM.shadows.sm
-            }}>
-              <div style={{ fontSize: 12, opacity: 0.9 }}>Project:</div>
-              <select
-                value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e5e7eb', minWidth: 220 }}
-              >
-                <option value="">No Project</option>
-                {(projects || []).map(pid => (
-                  <option key={pid} value={pid}>{projectNames[pid] || pid}</option>
-                ))}
-              </select>
-              <div style={{ flex: 1 }} />
-              <button
-                onClick={handleToggleMeeting}
-                style={{ ...getButtonStyle('secondary', 'customers'), background: 'rgba(255,255,255,0.15)', borderColor: 'transparent' }}
-              >
-                {(showMeeting || meetingMinimized) ? 'Close Meeting' : 'Conduct Meeting'}
-              </button>
-            </div>
-          </div>
 
-          {/* Project Workspace sits directly below toolbar */}
-          <div style={{ gridColumn: "1 / span 2" }}>
-            <ProjectWorkspacePanel
-              selectedProjectId={selectedProjectId}
-              projects={projects}
-              projectNames={projectNames}
-              files={files}
-              onFileAdd={handleFileAdd}
-              onFileRemove={handleFileRemove}
-              onFileRename={handleFileRename}
-              customerId={id}
-              customerProfile={customerProfile}
-              onConvertToProject={handleConvertToProject}
-              onSendApprovalRequest={handleSendApprovalRequest}
-              stages={stages}
-              currentStage={currentStage}
-              setCurrentStage={setCurrentStage}
-              stageData={stageData}
-              setStageData={setStageData}
-              setStages={setStages}
-              onStagesUpdate={handleStagesUpdate}
-              hasApprovedConversion={hasApprovedConversion}
-              onCreateProjectAfterApproval={handleCreateProjectAfterApproval}
-              onRequestApproval={handleRequestApproval}
-              customerName={getCustomerName()}
-              projectSnapshots={projectSnapshots}
-              customerReminders={reminders}
-              onAddCustomerReminder={handleAddReminder}
-              onCustomerReminderRemove={handleReminderRemove}
-              customerTranscripts={meetingTranscriptsList}
-            />
-          </div>
-        </div>
-
-        {/* Left Column - Customer Information */}
-        <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg }}>
-          <div style={getCardStyle('customers')}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-            }}>
-              <h2 style={{ 
-                margin: 0, 
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+        {/* Middle + Right: Toolbar and Project Workspace (near TopBar) */}
+        <div style={{ display: "grid", gridTemplateColumns: "350px 1fr 350px", gap: DESIGN_SYSTEM.spacing.xl, width: "100%", maxWidth: "100%", overflowX: "hidden" }}>
+          {/* Middle + Right block */}
+          <div style={{ gridColumn: "2 / span 2", gridRow: "1", display: "grid", gridTemplateColumns: "1fr 350px", gap: DESIGN_SYSTEM.spacing.lg, alignItems: "start", alignSelf: 'start' }}>
+            {/* Toolbar only for middle+right columns */}
+            <div style={{ gridColumn: "1 / span 2", marginBottom: DESIGN_SYSTEM.spacing.sm }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: 10,
+                borderRadius: 12,
+                boxShadow: DESIGN_SYSTEM.shadows.sm
               }}>
-                Customer Information
-              </h2>
+                <div style={{ fontSize: 12, opacity: 0.9 }}>Project:</div>
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e5e7eb', minWidth: 220 }}
+                >
+                  <option value="">No Project</option>
+                  {(projects || []).map(pid => (
+                    <option key={pid} value={pid}>{projectNames[pid] || pid}</option>
+                  ))}
+                </select>
+                <div style={{ flex: 1 }} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => { setApprovalModalType('general'); setShowProjectConversionApprovalModal(true); }} style={{ ...getButtonStyle('primary', 'customers') }} disabled={hasPendingConversionRequest && !hasApprovedConversion}>
+                    {hasApprovedConversion ? 'Approved - Create Project' : (hasPendingConversionRequest ? 'Awaiting Approval' : 'Convert to Project')}
+                  </button>
+                  <button onClick={handleSendApprovalRequest} style={{ ...getButtonStyle('secondary', 'customers') }}>Send for Approval</button>
+                </div>
+                <div style={{ width: 8 }} />
+                <button
+                  onClick={handleToggleMeeting}
+                  style={{ ...getButtonStyle('secondary', 'customers'), background: 'rgba(255,255,255,0.15)', borderColor: 'transparent' }}
+                >
+                  {(showMeeting || meetingMinimized) ? 'Close Meeting' : 'Conduct Meeting'}
+                </button>
+              </div>
             </div>
-            <div style={{ padding: "0" }}>
-              <CustomerInfo data={customerProfile} setCustomerProfile={setCustomerProfile} />
-            </div>
-          </div>
-
-          <div style={getCardStyle('customers')}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-            }}>
-              <h2 style={{ 
-                margin: 0, 
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
-              }}>
-                Company Details
-              </h2>
-            </div>
-            <div style={{ padding: "0" }}>
-              <CompanyInfo 
-                data={companyProfile} 
-                setCompanyProfile={(updated) => {
-                  // Only update local state; persistence happens on explicit Save
-                  setCompanyProfile(updated);
-                }} 
-                onSave={(updated) => handleSaveCustomer({ companyProfile: updated })}
-              />
-            </div>
-          </div>
-          
-          <div style={getCardStyle('customers')}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-            }}>
-              <h2 style={{ 
-                margin: 0, 
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
-              }}>
-                Company Reputation
-              </h2>
-            </div>
-            <div style={{ padding: "0" }}>
-              <CompanyReputation 
-                data={reputation} 
-                companyProfile={companyProfile}
-                onAiUpdate={async (val) => {
-                  try {
-                    const merged = { ...(reputation || {}), ...(val || {}) };
-                    setReputation(merged);
-                    if (id) await updateDoc(doc(db, 'customerProfiles', id), { reputation: merged });
-                  } catch {}
-                }}
+            {/* Project Workspace */}
+            <div style={{ gridColumn: "1 / span 2" }}>
+              <ProjectWorkspacePanel
+                selectedProjectId={selectedProjectId}
+                projects={projects}
+                projectNames={projectNames}
+                files={files}
+                onFileAdd={handleFileAdd}
+                onFileRemove={handleFileRemove}
+                onFileRename={handleFileRename}
+                customerId={id}
+                customerProfile={customerProfile}
+                onConvertToProject={handleConvertToProject}
+                onSendApprovalRequest={handleSendApprovalRequest}
+                stages={stages}
+                currentStage={currentStage}
+                setCurrentStage={setCurrentStage}
+                stageData={stageData}
+                setStageData={setStageData}
+                setStages={setStages}
+                onStagesUpdate={handleStagesUpdate}
+                hasApprovedConversion={hasApprovedConversion}
+                onCreateProjectAfterApproval={handleCreateProjectAfterApproval}
+                onRequestApproval={handleRequestApproval}
+                customerName={getCustomerName()}
+                projectSnapshots={projectSnapshots}
+                customerReminders={reminders}
+                onAddCustomerReminder={handleAddReminder}
+                onCustomerReminderRemove={handleReminderRemove}
+                customerTranscripts={meetingTranscriptsList}
               />
             </div>
           </div>
 
-          {/* Company News Panel */}
-          <div style={getCardStyle('customers')}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.customers.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-            }}>
-              <h2 style={{ 
-                margin: 0, 
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+          {/* Left Column - Customer Information */}
+          <div style={{ display: "flex", flexDirection: "column", gap: DESIGN_SYSTEM.spacing.lg, gridColumn: 1, gridRow: 1 }}>
+            {/* Customer Info */}
+            <div style={getCardStyle('customers')}>
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
               }}>
-                Latest News
-              </h2>
+                <h2 style={{ 
+                  margin: 0, 
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+                }}>
+                  Customer Information
+                </h2>
+              </div>
+              <div style={{ padding: "0" }}>
+                <CustomerInfo data={customerProfile} setCustomerProfile={setCustomerProfile} />
+              </div>
             </div>
-            <div style={{ padding: 0 }}>
-              <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-                <CompanyNewsPanel companyName={companyProfile.company || companyProfile.companyName || ''} />
+
+            <div style={getCardStyle('customers')}>
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              }}>
+                <h2 style={{ 
+                  margin: 0, 
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+                }}>
+                  Company Details
+                </h2>
+              </div>
+              <div style={{ padding: "0" }}>
+                <CompanyInfo 
+                  data={companyProfile} 
+                  setCompanyProfile={(updated) => {
+                    setCompanyProfile(updated);
+                  }} 
+                  onSave={(updated) => handleSaveCustomer({ companyProfile: updated })}
+                />
+              </div>
+            </div>
+
+            <div style={getCardStyle('customers')}>
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              }}>
+                <h2 style={{ 
+                  margin: 0, 
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+                }}>
+                  Company Reputation
+                </h2>
+              </div>
+              <div style={{ padding: "0" }}>
+                <CompanyReputation 
+                  data={reputation} 
+                  companyProfile={companyProfile}
+                  onAiUpdate={async (val) => {
+                    try {
+                      const merged = { ...(reputation || {}), ...(val || {}) };
+                      setReputation(merged);
+                      if (id) await updateDoc(doc(db, 'customerProfiles', id), { reputation: merged });
+                    } catch {}
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Company News Panel */}
+            <div style={getCardStyle('customers')}>
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              }}>
+                <h2 style={{ 
+                  margin: 0, 
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.lg, 
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold 
+                }}>
+                  Latest News
+                </h2>
+              </div>
+              <div style={{ padding: 0 }}>
+                <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                  <CompanyNewsPanel companyName={companyProfile.company || companyProfile.companyName || ''} />
+                </div>
               </div>
             </div>
           </div>
-
-          {/* Converted Projects Panel */}
-          {/* Removed Converted Projects panel as requested */}
         </div>
 
-        {/* Duplicate Middle+Right block removed */}
-      </div>
-      </div>
-      
-      {/* AI Actions Modal */}
-      {aiModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 16, width: 640, maxWidth: '95vw', boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ fontWeight: 700 }}>AI Actions</div>
-              <button onClick={() => setAiModalOpen(false)} style={{ ...getButtonStyle('secondary', 'customers') }}>Close</button>
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <button onClick={async () => {
-                if (!aiModalTranscriptDoc) return;
-                try {
-                  setAiModalLoading(true); setAiModalError('');
-                  const text = aiModalTranscriptDoc.content || '';
-                  const MAX_INPUT = 60000;
-                  const aiText = await callGeminiForSummary(text.slice(0, MAX_INPUT));
-                  const json = safeParseJson(aiText) || { summary: aiText, action_items: [] };
-                  let items = Array.isArray(json.action_items) ? json.action_items : [];
-                  if (!items.length) {
-                    const src = (json.summary || aiText || '').split('\n')
-                      .map(s => s.trim())
-                      .filter(s => s && /(^- |^\d+\. |should|need to|please|action|task|todo)/i.test(s))
-                      .slice(0, 10);
-                    items = src.map(s => ({ title: s.replace(/^[^-\d\.\s]+/, '').trim(), description: '' }));
-                  }
-                  const normalizeDate = (dl) => {
-                    if (!dl) return '';
-                    const s = String(dl).trim().toLowerCase();
-                    const fmt = (d) => {
-                      const y = d.getFullYear();
-                      const m = String(d.getMonth() + 1).padStart(2, '0');
-                      const da = String(d.getDate()).padStart(2, '0');
-                      return `${y}-${m}-${da}`;
-                    };
-                    const today = new Date();
-                    if (/\btoday\b/.test(s)) return fmt(today);
-                    if (/\b(tmr|tmrw|tmmrw|tmmr|tomor+ow?)\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return fmt(d); }
-                    if (/\byesterday\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() - 1); return fmt(d); }
-                    if (/^next\s*week$/.test(s) || /\bnextweek\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return fmt(d); }
-                    const inDays = s.match(/\bin\s+(\d+)\s+days?\b/);
-                    if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return fmt(d); }
-                    const wd = s.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
-                    if (wd) {
-                      const map = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
-                      const target = map[wd[1]];
-                      const d = new Date(today);
-                      const cur = d.getDay();
-                      let add = (target + 7 - cur) % 7; if (add === 0) add = 7; d.setDate(d.getDate() + add);
-                      return fmt(d);
-                    }
-                    const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[t\s](\d{2}:\d{2}))?/);
-                    if (m) return m[1];
-                    return '';
-                  };
-                  const normalized = items.map((it, idx) => {
-                    const candidate = (it.title || it.name || it.task || it.action || '').toString().trim();
-                    const displayTitle = candidate || (it.description || '').toString().split(/\.|;|\n/)[0].slice(0, 140) || `Action Item ${idx + 1}`;
-                    const normDeadline = normalizeDate(it.deadline);
-                    return { id: String(idx), displayTitle, ...it, deadline: normDeadline || it.deadline || '' };
-                  });
-                  setAiModalItems(normalized);
-                } catch (e) {
-                  setAiModalError(e.message || 'Failed to analyze transcript.');
-                } finally {
-                  setAiModalLoading(false);
-                }
-              }} style={{ ...getButtonStyle('secondary', 'customers') }}>Analyze</button>
-              <select value={aiModalTarget} onChange={(e) => setAiModalTarget(e.target.value)} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 8px' }}>
-                <option value="reminders">Add to Reminders</option>
-                <option value="notes">Add to Notes</option>
-              </select>
-              <button disabled={aiModalLoading || aiModalItems.length === 0} onClick={async () => {
-                try {
-                  setAiModalLoading(true); setAiModalError('');
-                  const selected = aiModalItems.filter(it => aiModalSelection[it.id]);
-                  if (selected.length === 0) { setAiModalLoading(false); return; }
-                  if (aiModalTarget === 'reminders') {
-                    // Map to reminders array on customer profile
-                    const parseDeadline = (dl) => {
-                      if (!dl) return { date: '', time: '' };
-                      const s = String(dl).trim().toLowerCase();
-                      const fmt = (d) => {
-                        const y = d.getFullYear();
-                        const m = String(d.getMonth() + 1).padStart(2, '0');
-                        const da = String(d.getDate()).padStart(2, '0');
-                        return { date: `${y}-${m}-${da}`, time: '' };
-                      };
-                      const today = new Date();
-                      if (/\btoday\b/.test(s)) return fmt(today);
-                      if (/\b(tmr|tmrw|tmmrw|tmmr|tomor+ow?)\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 1); return fmt(d); }
-                      if (/\byesterday\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() - 1); return fmt(d); }
-                      if (/^next\s*week$/.test(s) || /\bnextweek\b/.test(s)) { const d = new Date(today); d.setDate(d.getDate() + 7); return fmt(d); }
-                      const inDays = s.match(/\bin\s+(\d+)\s+days?\b/);
-                      if (inDays) { const d = new Date(today); d.setDate(d.getDate() + parseInt(inDays[1], 10)); return fmt(d); }
-                      const wd = s.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
-                      if (wd) {
-                        const map = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
-                        const target = map[wd[1]];
-                        const d = new Date(today);
-                        const cur = d.getDay();
-                        let add = (target + 7 - cur) % 7; if (add === 0) add = 7; d.setDate(d.getDate() + add);
-                        return fmt(d);
-                      }
-                      const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[t\s](\d{2}:\d{2}))?/);
-                      if (m) return { date: m[1], time: m[2] || '' };
-                      return { date: '', time: '' };
-                    };
-                    const base = Array.isArray(reminders) ? [...reminders] : [];
-                    const newRems = selected.map((it, idx) => {
-                      const { date, time } = parseDeadline(it.deadline);
-                      const finalDate = date || new Date().toISOString().slice(0,10);
-                      return {
-                        title: (it.displayTitle || it.title || it.name || `Reminder ${idx + 1}`).toString(),
-                        description: it.description || '',
-                        date: finalDate,
-                        time: time || ''
-                      };
-                    });
-                    const next = [...base, ...newRems];
-                    setReminders(next);
-                    if (id) await updateDoc(doc(db, 'customerProfiles', id), { reminders: next });
-                    // Write notifications for each added reminder
-                    try {
-                      for (let r of newRems) {
-                        await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
-                          unread: true,
-                          createdAt: serverTimestamp(),
-                          origin: 'customer',
-                          title: 'New Customer Reminder',
-                          message: `${getCustomerName()}: ${r.title} on ${r.date}${r.time ? ' ' + r.time : ''}`,
-                          refType: 'customerReminder',
-                          customerId: id
+        {showConvertPanel && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1600 }} onClick={() => setShowConvertPanel(false)}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '92%', maxWidth: 720, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontWeight: 700 }}>Convert to Project</div>
+                <button onClick={() => setShowConvertPanel(false)} style={{ ...getButtonStyle('secondary', 'customers') }}>Close</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151' }}>
+                    <input type="checkbox" onChange={(e) => {
+                      if (e.target.checked) {
+                        handleSaveProjectFromConversion({ 
+                          name: convertForm.name || '', 
+                          description: convertForm.description || '',
+                          startDate: convertForm.startDate || '',
+                          endDate: convertForm.endDate || '',
+                          budget: convertForm.budget || '',
+                          priority: convertForm.priority || 'Normal',
+                          team: convertForm.recipientUids || [] 
                         });
                       }
-                    } catch {}
-                    setAiModalOpen(false);
-                  } else {
-                    // Add to current stage notes
-                    const baseStage = stageData[currentStage] || { notes: [], tasks: [], completed: false };
-                    const newNotes = selected.map((it) => ({ type: 'Meeting', text: ((it.displayTitle || it.title || it.name || 'Note').toString() + (it.description ? ` – ${it.description}` : '')), createdAt: Date.now() }));
-                    const updatedStage = { ...stageData, [currentStage]: { ...baseStage, notes: [...(baseStage.notes || []), ...newNotes] } };
-                    setStageData(updatedStage);
-                    // Persist via updateDoc directly
-                    if (id) await updateDoc(doc(db, 'customerProfiles', id), { stageData: updatedStage });
-                    setAiModalOpen(false);
-                  }
-                } catch (e) {
-                  setAiModalError(e.message || 'Failed to add items.');
-                } finally {
-                  setAiModalLoading(false);
-                }
-              }} style={{ ...getButtonStyle('primary', 'customers') }}>Add Selected</button>
-            </div>
-            {aiModalError && <div style={{ color: '#b91c1c', marginBottom: 8 }}>{aiModalError}</div>}
-            <div style={{ maxHeight: 320, overflowY: 'auto', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, borderRadius: 8, padding: 8, background: '#fff' }}>
-              {aiModalLoading ? (
-                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>Analyzing…</div>
-              ) : aiModalItems.length === 0 ? (
-                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>Click Analyze to extract action items from the transcript.</div>
-              ) : (
-                aiModalItems.map(item => (
-                  <label key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 6 }}>
-                    <input type="checkbox" checked={!!aiModalSelection[item.id]} onChange={(e) => setAiModalSelection(s => ({ ...s, [item.id]: e.target.checked }))} />
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{(item.displayTitle || item.title || item.name || item.task || item.action || 'Untitled').toString()}</div>
-                      {item.description && <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>{item.description}</div>}
-                      {item.assignee && <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Assignee: {item.assignee}</div>}
-                      {item.deadline && <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm }}>Deadline: {item.deadline}</div>}
-                    </div>
+                    }} />
+                    No Approval Needed (create directly)
                   </label>
-                ))
-              )}
+                </div>
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Approval Request and Project Details</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280', flex: 1 }}>
+                      <span style={{ marginBottom: 4 }}>Project Name</span>
+                      <input value={convertForm.name} onChange={(e) => setConvertForm(f => ({ ...f, name: e.target.value }))} placeholder="Enter project name" />
+                    </label>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                      <span style={{ marginBottom: 4 }}>Start Date</span>
+                      <input type="date" value={convertForm.startDate} onChange={(e) => setConvertForm(f => ({ ...f, startDate: e.target.value }))} />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                      <span style={{ marginBottom: 4 }}>End Date</span>
+                      <input type="date" value={convertForm.endDate} onChange={(e) => setConvertForm(f => ({ ...f, endDate: e.target.value }))} />
+                    </label>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                      <span style={{ marginBottom: 4 }}>Budget</span>
+                      <input type="number" step="0.01" value={convertForm.budget} onChange={(e) => setConvertForm(f => ({ ...f, budget: e.target.value }))} placeholder="0.00" />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                      <span style={{ marginBottom: 4 }}>Priority</span>
+                      <select value={convertForm.priority} onChange={(e) => setConvertForm(f => ({ ...f, priority: e.target.value }))}>
+                        <option value="Low">Low</option>
+                        <option value="Normal">Normal</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                      <span style={{ marginBottom: 4 }}>Description</span>
+                      <textarea value={convertForm.description} onChange={(e) => setConvertForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 80 }} placeholder="Summary / scope" />
+                    </label>
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Approvers (select teammates)</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
+                      {approverMembers.map(m => (
+                        <label key={(m.id || m.uid)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                          <input type="checkbox" checked={(convertForm.recipientUids || []).includes(m.id || m.uid)} onChange={(e) => setConvertForm(f => ({ ...f, recipientUids: e.target.checked ? [ ...(f.recipientUids||[]), (m.id || m.uid) ] : (f.recipientUids||[]).filter(x => x !== (m.id || m.uid)) }))} />
+                          <span>{m.name || m.email}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>Quotation: { (customerProfile?.lastQuoteName || 'Auto‑attach if available') }</div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+                    <button onClick={() => setShowProjectConversionApprovalModal(true)} style={{ ...getButtonStyle('secondary', 'customers') }}>Send Approval Request</button>
+                    <button onClick={() => handleSaveProjectFromConversion({ 
+                      name: convertForm.name || '',
+                      description: convertForm.description || '',
+                      startDate: convertForm.startDate || '',
+                      endDate: convertForm.endDate || '',
+                      budget: convertForm.budget || '',
+                      priority: convertForm.priority || 'Normal',
+                      team: convertForm.recipientUids || []
+                    })} style={{ ...getButtonStyle('primary', 'customers') }}>Create Project</button>
+                  </div>
+                  {hasPendingConversionRequest && !hasApprovedConversion && (
+                    <div style={{ fontSize: 12, color: '#92400E', marginTop: 6 }}>Awaiting Approval</div>
+                  )}
+                  {hasApprovedConversion && (
+                    <div style={{ fontSize: 12, color: '#065F46', marginTop: 6 }}>Approved – project will be created automatically.</div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      
+        )}
+      </div>
+
       <SendApprovalModal
         isOpen={showSendApprovalModal}
         onClose={() => setShowSendApprovalModal(false)}
@@ -1360,11 +1319,17 @@ export default function CustomerProfile() {
         onClose={() => setShowProjectConversionApprovalModal(false)}
         onSuccess={handleProjectConversionApprovalSuccess}
         customerId={id}
-        customerName={`${customerProfile.firstName || ''} ${customerProfile.lastName || ''}`.trim() || companyProfile.companyName || 'Unknown Customer'}
+        customerName={getCustomerName()}
         currentUser={currentUser}
         currentStage=""
         nextStage=""
         isStageAdvancement={false}
+        autoAttachQuotation={true}
+        onCreateProject={(data) => handleSaveProjectFromConversion({ ...data, team: data.team || [] })}
+        customerProfileData={customerProfile}
+        companyProfileData={companyProfile}
+        quoteProjectId={selectedProjectId || null}
+        quoteProjectName={projectNames[selectedProjectId] || ''}
       />
     </div>
   );
