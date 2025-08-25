@@ -150,8 +150,11 @@ export default function PersonalAssistant() {
   }
 
   const handleAsk = async (attachments = []) => {
-    const q = queryText.trim();
-    if (!q) { const base = `Projects: ${insights.projectCount} • Forums: ${insights.forumCount} • Customers: ${insights.customerCount} • Active projects: ${insights.activeProjects.length} • Approvals pending: ${insights.approvalsPending}`; setSummary(base); setHistory(h => [...h, { q: '(overview)', a: base, t: Date.now() }]); return; }
+    let q = queryText.trim();
+    if (!q && attachments.length > 0) {
+      q = 'Summarize the attached file(s) and extract key points and actions.';
+    }
+    if (!q) { const base = `Projects: ${insights.projectCount} • Forums: ${insights.forumCount} • Customers: ${insights.customerCount} • Active projects: ${insights.activeProjects.length} • Approvals pending: ${insights.approvalsPending}`; setSummary(base); setHistory(h => [...h, { q: '(overview)', a: base, t: Date.now(), attachments: [] }]); return; }
     const projectsContext = projects.slice(0, 8).map(p => ({ id: p.id, name: p.name || 'Untitled', stage: p.stage || 'N/A', deadline: p.deadline || 'N/A', description: (p.description || '').slice(0, 600), members: (Array.isArray(p.team) ? p.team : []).map(uid => userMap[uid] || uid), tasks: (Array.isArray(p.tasks) ? p.tasks : []).slice(0, 6).flatMap(s => Array.isArray(s.tasks) ? s.tasks.slice(0, 6).map(t => ({ title: t.title || t.name || 'Task', status: t.status || 'open', deadline: t.deadline || '', stage: s.stage || '' })) : []) }));
     const forumsContext = forums.slice(0, 12).map(f => ({ id: f.id, name: f.name || 'Untitled', postsCount: f.posts || 0, recentPosts: (forumPostsDetailMap[f.id] || []).slice(0, 5).map(p => ({ title: p.title, excerpt: p.body, author: userMap[p.authorUid] || p.authorUid })) }));
     const customersContext = customers.slice(0, 10).map(c => ({ id: c.id, name: c.customerProfile?.name || c.customerProfile?.email || 'Customer', company: c.companyProfile?.company || '', currentStage: c.currentStage || '', notesCount: Object.keys(c.stageData || {}).reduce((acc, k) => acc + ((c.stageData?.[k]?.notes || []).length), 0), reminders: (c.reminders || []).length, files: (c.files || []).length }));
@@ -206,7 +209,7 @@ export default function PersonalAssistant() {
           </div>
         )}
         <div style={{ padding: DESIGN_SYSTEM.spacing.base, gap: DESIGN_SYSTEM.spacing.base, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.xs, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.xs, alignItems: 'center', position: 'relative', zIndex: 1 }}>
             <input value={queryText} onChange={(e) => setQueryText(e.target.value)} placeholder="Ask about projects, forums, customers, deadlines..." style={{ flex: 1, padding: DESIGN_SYSTEM.spacing.base, borderRadius: DESIGN_SYSTEM.borderRadius.lg, border: `1px solid ${DESIGN_SYSTEM.colors.border}`, outline: 'none' }} />
             <label htmlFor="pa-chat-file-input" title="Attach file" style={{ padding: '6px 10px', border: `1px solid ${DESIGN_SYSTEM.colors.border}`, borderRadius: 8, cursor: 'pointer', background: '#fff' }}>📎</label>
             <input id="pa-chat-file-input" type="file" accept=".txt,.md,.json,.csv,.log,.html,.xml,.yml,.yaml,.pdf,.png,.jpg,.jpeg,.webp" style={{ display: 'none' }} onChange={(e) => {
@@ -215,7 +218,7 @@ export default function PersonalAssistant() {
               setStagedFile({ file, name: file.name, size: file.size });
               try { e.target.value = ''; } catch {}
             }} />
-            <button disabled={isCalling} onClick={async () => {
+            <button type="button" disabled={isCalling} onClick={async () => {
               let attachments = [];
               if (stagedFile && currentUser?.uid) {
                 try {
@@ -232,7 +235,10 @@ export default function PersonalAssistant() {
                   } catch {}
                   attachments = [{ name: stagedFile.name, size: stagedFile.size, url, content }];
                 } catch (err) {
-                  attachments = [{ name: stagedFile.name, size: stagedFile.size, url: '(upload failed)' }];
+                  // Still proceed using local file content if readable
+                  let content = '';
+                  try { content = await stagedFile.file.text(); } catch {}
+                  attachments = [{ name: stagedFile.name, size: stagedFile.size, url: '(upload failed)', content }];
                 } finally {
                   setStagedFile(null);
                 }
