@@ -704,8 +704,13 @@ function ComprehensiveEditProfileModal({
             </label>
             <input
               type="tel"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={editingProfile.phone}
-              onChange={(e) => handleInputChange('phone', e.target.value)}
+              onChange={(e) => {
+                const digitsOnly = (e.target.value || '').replace(/[^0-9]/g, '');
+                handleInputChange('phone', digitsOnly);
+              }}
               style={{ fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
               backgroundColor: DESIGN_SYSTEM.colors.background.primary,
               border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
