@@ -16,6 +16,8 @@ export default function TopBar() {
   const [userProfile, setUserProfile] = useState(null);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const topLevelPaths = ['/', '/finance', '/project', '/forum', '/customer-profiles', '/approvals', '/team'];
+  const showBack = !topLevelPaths.includes(location.pathname);
 
   // Fetch user profile data including photo
   useEffect(() => {
@@ -100,20 +102,22 @@ export default function TopBar() {
       <NotificationAgent />
       <FollowUpAgent />
       {/* Back button */}
-      <button
-        onClick={() => navigate(-1)}
-        style={{
-          background: 'rgba(255,255,255,0.15)',
-          color: '#fff',
-          border: '1px solid rgba(255,255,255,0.25)',
-          borderRadius: 8,
-          padding: '8px 12px',
-          cursor: 'pointer'
-        }}
-        title="Back"
-      >
-        ← Back
-      </button>
+      {showBack && (
+        <button
+          onClick={() => navigate(-1)}
+          style={{
+            background: 'rgba(255,255,255,0.15)',
+            color: '#fff',
+            border: '1px solid rgba(255,255,255,0.25)',
+            borderRadius: 8,
+            padding: '8px 12px',
+            cursor: 'pointer'
+          }}
+          title="Back"
+        >
+          ← Back
+        </button>
+      )}
       <img 
         src="/proflow-logo.png" 
         alt="ProFlow Logo" 
