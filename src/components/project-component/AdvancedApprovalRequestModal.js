@@ -146,11 +146,8 @@ export default function AdvancedApprovalRequestModal({
         }
         quotes.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
         setModalProjectQuotes(quotes);
-        if (quotes.length > 0) {
-          const chosenId = quotes[0].id;
-          setSelectedQuoteIdLocal(prev => prev || chosenId);
-          await attachQuoteById(chosenId, quotes);
-        }
+        // Do not auto-select or auto-attach a quotation; selection is optional
+        setSelectedQuoteIdLocal("");
       } catch {
         setModalProjectQuotes([]);
       }
@@ -315,27 +312,7 @@ export default function AdvancedApprovalRequestModal({
           console.warn('Failed to attach selected quotation', e);
         }
       } else if (isOpen && autoAttachQuotation) {
-      // Auto-attach quotation based on selected project (if provided) else fallback to customer drafts
-        try {
-          if (quoteProjectId) {
-            // Fetch latest quote from selected project
-            const projQuotesSnap = await getDocs(collection(db, 'projects', quoteProjectId, 'quotes'));
-            if (!projQuotesSnap.empty) {
-              const docs = projQuotesSnap.docs;
-              const last = docs[docs.length - 1];
-              const q = last.data() || {};
-              const originalUrl = q.fileUrl || q.attachmentUrl || q.originalUrl || q.sourceUrl || q.renderUrl;
-              const pdfUrl = q.pdfUrl || q.renderedPdfUrl || q.renderedPdf;
-              if (originalUrl) {
-                const fileName = q.fileName || `quotation-${quoteProjectName || 'project'}.quote`;
-                setAutoAttachedFiles([{ url: originalUrl, name: fileName }]);
-              }
-              // Skip adding PDF attachments per requirement
-            }
-          }
-        } catch (err) {
-          console.warn('Failed to auto-attach quotation:', err);
-        }
+        // Optional quotation: do not auto-attach by default
       }
     };
 
@@ -430,8 +407,8 @@ export default function AdvancedApprovalRequestModal({
       deadline: cpDeadline || '',
       ownerId: currentUser.uid,
       allowJoinById: cpAllowJoinById,
-      // pass selected draft quote id when converting from customer
-      selectedDraftQuoteId: (customerId && selectedQuoteIdLocal) ? selectedQuoteIdLocal : undefined
+      // pass selected draft quote id when converting from customer (omit field if not selected)
+      ...(customerId && selectedQuoteIdLocal ? { selectedDraftQuoteId: selectedQuoteIdLocal } : {})
     })).catch(()=>{});
     onClose();
   };
@@ -525,28 +502,9 @@ export default function AdvancedApprovalRequestModal({
     setUploading(true);
 
     try {
-      // Ensure quotation is attached if configured but not yet populated
-      if (!isStageAdvancement && autoAttachQuotation && (autoAttachedFiles.length === 0 && autoAttachedPdfFiles.length === 0)) {
-        try {
-          if (selectedQuoteIdLocal && modalProjectQuotes.length > 0) {
-            await attachQuoteById(selectedQuoteIdLocal, modalProjectQuotes);
-          } else {
-            // Attempt to load latest quotes on-demand
-            const pid = projectId || quoteProjectId || null;
-            let quotes = [];
-            if (pid) {
-              const snap = await getDocs(collection(db, 'projects', pid, 'quotes'));
-              quotes = snap.docs.map(d => ({ id: d.id, scope: 'project', ...d.data() }));
-            } else if (customerId) {
-              const draftsSnap = await getDocs(collection(db, 'customerProfiles', customerId, 'quotesDrafts'));
-              quotes = draftsSnap.docs.map(d => ({ id: d.id, scope: 'customer', ...d.data() })).filter(q => !q.projectId);
-            }
-            if (quotes.length > 0) {
-              quotes.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
-              await attachQuoteById(quotes[0].id, quotes);
-            }
-          }
-        } catch {}
+      // Optional quotation: only attach if explicitly selected and not yet attached
+      if (!isStageAdvancement && autoAttachQuotation && selectedQuoteIdLocal && (autoAttachedFiles.length === 0 && autoAttachedPdfFiles.length === 0)) {
+        try { await attachQuoteById(selectedQuoteIdLocal, modalProjectQuotes); } catch {}
       }
 
       // Upload files first (original attachments selected by user)
@@ -838,7 +796,7 @@ export default function AdvancedApprovalRequestModal({
           overflow: "auto",
           flex: 1
         }}>
-          {/* Quotation Selection (required for conversion) */}
+          {/* Quotation Selection (optional for conversion) */}
           {(!isStageAdvancement && autoAttachQuotation) && (
             <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
               <label style={{
@@ -848,16 +806,22 @@ export default function AdvancedApprovalRequestModal({
                 fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
                 color: DESIGN_SYSTEM.colors.text.primary
               }}>
-                Quotation (required for conversion)
+                Quotation (optional)
               </label>
               <select
                 value={selectedQuoteIdLocal}
                 onChange={async (e) => {
                   setSelectedQuoteIdLocal(e.target.value);
                   setQuoteAttachError("");
-                  await attachQuoteById(e.target.value);
+                  if (e.target.value) {
+                    await attachQuoteById(e.target.value);
+                  } else {
+                    setAutoAttachedFiles([]);
+                    setAutoAttachedPdfFiles([]);
+                    setSelectedQuoteData(null);
+                  }
                 }}
-                disabled={modalProjectQuotes.length === 0 || loading}
+                disabled={loading}
                 style={{
                   width: '100%',
                   padding: DESIGN_SYSTEM.spacing.sm,
@@ -866,6 +830,7 @@ export default function AdvancedApprovalRequestModal({
                   fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
                 }}
               >
+                <option value="">None — do not include quotation</option>
                 {modalProjectQuotes.length === 0 && (
                   <option value="">No quotes found (select a project or add drafts)</option>
                 )}

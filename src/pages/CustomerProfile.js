@@ -790,40 +790,54 @@ export default function CustomerProfile() {
 
   const handleSaveProjectFromConversion = async (projectData) => {
     setLoading(true);
+    // Pre-fill fields from customerProfile and companyProfile
+    const preFilledProjectData = {
+      ...projectData,
+      company: companyProfile.company || projectData.company || '',
+      industry: companyProfile.industry || projectData.industry || '',
+      contactPerson: customerProfile.name || projectData.contactPerson || '',
+      contactEmail: customerProfile.email || projectData.contactEmail || '',
+      contactPhone: customerProfile.phone || projectData.contactPhone || '',
+      status: "Active", // Set as active since approval was already given
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      customerId: id, // Link to the current customer
+      convertedFromCustomer: true,
+      description: projectData.description || '',
+      startDate: projectData.startDate || '',
+      endDate: projectData.endDate || '',
+      budget: projectData.budget || '',
+      priority: projectData.priority || 'Normal',
+      
+      // Ensure project appears in ProjectList queries
+      userId: currentUser.uid, // Legacy field for compatibility
+      createdBy: currentUser.uid, // New field
+      createdByName: currentUser.name || currentUser.displayName || currentUser.email,
+      
+      // Ensure current user is in team if not already
+      team: projectData.team && projectData.team.length > 0 
+        ? (projectData.team.includes(currentUser.uid) ? projectData.team : [...projectData.team, currentUser.uid])
+        : [currentUser.uid]
+    };
+
+    const projectsCollectionRef = collection(db, "projects");
+    let newProjectRef = null;
+    // Remove undefined fields that Firestore disallows
     try {
-      // Pre-fill fields from customerProfile and companyProfile
-      const preFilledProjectData = {
-        ...projectData,
-        company: companyProfile.company || projectData.company || '',
-        industry: companyProfile.industry || projectData.industry || '',
-        contactPerson: customerProfile.name || projectData.contactPerson || '',
-        contactEmail: customerProfile.email || projectData.contactEmail || '',
-        contactPhone: customerProfile.phone || projectData.contactPhone || '',
-        status: "Active", // Set as active since approval was already given
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        customerId: id, // Link to the current customer
-        convertedFromCustomer: true,
-        description: projectData.description || '',
-        startDate: projectData.startDate || '',
-        endDate: projectData.endDate || '',
-        budget: projectData.budget || '',
-        priority: projectData.priority || 'Normal',
-        
-        // Ensure project appears in ProjectList queries
-        userId: currentUser.uid, // Legacy field for compatibility
-        createdBy: currentUser.uid, // New field
-        createdByName: currentUser.name || currentUser.displayName || currentUser.email,
-        
-        // Ensure current user is in team if not already
-        team: projectData.team && projectData.team.length > 0 
-          ? (projectData.team.includes(currentUser.uid) ? projectData.team : [...projectData.team, currentUser.uid])
-          : [currentUser.uid]
-      };
+      Object.keys(preFilledProjectData).forEach((k) => {
+        if (preFilledProjectData[k] === undefined) delete preFilledProjectData[k];
+      });
+    } catch {}
+    try {
+      newProjectRef = await addDoc(projectsCollectionRef, preFilledProjectData);
+    } catch (error) {
+      console.error("Error creating project from conversion:", error);
+      alert("Failed to create project.");
+      setLoading(false);
+      return;
+    }
 
-      const projectsCollectionRef = collection(db, "projects");
-      const newProjectRef = await addDoc(projectsCollectionRef, preFilledProjectData);
-
+    try {
       // Update the customer's projects array with the new project ID
       const customerRef = doc(db, "customerProfiles", id);
       // Save a snapshot of current pipeline data for this project tab
@@ -840,6 +854,9 @@ export default function CustomerProfile() {
         projectSnapshots: { ...(projectSnapshots || {}), [newProjectRef.id]: snapshot }
       });
       setProjectSnapshots(prev => ({ ...(prev || {}), [newProjectRef.id]: snapshot }));
+    } catch (e) {
+      console.warn('Project created but failed to link to customer profile:', e);
+    }
 
       // Move attached files to the project record for project history visibility
       try {
@@ -848,76 +865,65 @@ export default function CustomerProfile() {
         });
       } catch {}
 
-      // Copy only ONE unassigned customer draft quote into the new project's quotes collection and remove others
+      // Optional quotation migration: keep only selected draft if provided; else delete all drafts
       try {
         const draftsSnap = await getDocs(collection(db, 'customerProfiles', id, 'quotesDrafts'));
-        // Determine which draft to keep: prefer explicitly selected; else keep the most recent unassigned
-        let selectedDraftId = projectData?.selectedDraftQuoteId || null;
-        if (!selectedDraftId) {
-          // Find newest unassigned draft by createdAt
-          let newest = null;
-          draftsSnap.forEach(d => {
-            const data = d.data() || {};
-            if (data.projectId) return;
-            const createdAtSec = (data.createdAt?.seconds || 0);
-            if (!newest || createdAtSec > (newest.createdAtSec || 0)) {
-              newest = { id: d.id, createdAtSec, data };
-            }
-          });
-          selectedDraftId = newest ? newest.id : null;
-        }
+        const selectedDraftId = projectData?.selectedDraftQuoteId || null;
         const ops = [];
         let addedQuoteId = null;
         draftsSnap.forEach(d => {
           const q = d.data() || {};
-          if (q.projectId) return;
-          const items = Array.isArray(q.items) ? q.items : [];
-          const subtotal = Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0));
-          const taxRate = Number(q.taxRate || 0);
-          const discount = Number(q.discount || 0);
-          const taxAmount = Number(q.taxAmount || (subtotal * (taxRate/100)));
-          const total = Number(q.total || (subtotal + taxAmount - discount));
-          if (selectedDraftId && d.id === selectedDraftId) {
-            // Add only the selected draft
-            ops.push(
-              addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
-                client: q.client || '',
-                validUntil: q.validUntil || '',
-                items,
-                subtotal,
-                taxRate,
-                discount,
-                taxAmount,
-                total,
-                status: q.status || 'draft',
-                createdAt: serverTimestamp(),
-                movedFromCustomerId: id,
-              })
-                .then(ref => { addedQuoteId = ref.id; })
-                .catch(() => {})
-            );
-            // Tag selected draft so it won't appear as customer-level
-            ops.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
+          if (q.projectId) return; // already moved elsewhere
+          if (selectedDraftId) {
+            // Migrate only the selected draft; delete others
+            if (d.id === selectedDraftId) {
+              const items = Array.isArray(q.items) ? q.items : [];
+              const subtotal = Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0));
+              const taxRate = Number(q.taxRate || 0);
+              const discount = Number(q.discount || 0);
+              const taxAmount = Number(q.taxAmount || (subtotal * (taxRate/100)));
+              const total = Number(q.total || (subtotal + taxAmount - discount));
+              ops.push(
+                addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
+                  client: q.client || '',
+                  validUntil: q.validUntil || '',
+                  items,
+                  subtotal,
+                  taxRate,
+                  discount,
+                  taxAmount,
+                  total,
+                  status: q.status || 'draft',
+                  createdAt: serverTimestamp(),
+                  movedFromCustomerId: id,
+                }).then(ref => { addedQuoteId = ref.id; }).catch(() => {})
+              );
+              ops.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
+            } else {
+              ops.push(deleteDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id)).catch(() => {}));
+            }
           } else {
-            // Remove other drafts
+            // No selection: delete all unassigned drafts
             ops.push(deleteDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id)).catch(() => {}));
           }
         });
         if (ops.length > 0) await Promise.all(ops);
-        // Safety: ensure only one quote under the project by removing any extras that may exist
-        try {
-          const projQuotesSnap = await getDocs(collection(db, 'projects', newProjectRef.id, 'quotes'));
-          const deletes = [];
-          let keepFound = false;
-          projQuotesSnap.forEach(qdoc => {
-            if (!keepFound && (addedQuoteId ? qdoc.id === addedQuoteId : true)) {
-              keepFound = true;
-              return;
-            }
-            deletes.push(deleteDoc(doc(db, 'projects', newProjectRef.id, 'quotes', qdoc.id)).catch(() => {}));
-          });
-          if (deletes.length > 0) await Promise.all(deletes);
-        } catch {}
+        // Safety: ensure at most one quote exists under project
+        if (selectedDraftId) {
+          try {
+            const projQuotesSnap = await getDocs(collection(db, 'projects', newProjectRef.id, 'quotes'));
+            const deletes = [];
+            let keepFound = false;
+            projQuotesSnap.forEach(qdoc => {
+              if (!keepFound && (addedQuoteId ? qdoc.id === addedQuoteId : true)) {
+                keepFound = true;
+                return;
+              }
+              deletes.push(deleteDoc(doc(db, 'projects', newProjectRef.id, 'quotes', qdoc.id)).catch(() => {}));
+            });
+            if (deletes.length > 0) await Promise.all(deletes);
+          } catch {}
+        }
       } catch {}
 
       // Move customer transcripts to the new project's transcripts collection
@@ -941,6 +947,7 @@ export default function CustomerProfile() {
         }
       } catch {}
 
+    try {
       console.log("Project created from conversion with ID:", newProjectRef.id);
       // Reset non-core panels for a clean state per requirement
       setActivities([]);
@@ -949,16 +956,12 @@ export default function CustomerProfile() {
       // Reset stage content but keep structure
       const resetStageData = Object.fromEntries((stages || []).map(s => [s, { notes: [], tasks: [], completed: false }]));
       setStageData(resetStageData);
-      await updateDoc(doc(db, 'customerProfiles', id), { activities: [], reminders: [], files: [], stageData: resetStageData });
+      try { await updateDoc(doc(db, 'customerProfiles', id), { activities: [], reminders: [], files: [], stageData: resetStageData }); } catch {}
+    } catch {}
 
-      setShowCreateProjectModal(false);
-      navigate(`/project/${newProjectRef.id}`);
-    } catch (error) {
-      console.error("Error creating project from conversion:", error);
-      alert("Failed to create project.");
-    } finally {
-      setLoading(false);
-    }
+    setShowCreateProjectModal(false);
+    navigate(`/project/${newProjectRef.id}`);
+    setLoading(false);
   };
 
   const handleAddActivity = (activity) => {
