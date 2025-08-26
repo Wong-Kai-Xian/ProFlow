@@ -10,7 +10,8 @@ export default function ConfirmationModal({
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   confirmButtonType = 'primary',
-  isLoading = false 
+  isLoading = false,
+  hideCancel = false
 }) {
   if (!isOpen) return null;
 
@@ -57,16 +58,18 @@ export default function ConfirmationModal({
           {message}
         </p>
         <div style={{ display: 'flex', justifyContent: 'center', gap: DESIGN_SYSTEM.spacing.lg }}>
-          <button
-            onClick={onClose}
-            style={{
-              ...getButtonStyle('secondary', 'neutral'),
-              padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.lg}`,
-              fontSize: DESIGN_SYSTEM.typography.fontSize.base,
-            }}
-          >
-            {cancelText}
-          </button>
+          {!hideCancel && (
+            <button
+              onClick={onClose}
+              style={{
+                ...getButtonStyle('secondary', 'neutral'),
+                padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.lg}`,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+              }}
+            >
+              {cancelText}
+            </button>
+          )}
           <button
             onClick={onConfirm}
             disabled={isLoading}

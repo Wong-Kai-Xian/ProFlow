@@ -7,7 +7,7 @@ import { DESIGN_SYSTEM } from '../styles/designSystem';
 
 export default function NotificationCenter({ userId, isOpen, onClose }) {
   const [items, setItems] = useState([]);
-  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const [showUnreadOnly, setShowUnreadOnly] = useState(true);
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
   const [dueSoonHours, setDueSoonHours] = useState(24);
@@ -38,6 +38,11 @@ export default function NotificationCenter({ userId, isOpen, onClose }) {
     });
     return () => unsub();
   }, [userId, isOpen]);
+
+  // Default to unread filter each time the panel opens
+  useEffect(() => {
+    if (isOpen) setShowUnreadOnly(true);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!userId || !isOpen) return;

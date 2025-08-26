@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES } from '../profile-component/constants';
 
-export default function StageIndicator({ currentStage, allStages, onAdvanceStage, onGoBackStage, isCurrentStageTasksComplete, onStageSelect, canAdvance, editing = false, onAddStage, onDeleteStageAt, onRenameStage, onMoveStageLeft, onMoveStageRight }) {
+export default function StageIndicator({ currentStage, allStages, onAdvanceStage, onGoBackStage, isCurrentStageTasksComplete, onStageSelect, canAdvance, editing = false, onAddStage, onDeleteStageAt, onRenameStage, onMoveStageLeft, onMoveStageRight, isStageApprovalPending = false }) {
   const currentStageIndex = allStages.indexOf(currentStage);
   const isLastStage = currentStageIndex === allStages.length - 1;
   const rowRef = useRef(null);
@@ -145,7 +145,7 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
               }}
               disabled={!canAdvance}
             >
-              Get Approval & Advance Stage
+              {isStageApprovalPending ? 'Pending Approval' : 'Get Approval & Advance Stage'}
             </button>
           )}
         </div>

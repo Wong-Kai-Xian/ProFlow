@@ -21,6 +21,7 @@ import { getAcceptedTeamMembers, getAcceptedTeamMembersForProject } from '../ser
 import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc, query, where, getDocs, deleteDoc, onSnapshot, arrayUnion, arrayRemove } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getPageHeaderStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
+import ConfirmationModal from '../components/common/ConfirmationModal';
 
 const STAGES = ["Working", "Qualified", "Converted"];
 
@@ -59,6 +60,16 @@ export default function CustomerProfile() {
   const [showConvertPanel, setShowConvertPanel] = useState(false);
   const [autoCreatedFromApproval, setAutoCreatedFromApproval] = useState(false);
   const [convertForm, setConvertForm] = useState({ name: '', description: '', startDate: '', endDate: '', budget: '', priority: 'Normal', recipientUids: [] });
+
+  // Confirmation modal state (mirrors ProjectDetail)
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState({
+    title: '',
+    message: '',
+    onConfirm: () => setShowConfirmModal(false),
+    confirmText: 'OK',
+    confirmButtonType: 'primary'
+  });
 
   // Meeting state (mirrors ProjectDetail)
   const [showMeeting, setShowMeeting] = useState(false);
@@ -151,8 +162,19 @@ export default function CustomerProfile() {
   const handleProjectConversionApprovalSuccess = (result) => {
     setShowProjectConversionApprovalModal(false);
     setHasPendingConversionRequest(true);
-    // Don't create project immediately - wait for approval
-    alert("Conversion approval request sent successfully! You'll be able to create the project once it's approved.");
+    // Show success modal instead of alert
+    try {
+      setConfirmModalConfig({
+        title: 'Approval Sent',
+        message: "Conversion approval request sent successfully! You'll be able to create the project once it's approved.",
+        confirmText: 'OK',
+        confirmButtonType: 'primary',
+        onConfirm: () => setShowConfirmModal(false)
+      });
+      setShowConfirmModal(true);
+    } catch (e) {
+      console.log('Approval sent');
+    }
   };
 
   // Disabled auto-create on approval to prevent auto-linking customer to project
@@ -187,7 +209,18 @@ export default function CustomerProfile() {
 
   const handleApprovalRequestSuccess = (result) => {
     setShowAdvancedApprovalModal(false);
-    alert(`Approval request sent successfully to ${result.recipientCount} team member(s)!\n\nTitle: ${result.title}\nType: ${result.type}\nEntity: ${result.entityName}`);
+    try {
+      setConfirmModalConfig({
+        title: 'Approval Sent',
+        message: `Approval request sent successfully to ${result.recipientCount} team member(s)!\n\nTitle: ${result.title}\nType: ${result.type}\nEntity: ${result.entityName}`,
+        confirmText: 'OK',
+        confirmButtonType: 'primary',
+        onConfirm: () => setShowConfirmModal(false)
+      });
+      setShowConfirmModal(true);
+    } catch (e) {
+      console.log('Approval sent');
+    }
   };
 
   useEffect(() => {
@@ -1365,6 +1398,17 @@ export default function CustomerProfile() {
         companyProfileData={companyProfile}
         quoteProjectId={selectedProjectId || null}
         quoteProjectName={projectNames[selectedProjectId] || ''}
+      />
+
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={confirmModalConfig.onConfirm}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        confirmText={confirmModalConfig.confirmText}
+        confirmButtonType={confirmModalConfig.confirmButtonType}
+        hideCancel={true}
       />
     </div>
   );
