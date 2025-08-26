@@ -715,7 +715,8 @@ export default function AdvancedApprovalRequestModal({
           entityName: effectiveEntityName,
           decisionMaker: selectedDecisionMaker.name,
           viewerCount: selectedViewers.length,
-          title: requestTitle
+          title: requestTitle,
+          nextStage: isStageAdvancement ? nextStage : undefined
         });
       }
 

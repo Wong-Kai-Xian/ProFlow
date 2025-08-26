@@ -86,14 +86,17 @@ export default function ApprovalPage() {
     console.log('Fetching approval requests for user:', currentUser.uid);
 
     // Fetch approval requests where user has access (creator, decision maker, or viewer)
-    const allRequestsMap = new Map();
-    
-    const updateRequestsList = (newRequests) => {
-      newRequests.forEach(request => {
-        allRequestsMap.set(request.id, request);
+    // Maintain latest results per query and rebuild the combined list on any change
+    let q1Data = [];
+    let q2Data = [];
+    let q3Data = [];
+
+    const rebuildCombinedList = () => {
+      const map = new Map();
+      [...q1Data, ...q2Data, ...q3Data].forEach(request => {
+        map.set(request.id, request);
       });
-      
-      const requestsArray = Array.from(allRequestsMap.values());
+      const requestsArray = Array.from(map.values());
       // Sort by dateRequested descending (most recent first)
       requestsArray.sort((a, b) => {
         if (!a.dateRequested && !b.dateRequested) return 0;
@@ -101,7 +104,6 @@ export default function ApprovalPage() {
         if (!b.dateRequested) return -1;
         return b.dateRequested.getTime() - a.dateRequested.getTime();
       });
-      
       setAllRequests(requestsArray);
       setLoading(false);
       // If we are deleting and the target is now gone, close modal and reset state
@@ -110,7 +112,7 @@ export default function ApprovalPage() {
         setShowDeleteModal(false);
         setRequestToDelete(null);
       }
-      console.log('Processed approval requests:', requestsArray);
+      console.log('Processed approval requests (combined):', requestsArray);
     };
 
     // Query 1: Requests created by user
@@ -160,7 +162,8 @@ export default function ApprovalPage() {
           dueDate: normalizeDateValue(data.dueDate, data.dueTime)
         };
       });
-      updateRequestsList(requests);
+      q1Data = requests;
+      rebuildCombinedList();
     });
 
     const unsubscribe2 = onSnapshot(q2, (snapshot) => {
@@ -174,7 +177,8 @@ export default function ApprovalPage() {
           dueDate: normalizeDateValue(data.dueDate, data.dueTime)
         };
       });
-      updateRequestsList(requests);
+      q2Data = requests;
+      rebuildCombinedList();
     });
 
     const unsubscribe3 = onSnapshot(q3, (snapshot) => {
@@ -188,7 +192,8 @@ export default function ApprovalPage() {
           dueDate: normalizeDateValue(data.dueDate, data.dueTime)
         };
       });
-      updateRequestsList(requests);
+      q3Data = requests;
+      rebuildCombinedList();
     });
 
     return () => {
@@ -322,8 +327,10 @@ export default function ApprovalPage() {
     setDeleteLoading(true);
     try {
       await deleteDoc(doc(db, 'approvalRequests', requestToDelete.id));
-      // Keep modal open and button in "Deleting..." state
-      // We'll close the modal once the item is actually removed from the list (see effect below)
+      // Close immediately; list will live-update from onSnapshot
+      setDeleteLoading(false);
+      setShowDeleteModal(false);
+      setRequestToDelete(null);
     } catch (error) {
       console.error("Error deleting approval request:", error);
       alert("Failed to delete approval request. Please try again.");

@@ -461,6 +461,7 @@ export default function ProjectDetail() {
   const [projectReminders, setProjectReminders] = useState([]);
   const [projectDetails, setProjectDetails] = useState(null);
   const [stagesCollapsed, setStagesCollapsed] = useState(false);
+  const [stageApprovalPending, setStageApprovalPending] = useState(false);
 
   const handleAdvanceStage = async () => {
     const currentStageIndex = projectStages.indexOf(currentStage);
@@ -490,8 +491,29 @@ export default function ProjectDetail() {
       setCurrentStage(result.nextStage);
       setProjectData(prev => prev ? { ...prev, stage: result.nextStage } : prev);
     }
-    // Optional: log/notify for non-bypassed requests
-    console.log(`Project approval request ${result?.bypassed ? 'bypassed/advanced' : 'sent'} for ${result?.entityName || ''}`);
+    // If this was a stage advancement request (not bypass), mark pending indicator
+    if (approvalModalType === 'stage' && !(result && result.bypassed)) {
+      setStageApprovalPending(true);
+    }
+    // Show styled popup, no cancel, include rich info
+    const lines = [];
+    if (result?.title) lines.push(`Title: ${result.title}`);
+    if (result?.entityName) lines.push(`Entity: ${result.entityName}`);
+    if (result?.type) lines.push(`Type: ${result.type}`);
+    if (approvalModalType === 'stage' && result?.nextStage && !result?.bypassed) {
+      lines.push(`Requested Stage: ${currentStage} → ${result.nextStage}`);
+    }
+    const msg = result?.bypassed
+      ? `Stage advanced to ${result.nextStage}.`
+      : `Approval request sent successfully.${lines.length ? `\n\n${lines.join('\n')}` : ''}`;
+    setConfirmModalConfig({
+      title: 'Approval Sent',
+      message: msg,
+      confirmText: 'OK',
+      confirmButtonType: 'primary',
+      onConfirm: () => setShowConfirmModal(false)
+    });
+    setShowConfirmModal(true);
   };
 
   const handleConfirmAdvanceStage = async () => {
@@ -1476,19 +1498,19 @@ export default function ProjectDetail() {
                 )}
                 {!isEditingStages && (
                 <button
-                  onClick={() => !currentApproval && handleSendApprovalRequest()}
-                  disabled={!!currentApproval}
+                  onClick={() => handleSendApprovalRequest()}
+                  disabled={false}
                   style={{
                     ...getButtonStyle('secondary', 'projects'),
-                    background: currentApproval ? 'rgba(107,114,128,0.3)' : 'rgba(255,255,255,0.2)',
-                    color: currentApproval ? '#9CA3AF' : DESIGN_SYSTEM.colors.text.inverse,
-                    border: currentApproval ? `1px solid rgba(156,163,175,0.5)` : `1px solid rgba(255,255,255,0.3)`,
+                    background: 'rgba(255,255,255,0.2)',
+                    color: DESIGN_SYSTEM.colors.text.inverse,
+                    border: `1px solid rgba(255,255,255,0.3)`,
                     padding: `${DESIGN_SYSTEM.spacing.xs} ${DESIGN_SYSTEM.spacing.base}`,
                     fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                    cursor: currentApproval ? 'not-allowed' : 'pointer'
+                    cursor: 'pointer'
                   }}
                 >
-                  {currentApproval ? 'Pending Approval' : 'Send Approval'}
+                  Send Approval
                 </button>
                 )}
                 {!isEditingStages && (
@@ -1524,6 +1546,7 @@ export default function ProjectDetail() {
                  onRenameStage={handleRenameStageAt}
                  onMoveStageLeft={handleMoveStageLeft}
                  onMoveStageRight={handleMoveStageRight}
+                 isStageApprovalPending={stageApprovalPending}
                />
             </div>
             )}
