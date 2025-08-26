@@ -1,5 +1,5 @@
 // src/components/profile-component/GmailAIReplyModal.js
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from 'react-dom';
 import { BUTTON_STYLES, INPUT_STYLES, COLORS } from "./constants";
 
@@ -159,6 +159,17 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
     // Mark that user authorized Gmail at least once
     try { localStorage.setItem('gmail_authorized', '1'); } catch {}
   }, [isOpen]);
+
+  // Auto-load latest threads when modal opens for reply/analyze
+  const autoLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!isOpen) { autoLoadedRef.current = false; return; }
+    if ((mode === 'reply' || mode === 'analyze') && !autoLoadedRef.current) {
+      (async () => {
+        try { await fetchThreads(); autoLoadedRef.current = true; } catch {}
+      })();
+    }
+  }, [isOpen, mode]);
 
   const ensureToken = async () => {
     try {

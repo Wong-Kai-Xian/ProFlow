@@ -1,15 +1,18 @@
 // src/components/profile-component/CustomerInfo.js
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Card from "./Card";
 import { BUTTON_STYLES, INPUT_STYLES } from "./constants"; // Import BUTTON_STYLES and INPUT_STYLES
 import { COLORS } from "./constants"; // Import COLORS
 import GmailAIReplyModal from "./GmailAIReplyModal";
 
-export default function CustomerInfo({ data, setCustomerProfile }) {
+export default function CustomerInfo({ data, setCustomerProfile, onSave }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedData, setEditedData] = useState(data);
   const [gmailAiOpen, setGmailAiOpen] = useState(false);
   
+  useEffect(() => {
+    setEditedData(data || {});
+  }, [data]);
 
   const openGmailCompose = (toEmail = '') => {
     try {
@@ -52,6 +55,9 @@ export default function CustomerInfo({ data, setCustomerProfile }) {
   const handleEditToggle = () => {
     if (isEditing) {
       setCustomerProfile(editedData);
+      if (typeof onSave === 'function') {
+        try { onSave(editedData); } catch {}
+      }
     }
     setIsEditing(!isEditing);
   };

@@ -8,7 +8,7 @@ import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where
 import IncomingCustomerSharesModal from "../components/profile-component/IncomingCustomerSharesModal";
 import AddProfileModal from "../components/profile-component/AddProfileModal"; // Import AddProfileModal
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
-import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
+import { FaTrash, FaInbox } from 'react-icons/fa'; // Import icons
 import DeleteProfileModal from '../components/profile-component/DeleteProfileModal'; // Import DeleteProfileModal
 
 // Get initials from customer name
@@ -70,12 +70,14 @@ export default function CustomerProfileList() {
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false); // Loading state for customer creation
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
   const [showIncomingShares, setShowIncomingShares] = useState(false);
+  const [pendingSharesCount, setPendingSharesCount] = useState(0);
 
   useEffect(() => {
     if (!currentUser) {
       setCustomers([]);
       setLegacyCustomers([]);
       setSharedCustomers([]);
+      setPendingSharesCount(0);
       return;
     }
 
@@ -114,6 +116,38 @@ export default function CustomerProfileList() {
     });
 
     return () => { unsubLegacy(); unsubShared(); };
+  }, [currentUser]);
+
+  // Live pending shares count (to highlight button)
+  useEffect(() => {
+    if (!currentUser) { setPendingSharesCount(0); return; }
+    const base = collection(db, 'customerShares');
+    const qUid = query(base, where('toUserId', '==', currentUser.uid), where('status', '==', 'pending'));
+    const qEmail = currentUser.email ? query(base, where('toUserEmail', '==', currentUser.email), where('status', '==', 'pending')) : null;
+    const unsubs = [];
+    const updateCount = (lists) => {
+      const ids = new Set();
+      lists.forEach(snap => snap && snap.docs && snap.docs.forEach(d => ids.add(d.id)));
+      setPendingSharesCount(ids.size);
+    };
+    const unsub1 = onSnapshot(qUid, (snap) => {
+      if (qEmail) {
+        // we'll update in combined handler via second snapshot too
+        // temporarily store in localStorage to merge
+        try { localStorage.setItem('pending_shares_uid', String(snap.size || 0)); } catch {}
+      } else {
+        updateCount([snap]);
+      }
+    });
+    unsubs.push(unsub1);
+    if (qEmail) {
+      const unsub2 = onSnapshot(qEmail, (snapEmail) => {
+        // Merge both counts by IDs; re-run queries; simpler approach: fetch both once here
+        getDocs(qUid).then(snapUid => updateCount([snapUid, snapEmail])).catch(() => updateCount([snapEmail]));
+      });
+      unsubs.push(unsub2);
+    }
+    return () => { unsubs.forEach(u => { try { u(); } catch {} }); };
   }, [currentUser]);
 
   // Merge lists and de-duplicate
@@ -404,42 +438,55 @@ export default function CustomerProfileList() {
             </p>
           </div>
           {currentUser && (
-            <button
-              onClick={() => setShowAddCustomerModal(true)}
-              style={{
-                ...getButtonStyle('primary', 'customers'),
-                padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.base,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-                borderRadius: DESIGN_SYSTEM.borderRadius.lg,
-                boxShadow: "0 4px 15px rgba(255, 255, 255, 0.3)"
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.transform = "translateY(-2px)";
-                e.target.style.boxShadow = "0 6px 20px rgba(255, 255, 255, 0.4)";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = "translateY(0)";
-                e.target.style.boxShadow = "0 4px 15px rgba(255, 255, 255, 0.3)";
-              }}
-            >
-              Add New Customer
-            </button>
-          )}
-          {currentUser && (
-            <button
-              onClick={() => setShowIncomingShares(true)}
-              style={{
-                ...getButtonStyle('secondary', 'customers'),
-                padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.base,
-                fontWeight: DESIGN_SYSTEM.typTypography?.fontWeight?.semibold || DESIGN_SYSTEM.typography.fontWeight.semibold,
-                borderRadius: DESIGN_SYSTEM.borderRadius.lg,
-                marginLeft: DESIGN_SYSTEM.spacing.base
-              }}
-            >
-              Incoming Shares
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.base }}>
+              <button
+                onClick={() => setShowAddCustomerModal(true)}
+                style={{
+                  ...getButtonStyle('primary', 'customers'),
+                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                  boxShadow: "0 4px 15px rgba(255, 255, 255, 0.3)"
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = "translateY(-2px)";
+                  e.target.style.boxShadow = "0 6px 20px rgba(255, 255, 255, 0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = "translateY(0)";
+                  e.target.style.boxShadow = "0 4px 15px rgba(255, 255, 255, 0.3)";
+                }}
+              >
+                Add New Customer
+              </button>
+              <button
+                onClick={() => setShowIncomingShares(true)}
+                style={{
+                  ...(pendingSharesCount > 0 ? getButtonStyle('primary', 'customers') : getButtonStyle('secondary', 'customers')),
+                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}
+              >
+                <FaInbox style={{ marginRight: 4 }} /> Incoming Shares
+                {pendingSharesCount > 0 && (
+                  <span style={{
+                    marginLeft: 6,
+                    background: '#ef4444',
+                    color: '#fff',
+                    borderRadius: 9999,
+                    padding: '2px 8px',
+                    fontSize: 12,
+                    fontWeight: 700
+                  }}>{pendingSharesCount}</span>
+                )}
+              </button>
+            </div>
           )}
         </div>
 

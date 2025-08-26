@@ -42,12 +42,14 @@ export default function NotificationAgent() {
       const isOptIn = localStorage.getItem('gmail_poll_enabled') === '1';
       if (!isAuthorized || !isOptIn) return;
       try {
-        const accessToken = await ensureGmailToken();
+        let accessToken = await ensureGmailToken();
         if (!accessToken) return;
         gmailStartedRef.current = true;
         let lastIds = new Set(JSON.parse(localStorage.getItem(`proflow_gmail_seen_${currentUser.uid}`) || '[]'));
         const poll = async () => {
           try {
+            // refresh token silently each poll to avoid expiry issues
+            try { const refreshed = await ensureGmailToken(); if (refreshed) accessToken = refreshed; } catch {}
             const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5', { headers: { Authorization: `Bearer ${accessToken}` } });
             if (!res.ok) return;
             const json = await res.json();
@@ -77,6 +79,66 @@ export default function NotificationAgent() {
       } catch {}
     };
     startGmailPoll();
+
+    // Incoming customer shares → notify receiver
+    try {
+      const sharesBase = collection(db, 'customerShares');
+      const qToUid = query(sharesBase, where('toUserId', '==', currentUser.uid), where('status', '==', 'pending'));
+      const unsubSharesUid = onSnapshot(qToUid, async (snap) => {
+        const seenKey = `proflow_share_in_${currentUser.uid}`;
+        const seen = JSON.parse(localStorage.getItem(seenKey) || '{}');
+        for (const d of snap.docs) {
+          const key = `share_in:${d.id}`;
+          if (!seen[key]) {
+            try {
+              const data = d.data();
+              const who = data.fromUserEmail || 'Someone';
+              await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+                unread: true,
+                createdAt: serverTimestamp(),
+                origin: 'customer',
+                title: 'Incoming customer share',
+                message: `${who} shared a customer with you`,
+                refType: 'customerShare',
+                shareId: d.id,
+              });
+              seen[key] = Date.now();
+              localStorage.setItem(seenKey, JSON.stringify(seen));
+            } catch {}
+          }
+        }
+      });
+      unsubs.push(unsubSharesUid);
+
+      if (currentUser.email) {
+        const qToEmail = query(sharesBase, where('toUserEmail', '==', currentUser.email), where('status', '==', 'pending'));
+        const unsubSharesEmail = onSnapshot(qToEmail, async (snap) => {
+          const seenKey = `proflow_share_in_${currentUser.uid}`;
+          const seen = JSON.parse(localStorage.getItem(seenKey) || '{}');
+          for (const d of snap.docs) {
+            const key = `share_in:${d.id}`;
+            if (!seen[key]) {
+              try {
+                const data = d.data();
+                const who = data.fromUserEmail || 'Someone';
+                await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+                  unread: true,
+                  createdAt: serverTimestamp(),
+                  origin: 'customer',
+                  title: 'Incoming customer share',
+                  message: `${who} shared a customer with you`,
+                  refType: 'customerShare',
+                  shareId: d.id,
+                });
+                seen[key] = Date.now();
+                localStorage.setItem(seenKey, JSON.stringify(seen));
+              } catch {}
+            }
+          }
+        });
+        unsubs.push(unsubSharesEmail);
+      }
+    } catch {}
     // Invitations to me -> notify
     const qInvIncoming = query(collection(db, 'invitations'), where('toUserId', '==', currentUser.uid), where('status', '==', 'pending'));
     const unsubIncoming = onSnapshot(qInvIncoming, async (snap) => {

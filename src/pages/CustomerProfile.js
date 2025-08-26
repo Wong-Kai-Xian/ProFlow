@@ -1243,7 +1243,7 @@ export default function CustomerProfile() {
                 </h2>
               </div>
               <div style={{ padding: "0" }}>
-                <CustomerInfo data={customerProfile} setCustomerProfile={setCustomerProfile} />
+                <CustomerInfo data={customerProfile} setCustomerProfile={setCustomerProfile} onSave={(updated) => handleSaveCustomer({ customerProfile: updated })} />
               </div>
             </div>
 
