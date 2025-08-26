@@ -104,6 +104,12 @@ export default function CustomerProfile() {
   // Default CRM tab to Stages on load
   const [defaultCrmTab, setDefaultCrmTab] = useState('Stages');
 
+  // Access management
+  const [accessList, setAccessList] = useState([]); // [{ uid, name, email }]
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [sharing, setSharing] = useState(false);
+
   
 
   // Wire AI Actions button inside CRM transcripts to this page modal
@@ -243,6 +249,22 @@ export default function CustomerProfile() {
           setProjects(data.projects || []);
           setProjectSnapshots(data.projectSnapshots || {});
           setLastContact(data.lastContact || "N/A");
+          // Load access list details
+          try {
+            const access = Array.isArray(data.access) ? data.access : (data.userId ? [data.userId] : []);
+            const details = [];
+            const chunkSize = 10;
+            for (let i = 0; i < access.length; i += chunkSize) {
+              const chunk = access.slice(i, i + chunkSize);
+              const usersQuery = query(collection(db, "users"), where("uid", "in", chunk));
+              const usersSnapshot = await getDocs(usersQuery);
+              usersSnapshot.forEach(userDoc => {
+                const u = userDoc.data();
+                details.push({ uid: userDoc.id, name: u.name || u.email || 'User', email: u.email || '' });
+              });
+            }
+            setAccessList(details);
+          } catch {}
         } else {
           console.log("No such customer document!");
           // If ID exists but document doesn't, navigate back to list or show error
@@ -768,40 +790,54 @@ export default function CustomerProfile() {
 
   const handleSaveProjectFromConversion = async (projectData) => {
     setLoading(true);
+    // Pre-fill fields from customerProfile and companyProfile
+    const preFilledProjectData = {
+      ...projectData,
+      company: companyProfile.company || projectData.company || '',
+      industry: companyProfile.industry || projectData.industry || '',
+      contactPerson: customerProfile.name || projectData.contactPerson || '',
+      contactEmail: customerProfile.email || projectData.contactEmail || '',
+      contactPhone: customerProfile.phone || projectData.contactPhone || '',
+      status: "Active", // Set as active since approval was already given
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      customerId: id, // Link to the current customer
+      convertedFromCustomer: true,
+      description: projectData.description || '',
+      startDate: projectData.startDate || '',
+      endDate: projectData.endDate || '',
+      budget: projectData.budget || '',
+      priority: projectData.priority || 'Normal',
+      
+      // Ensure project appears in ProjectList queries
+      userId: currentUser.uid, // Legacy field for compatibility
+      createdBy: currentUser.uid, // New field
+      createdByName: currentUser.name || currentUser.displayName || currentUser.email,
+      
+      // Ensure current user is in team if not already
+      team: projectData.team && projectData.team.length > 0 
+        ? (projectData.team.includes(currentUser.uid) ? projectData.team : [...projectData.team, currentUser.uid])
+        : [currentUser.uid]
+    };
+
+    const projectsCollectionRef = collection(db, "projects");
+    let newProjectRef = null;
+    // Remove undefined fields that Firestore disallows
     try {
-      // Pre-fill fields from customerProfile and companyProfile
-      const preFilledProjectData = {
-        ...projectData,
-        company: companyProfile.company || projectData.company || '',
-        industry: companyProfile.industry || projectData.industry || '',
-        contactPerson: customerProfile.name || projectData.contactPerson || '',
-        contactEmail: customerProfile.email || projectData.contactEmail || '',
-        contactPhone: customerProfile.phone || projectData.contactPhone || '',
-        status: "Active", // Set as active since approval was already given
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        customerId: id, // Link to the current customer
-        convertedFromCustomer: true,
-        description: projectData.description || '',
-        startDate: projectData.startDate || '',
-        endDate: projectData.endDate || '',
-        budget: projectData.budget || '',
-        priority: projectData.priority || 'Normal',
-        
-        // Ensure project appears in ProjectList queries
-        userId: currentUser.uid, // Legacy field for compatibility
-        createdBy: currentUser.uid, // New field
-        createdByName: currentUser.name || currentUser.displayName || currentUser.email,
-        
-        // Ensure current user is in team if not already
-        team: projectData.team && projectData.team.length > 0 
-          ? (projectData.team.includes(currentUser.uid) ? projectData.team : [...projectData.team, currentUser.uid])
-          : [currentUser.uid]
-      };
+      Object.keys(preFilledProjectData).forEach((k) => {
+        if (preFilledProjectData[k] === undefined) delete preFilledProjectData[k];
+      });
+    } catch {}
+    try {
+      newProjectRef = await addDoc(projectsCollectionRef, preFilledProjectData);
+    } catch (error) {
+      console.error("Error creating project from conversion:", error);
+      alert("Failed to create project.");
+      setLoading(false);
+      return;
+    }
 
-      const projectsCollectionRef = collection(db, "projects");
-      const newProjectRef = await addDoc(projectsCollectionRef, preFilledProjectData);
-
+    try {
       // Update the customer's projects array with the new project ID
       const customerRef = doc(db, "customerProfiles", id);
       // Save a snapshot of current pipeline data for this project tab
@@ -818,6 +854,9 @@ export default function CustomerProfile() {
         projectSnapshots: { ...(projectSnapshots || {}), [newProjectRef.id]: snapshot }
       });
       setProjectSnapshots(prev => ({ ...(prev || {}), [newProjectRef.id]: snapshot }));
+    } catch (e) {
+      console.warn('Project created but failed to link to customer profile:', e);
+    }
 
       // Move attached files to the project record for project history visibility
       try {
@@ -826,76 +865,65 @@ export default function CustomerProfile() {
         });
       } catch {}
 
-      // Copy only ONE unassigned customer draft quote into the new project's quotes collection and remove others
+      // Optional quotation migration: keep only selected draft if provided; else delete all drafts
       try {
         const draftsSnap = await getDocs(collection(db, 'customerProfiles', id, 'quotesDrafts'));
-        // Determine which draft to keep: prefer explicitly selected; else keep the most recent unassigned
-        let selectedDraftId = projectData?.selectedDraftQuoteId || null;
-        if (!selectedDraftId) {
-          // Find newest unassigned draft by createdAt
-          let newest = null;
-          draftsSnap.forEach(d => {
-            const data = d.data() || {};
-            if (data.projectId) return;
-            const createdAtSec = (data.createdAt?.seconds || 0);
-            if (!newest || createdAtSec > (newest.createdAtSec || 0)) {
-              newest = { id: d.id, createdAtSec, data };
-            }
-          });
-          selectedDraftId = newest ? newest.id : null;
-        }
+        const selectedDraftId = projectData?.selectedDraftQuoteId || null;
         const ops = [];
         let addedQuoteId = null;
         draftsSnap.forEach(d => {
           const q = d.data() || {};
-          if (q.projectId) return;
-          const items = Array.isArray(q.items) ? q.items : [];
-          const subtotal = Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0));
-          const taxRate = Number(q.taxRate || 0);
-          const discount = Number(q.discount || 0);
-          const taxAmount = Number(q.taxAmount || (subtotal * (taxRate/100)));
-          const total = Number(q.total || (subtotal + taxAmount - discount));
-          if (selectedDraftId && d.id === selectedDraftId) {
-            // Add only the selected draft
-            ops.push(
-              addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
-                client: q.client || '',
-                validUntil: q.validUntil || '',
-                items,
-                subtotal,
-                taxRate,
-                discount,
-                taxAmount,
-                total,
-                status: q.status || 'draft',
-                createdAt: serverTimestamp(),
-                movedFromCustomerId: id,
-              })
-                .then(ref => { addedQuoteId = ref.id; })
-                .catch(() => {})
-            );
-            // Tag selected draft so it won't appear as customer-level
-            ops.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
+          if (q.projectId) return; // already moved elsewhere
+          if (selectedDraftId) {
+            // Migrate only the selected draft; delete others
+            if (d.id === selectedDraftId) {
+              const items = Array.isArray(q.items) ? q.items : [];
+              const subtotal = Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0));
+              const taxRate = Number(q.taxRate || 0);
+              const discount = Number(q.discount || 0);
+              const taxAmount = Number(q.taxAmount || (subtotal * (taxRate/100)));
+              const total = Number(q.total || (subtotal + taxAmount - discount));
+              ops.push(
+                addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
+                  client: q.client || '',
+                  validUntil: q.validUntil || '',
+                  items,
+                  subtotal,
+                  taxRate,
+                  discount,
+                  taxAmount,
+                  total,
+                  status: q.status || 'draft',
+                  createdAt: serverTimestamp(),
+                  movedFromCustomerId: id,
+                }).then(ref => { addedQuoteId = ref.id; }).catch(() => {})
+              );
+              ops.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
+            } else {
+              ops.push(deleteDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id)).catch(() => {}));
+            }
           } else {
-            // Remove other drafts
+            // No selection: delete all unassigned drafts
             ops.push(deleteDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id)).catch(() => {}));
           }
         });
         if (ops.length > 0) await Promise.all(ops);
-        // Safety: ensure only one quote under the project by removing any extras that may exist
-        try {
-          const projQuotesSnap = await getDocs(collection(db, 'projects', newProjectRef.id, 'quotes'));
-          const deletes = [];
-          let keepFound = false;
-          projQuotesSnap.forEach(qdoc => {
-            if (!keepFound && (addedQuoteId ? qdoc.id === addedQuoteId : true)) {
-              keepFound = true;
-              return;
-            }
-            deletes.push(deleteDoc(doc(db, 'projects', newProjectRef.id, 'quotes', qdoc.id)).catch(() => {}));
-          });
-          if (deletes.length > 0) await Promise.all(deletes);
-        } catch {}
+        // Safety: ensure at most one quote exists under project
+        if (selectedDraftId) {
+          try {
+            const projQuotesSnap = await getDocs(collection(db, 'projects', newProjectRef.id, 'quotes'));
+            const deletes = [];
+            let keepFound = false;
+            projQuotesSnap.forEach(qdoc => {
+              if (!keepFound && (addedQuoteId ? qdoc.id === addedQuoteId : true)) {
+                keepFound = true;
+                return;
+              }
+              deletes.push(deleteDoc(doc(db, 'projects', newProjectRef.id, 'quotes', qdoc.id)).catch(() => {}));
+            });
+            if (deletes.length > 0) await Promise.all(deletes);
+          } catch {}
+        }
       } catch {}
 
       // Move customer transcripts to the new project's transcripts collection
@@ -919,6 +947,7 @@ export default function CustomerProfile() {
         }
       } catch {}
 
+    try {
       console.log("Project created from conversion with ID:", newProjectRef.id);
       // Reset non-core panels for a clean state per requirement
       setActivities([]);
@@ -927,16 +956,12 @@ export default function CustomerProfile() {
       // Reset stage content but keep structure
       const resetStageData = Object.fromEntries((stages || []).map(s => [s, { notes: [], tasks: [], completed: false }]));
       setStageData(resetStageData);
-      await updateDoc(doc(db, 'customerProfiles', id), { activities: [], reminders: [], files: [], stageData: resetStageData });
+      try { await updateDoc(doc(db, 'customerProfiles', id), { activities: [], reminders: [], files: [], stageData: resetStageData }); } catch {}
+    } catch {}
 
-      setShowCreateProjectModal(false);
-      navigate(`/project/${newProjectRef.id}`);
-    } catch (error) {
-      console.error("Error creating project from conversion:", error);
-      alert("Failed to create project.");
-    } finally {
-      setLoading(false);
-    }
+    setShowCreateProjectModal(false);
+    navigate(`/project/${newProjectRef.id}`);
+    setLoading(false);
   };
 
   const handleAddActivity = (activity) => {
@@ -1245,6 +1270,75 @@ export default function CustomerProfile() {
                   }} 
                   onSave={(updated) => handleSaveCustomer({ companyProfile: updated })}
                 />
+              </div>
+            </div>
+
+            {/* Access Panel */}
+            <div style={getCardStyle('customers')}>
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              }}>
+                <h2 style={{ margin: 0, fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>
+                  Access
+                </h2>
+              </div>
+              <div style={{ padding: DESIGN_SYSTEM.spacing.base, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={shareEmail} onChange={(e) => setShareEmail(e.target.value)} placeholder="Share with email" style={{ flex: 1, padding: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }} />
+                  <button
+                    onClick={async () => {
+                      if (!id || !currentUser || !shareEmail.trim()) return;
+                      setSharing(true);
+                      try {
+                        // Lookup user by email
+                        const usersQuery = query(collection(db, 'users'), where('email', '==', shareEmail.trim()))
+                        const snap = await getDocs(usersQuery);
+                        let toUserId = null;
+                        if (!snap.empty) toUserId = snap.docs[0].id;
+                        // Create share request
+                        await addDoc(collection(db, 'customerShares'), {
+                          customerId: id,
+                          customerName: getCustomerName(),
+                          fromUserId: currentUser.uid,
+                          fromUserEmail: currentUser.email || '',
+                          toUserId: toUserId || null,
+                          toUserEmail: shareEmail.trim(),
+                          status: 'pending',
+                          createdAt: serverTimestamp(),
+                        });
+                        setShareEmail('');
+                        alert('Share invitation sent');
+                      } catch (e) {
+                        alert('Failed to send share');
+                      } finally {
+                        setSharing(false);
+                      }
+                    }}
+                    disabled={sharing}
+                    style={{ ...getButtonStyle('primary', 'customers'), opacity: sharing ? 0.7 : 1 }}
+                  >
+                    {sharing ? 'Sending…' : 'Share'}
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary }}>People with access</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {accessList.length === 0 ? (
+                    <div style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.tertiary }}>Only you</div>
+                  ) : (
+                    accessList.map(u => (
+                      <div key={u.uid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, borderRadius: 8, padding: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{u.name}</div>
+                          <div style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary }}>{u.email}</div>
+                        </div>
+                        {/* Optional: add remove button for owner to revoke others later */}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
 

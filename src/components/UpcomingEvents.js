@@ -69,9 +69,10 @@ export default function UpcomingEvents({ embedded = false }) {
       });
     }));
 
-    // 2. Fetch Customer Profile Reminders
-    const customerProfilesQuery = query(collection(db, "customerProfiles"), where("userId", "==", currentUser.uid)); // Filter by userId
-    unsubscribes.push(onSnapshot(customerProfilesQuery, (snapshot) => {
+    // 2. Fetch Customer Profile Reminders (owned or shared via access)
+    const customerProfilesOwned = query(collection(db, "customerProfiles"), where("userId", "==", currentUser.uid)); // Legacy userId
+    const customerProfilesShared = query(collection(db, "customerProfiles"), where("access", "array-contains", currentUser.uid)); // Access-based
+    const handleCustomerSnapshot = (snapshot) => {
       console.log("Customer Profiles snapshot received.");
       snapshot.docs.forEach(customerDoc => {
         const customerData = customerDoc.data();
@@ -108,7 +109,9 @@ export default function UpcomingEvents({ embedded = false }) {
         }
       });
       updateEvents();
-    }));
+    };
+    unsubscribes.push(onSnapshot(customerProfilesOwned, handleCustomerSnapshot));
+    unsubscribes.push(onSnapshot(customerProfilesShared, handleCustomerSnapshot));
 
     // 3. Fetch Forum Reminders (from subcollections)
     const forumsQuery = query(collection(db, "forums"), where("members", "array-contains", currentUser.uid)); // Filter by members array

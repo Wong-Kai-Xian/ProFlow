@@ -920,85 +920,22 @@ export default function ApprovalPage() {
             });
           }
 
-          // Migrate only ONE unassigned quotesDraft from customer to this project and remove others
+          // Optional quotation migration: migrate only the explicitly selected draft; else delete all drafts
           try {
             const draftsSnap = await getDocs(collection(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts'));
             const ops = [];
-            let selectedDraftId = selectedRequest?.selectedDraftQuoteId || selectedRequest?.quotationData?.id || null;
-            const quotedItems = Array.isArray(selectedRequest?.quotationData?.items) ? selectedRequest.quotationData.items : [];
-
-            // If no selected id provided, attempt to match by items (description, qty, unitPrice), order-insensitive
-            if (!selectedDraftId && quotedItems.length > 0) {
-              const normMap = it => ({
-                description: String(it.description || '').trim(),
-                qty: Number(it.qty || 0),
-                unitPrice: Number(it.unitPrice || 0)
-              });
-              const sig = arr => JSON.stringify(arr.map(normMap).sort((a,b)=>{
-                const ka = `${a.description}|${a.qty}|${a.unitPrice}`;
-                const kb = `${b.description}|${b.qty}|${b.unitPrice}`;
-                return ka < kb ? -1 : ka > kb ? 1 : 0;
-              }));
-              const targetSig = sig(quotedItems);
-              draftsSnap.forEach(d => {
-                if (selectedDraftId) return;
-                const q = d.data() || {};
-                if (q.projectId) return;
-                const srcItems = Array.isArray(q.items) ? q.items : [];
-                if (sig(srcItems) === targetSig) selectedDraftId = d.id;
-              });
-            }
-
-            draftsSnap.forEach(d => {
-              const q = d.data() || {};
-              if (!q.projectId) {
-                const items = Array.isArray(q.items) ? q.items : [];
-                // prefer values from draft; fall back to selected quotation; finally derive from total
-                const fallbackTaxRateFromQuote = Number(selectedRequest?.quotationData?.taxRate || 0);
-                const fallbackDiscountFromQuote = Number(selectedRequest?.quotationData?.discount || 0);
-
-                const draftSubtotal = Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0));
-                let taxRate = (q.taxRate !== undefined ? Number(q.taxRate) : fallbackTaxRateFromQuote);
-                let discount = (q.discount !== undefined ? Number(q.discount) : fallbackDiscountFromQuote);
-                // derive from total if taxRate missing
-                const draftTotal = (q.total !== undefined ? Number(q.total||0) : NaN);
-                if ((!Number.isFinite(taxRate) || taxRate === 0) && Number.isFinite(draftTotal)) {
-                  const impliedTaxAmount = Math.max(0, draftTotal + Number(discount||0) - draftSubtotal);
-                  taxRate = draftSubtotal > 0 ? (impliedTaxAmount / draftSubtotal) * 100 : 0;
-                }
-                const taxAmount = Number(q.taxAmount || (draftSubtotal * (Number(taxRate||0)/100)));
-                const total = Number(q.total || (draftSubtotal + taxAmount - Number(discount || 0)));
-
-                if (!selectedDraftId) {
-                  // If still not identified, pick the newest unassigned draft
-                  // We'll compute the newest below after iterating
-                }
-              }
-            });
-
-            // If no selectedDraftId, pick newest unassigned now
-            if (!selectedDraftId) {
-              let newest = null;
-              draftsSnap.forEach(d => {
-                const data = d.data() || {};
-                if (data.projectId) return;
-                const sec = (data.createdAt?.seconds || 0);
-                if (!newest || sec > (newest.sec || 0)) newest = { id: d.id, sec };
-              });
-              if (newest) selectedDraftId = newest.id;
-            }
-
-            // Second pass: migrate only selectedDraftId and delete others
+            const selectedDraftId = selectedRequest?.selectedDraftQuoteId || null;
+            // If selectedDraftId provided, migrate only that one; otherwise delete all
             draftsSnap.forEach(d => {
               const q = d.data() || {};
               if (q.projectId) return;
-              const items = Array.isArray(q.items) ? q.items : [];
-              const draftSubtotal = Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0));
-              const taxRate = Number(q.taxRate || 0);
-              const discount = Number(q.discount || 0);
-              const taxAmount = Number(q.taxAmount || (draftSubtotal * (taxRate/100)));
-              const total = Number(q.total || (draftSubtotal + taxAmount - discount));
               if (selectedDraftId && d.id === selectedDraftId) {
+                const items = Array.isArray(q.items) ? q.items : [];
+                const draftSubtotal = Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0));
+                const taxRate = Number(q.taxRate || 0);
+                const discount = Number(q.discount || 0);
+                const taxAmount = Number(q.taxAmount || (draftSubtotal * (taxRate/100)));
+                const total = Number(q.total || (draftSubtotal + taxAmount - discount));
                 ops.push(addDoc(collection(db, 'projects', projRef.id, 'quotes'), {
                   client: q.client || '',
                   validUntil: q.validUntil || '',
@@ -1018,17 +955,19 @@ export default function ApprovalPage() {
               }
             });
             if (ops.length > 0) await Promise.all(ops);
-            // Safety: ensure only one quote under project (remove extras if any)
-            try {
-              const projQuotesSnap = await getDocs(collection(db, 'projects', projRef.id, 'quotes'));
-              let kept = false;
-              const removals = [];
-              projQuotesSnap.forEach(qdoc => {
-                if (!kept) { kept = true; return; }
-                removals.push(deleteDoc(doc(db, 'projects', projRef.id, 'quotes', qdoc.id)).catch(() => {}));
-              });
-              if (removals.length > 0) await Promise.all(removals);
-            } catch {}
+            // Safety: ensure at most one quote under project if selection existed
+            if (selectedDraftId) {
+              try {
+                const projQuotesSnap = await getDocs(collection(db, 'projects', projRef.id, 'quotes'));
+                let kept = false;
+                const removals = [];
+                projQuotesSnap.forEach(qdoc => {
+                  if (!kept) { kept = true; return; }
+                  removals.push(deleteDoc(doc(db, 'projects', projRef.id, 'quotes', qdoc.id)).catch(() => {}));
+                });
+                if (removals.length > 0) await Promise.all(removals);
+              } catch {}
+            }
           } catch {}
 
           // Move customer transcripts to the new project's transcripts collection
