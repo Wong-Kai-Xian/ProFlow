@@ -6,6 +6,8 @@ import { storage } from "../../firebase";
 import { ref, deleteObject, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import CreatePostModal from "./CreatePostModal"; // Import CreatePostModal
 import ConfirmationModal from "./ConfirmationModal"; // Import ConfirmationModal
+import LocationModal from "./LocationModal";
+import MeetingModal from "./MeetingModal";
 import UserAvatar from "../shared/UserAvatar";
 
 // Helper to format timestamp
@@ -65,6 +67,7 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
   const [newCommentText, setNewCommentText] = useState(''); // State for new comment input
   const [editingCommentId, setEditingCommentId] = useState(null); // State for ID of comment being edited
   const [editedCommentText, setEditedCommentText] = useState(''); // State for text of comment being edited
+  const [openCommentMenuIndex, setOpenCommentMenuIndex] = useState(null); // 3-dot menu state for comments
   const [commentFiles, setCommentFiles] = useState([]); // Files attached to new comment
   const [showCommentDeleteConfirmModal, setShowCommentDeleteConfirmModal] = useState(false); // State for comment delete confirmation modal
   const [commentToDelete, setCommentToDelete] = useState(null); // State to hold the comment to be deleted
@@ -564,7 +567,7 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
             style={{ display: 'none' }} 
             id={`comment-file-input-${post.id}`}
           />
-          <label htmlFor={`comment-file-input-${post.id}`} style={{ ...BUTTON_STYLES.secondary, padding: '8px 12px', cursor: 'pointer' }}>Attach</label>
+          <label htmlFor={`comment-file-input-${post.id}`} title="Attach files" style={{ ...BUTTON_STYLES.secondary, padding: '6px 10px', cursor: 'pointer' }}>📎</label>
           <button
             onClick={handleAddComment}
             disabled={newCommentText.trim() === '' && commentFiles.length === 0}
@@ -603,22 +606,69 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
                 <span style={{ fontSize: '11px', color: COLORS.lightText, marginLeft: '8px' }}>{formatTimestamp(comment.timestamp)}</span>
                 {/* Comment Actions */}
                 {comment.authorId === currentUserId && (
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: '5px' }}>
-                    {editingCommentId === (comment.timestamp?.seconds || null) && editingCommentId === (comment.timestamp?.nanoseconds || null) ? (
+                  <div style={{ marginLeft: 'auto', position: 'relative', display: 'flex', gap: '5px' }}>
+                    {/* If editing this comment, show Save/Cancel */}
+                    {(
+                      editingCommentId?.seconds === comment.timestamp?.seconds &&
+                      editingCommentId?.nanoseconds === comment.timestamp?.nanoseconds
+                    ) ? (
                       <>
                         <button onClick={() => handleUpdateComment(comment.timestamp)} style={{ ...BUTTON_STYLES.text, color: COLORS.primary, fontSize: '12px' }}>Save</button>
                         <button onClick={cancelEditComment} style={{ ...BUTTON_STYLES.text, color: COLORS.lightText, fontSize: '12px' }}>Cancel</button>
                       </>
                     ) : (
                       <>
-                        <button onClick={() => startEditComment(comment.timestamp, comment.content)} style={{ ...BUTTON_STYLES.text, color: COLORS.primary, fontSize: '12px' }}>Edit</button>
-                        <button onClick={() => handleDeleteComment(comment)} style={{ ...BUTTON_STYLES.text, color: COLORS.danger, fontSize: '12px' }}>Delete</button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setOpenCommentMenuIndex(openCommentMenuIndex === index ? null : index); }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            fontSize: '18px',
+                            cursor: 'pointer',
+                            color: '#6b7280',
+                            padding: '4px 8px',
+                            borderRadius: '6px'
+                          }}
+                          onMouseEnter={(e) => { e.target.style.backgroundColor = '#f3f4f6'; }}
+                          onMouseLeave={(e) => { e.target.style.backgroundColor = 'transparent'; }}
+                        >
+                          •••
+                        </button>
+                        {openCommentMenuIndex === index && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '24px',
+                            right: 0,
+                            backgroundColor: COLORS.white,
+                            borderRadius: LAYOUT.borderRadius,
+                            boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                            zIndex: 5
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          >
+                            <button 
+                              onClick={() => { startEditComment(comment.timestamp, comment.content); setOpenCommentMenuIndex(null); }}
+                              style={{ ...BUTTON_STYLES.text, width: '100%', textAlign: 'left', padding: '8px 12px', color: COLORS.dark }}
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => { handleDeleteComment(comment); setOpenCommentMenuIndex(null); }}
+                              style={{ ...BUTTON_STYLES.text, width: '100%', textAlign: 'left', padding: '8px 12px', color: COLORS.danger }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
                 )}
               </div>
-              {editingCommentId === (comment.timestamp?.seconds || null) && editingCommentId === (comment.timestamp?.nanoseconds || null) ? (
+              {(
+                editingCommentId?.seconds === comment.timestamp?.seconds &&
+                editingCommentId?.nanoseconds === comment.timestamp?.nanoseconds
+              ) ? (
                 <textarea
                   value={editedCommentText}
                   onChange={(e) => setEditedCommentText(e.target.value)}
@@ -691,6 +741,13 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
 
 export default function Discussion({ forumData, posts, setPosts, forumId, updateForumLastActivity, updateForumPostCount, currentUser }) {
   const [newPostContent, setNewPostContent] = useState('');
+  const [composerFiles, setComposerFiles] = useState([]);
+  const [composerLocation, setComposerLocation] = useState('');
+  const [composerMeeting, setComposerMeeting] = useState(null);
+  const [showComposerLocationModal, setShowComposerLocationModal] = useState(false);
+  const [showComposerMeetingModal, setShowComposerMeetingModal] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+  const [composerFileProgress, setComposerFileProgress] = useState({});
   const [mentionCandidates, setMentionCandidates] = useState([]); // forum members for @ suggest
   const [postMentionOpen, setPostMentionOpen] = useState(false);
   const [postMentionQuery, setPostMentionQuery] = useState('');
@@ -884,10 +941,35 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
 
   const handlePostSubmit = async (e) => {
     e.preventDefault();
-    if (newPostContent.trim() === '' || !forumId) return;
+    if ((!newPostContent.trim() && composerFiles.length === 0) || !forumId) return;
 
     try {
-      const ref = await addDoc(collection(doc(db, "forums", forumId), "posts"), {
+      setIsPosting(true);
+      let uploadedFileMetadata = [];
+      if (composerFiles.length > 0) {
+        const uploadPromises = composerFiles.map((file) => {
+          if (!(file instanceof File)) { uploadedFileMetadata.push(file); return Promise.resolve(); }
+          return new Promise((resolve, reject) => {
+            try {
+              const storagePath = `forum_attachments/${forumId}/${file.name}`;
+              const task = uploadBytesResumable(ref(storage, storagePath), file);
+              task.on('state_changed', (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setComposerFileProgress(prev => ({ ...prev, [file.name]: progress }));
+              }, reject, async () => {
+                try {
+                  const url = await getDownloadURL(task.snapshot.ref);
+                  uploadedFileMetadata.push({ name: file.name, url, type: file.type, size: file.size });
+                  resolve();
+                } catch (e) { reject(e); }
+              });
+            } catch (e) { reject(e); }
+          });
+        });
+        await Promise.all(uploadPromises);
+      }
+
+      const refDoc = await addDoc(collection(doc(db, "forums", forumId), "posts"), {
         content: newPostContent.trim(),
         author: currentUser?.name || currentUser?.displayName || currentUser?.email || "Anonymous", // Use currentUser.name
         authorId: currentUser?.uid, // Add authorId field
@@ -896,13 +978,22 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
         comments: [], // Initialize comments as an empty array
         likedBy: [], // Initialize likedBy as an empty array
         starredBy: [], // Initialize starredBy as an empty array
+        files: uploadedFileMetadata,
+        location: composerLocation,
+        meeting: composerMeeting,
       });
-      await notifyMentions({ text: newPostContent.trim(), forumId, postId: ref.id, db, currentUser });
+      await notifyMentions({ text: newPostContent.trim(), forumId, postId: refDoc.id, db, currentUser });
       setNewPostContent('');
+      setComposerFiles([]);
+      setComposerLocation('');
+      setComposerMeeting(null);
+      setComposerFileProgress({});
+      setIsPosting(false);
       updateForumLastActivity(); // Update parent forum's last activity
       updateForumPostCount(1); // Increment post count
     } catch (error) {
       console.error("Error adding post: ", error);
+      setIsPosting(false);
     }
   };
 
@@ -910,37 +1001,121 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
     <div style={{ padding: LAYOUT.gap, background: COLORS.background }}>
       {/* Post creation form */}
       <form onSubmit={handlePostSubmit} style={{ marginBottom: LAYOUT.gap, position: 'relative' }}>
-                    <textarea
+        <textarea
           value={newPostContent}
           onChange={(e) => updatePostMentionState(e.target.value)}
           placeholder="Write a new post..."
-                      style={{
+          style={{
             ...INPUT_STYLES.textarea,
             width: "100%",
             minHeight: "80px",
             marginBottom: LAYOUT.smallGap,
-                      }}
-                    />
-                    {postMentionOpen && (
-                      <div style={{ position: 'absolute', left: 0, bottom: 0, transform: 'translateY(100%)', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 20px rgba(0,0,0,0.08)', padding: 6, zIndex: 20, minWidth: 280 }}>
-                        {mentionCandidates
-                          .filter(u => (u.name || '').toLowerCase().startsWith(postMentionQuery) || (u.email || '').toLowerCase().startsWith(postMentionQuery))
-                          .slice(0,6)
-                          .map((u, i) => (
-                            <div key={u.uid || u.email} onMouseDown={(e) => { e.preventDefault(); insertPostMention(u); }}
-                              style={{ padding: '6px 8px', borderRadius: 6, cursor: 'pointer', background: i === postMentionIndex ? '#f1f5f9' : 'transparent', display: 'flex', flexDirection: 'column' }}>
-                              <span style={{ fontSize: 13, color: '#111827', fontWeight: 600 }}>{u.name}</span>
-                              <span style={{ fontSize: 11, color: '#6b7280' }}>{u.email}</span>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                    <button
+          }}
+        />
+        {/* Quick composer actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <button
+            type="button"
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'image/*';
+              input.multiple = true;
+              input.onchange = (e) => {
+                const files = Array.from(e.target.files || []);
+                setComposerFiles(prev => [...prev, ...files]);
+              };
+              input.click();
+            }}
+            style={{ ...BUTTON_STYLES.secondary, padding: '6px 10px' }}
+            disabled={isPosting}
+          >
+            🖼️
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.multiple = true;
+              input.onchange = (e) => {
+                const files = Array.from(e.target.files || []);
+                setComposerFiles(prev => [...prev, ...files]);
+              };
+              input.click();
+            }}
+            style={{ ...BUTTON_STYLES.secondary, padding: '6px 10px' }}
+            disabled={isPosting}
+          >
+            📎
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowComposerMeetingModal(true)}
+            style={{ ...BUTTON_STYLES.secondary, padding: '6px 10px' }}
+            disabled={isPosting}
+          >
+            📅
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowComposerLocationModal(true)}
+            style={{ ...BUTTON_STYLES.secondary, padding: '6px 10px' }}
+            disabled={isPosting}
+          >
+            📍
+          </button>
+        </div>
+        {composerFiles.length > 0 && (
+          <div style={{ marginBottom: 8, fontSize: 12, color: COLORS.lightText, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {composerFiles.map((file, idx) => (
+              <span key={idx} style={{ background: '#eef2ff', border: '1px solid #c7d2fe', color: '#3730a3', padding: '2px 6px', borderRadius: 6 }}>
+                {file.name || file.url}
+                {composerFileProgress[file.name] !== undefined && (
+                  <span style={{ marginLeft: 4 }}>({(composerFileProgress[file.name] || 0).toFixed(0)}%)</span>
+                )}
+                <button type="button" onClick={() => setComposerFiles(prev => prev.filter((_, i) => i !== idx))} style={{ marginLeft: 6, background: 'transparent', border: 'none', cursor: 'pointer', color: '#6b7280' }}>×</button>
+              </span>
+            ))}
+          </div>
+        )}
+        {(composerLocation || composerMeeting) && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+            {composerLocation && (
+              <span style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', padding: '2px 6px', borderRadius: 6 }}>
+                📍 {composerLocation}
+                <button type="button" onClick={() => setComposerLocation('')} style={{ marginLeft: 6, background: 'transparent', border: 'none', cursor: 'pointer', color: '#6b7280' }}>×</button>
+              </span>
+            )}
+            {composerMeeting && (
+              <span style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', padding: '2px 6px', borderRadius: 6 }}>
+                📅 {composerMeeting.type} {composerMeeting.fullDateTime}
+                <button type="button" onClick={() => setComposerMeeting(null)} style={{ marginLeft: 6, background: 'transparent', border: 'none', cursor: 'pointer', color: '#6b7280' }}>×</button>
+              </span>
+            )}
+          </div>
+        )}
+        {postMentionOpen && (
+          <div style={{ position: 'absolute', left: 0, bottom: 0, transform: 'translateY(100%)', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 20px rgba(0,0,0,0.08)', padding: 6, zIndex: 20, minWidth: 280 }}>
+            {mentionCandidates
+              .filter(u => (u.name || '').toLowerCase().startsWith(postMentionQuery) || (u.email || '').toLowerCase().startsWith(postMentionQuery))
+              .slice(0,6)
+              .map((u, i) => (
+                <div key={u.uid || u.email} onMouseDown={(e) => { e.preventDefault(); insertPostMention(u); }}
+                  style={{ padding: '6px 8px', borderRadius: 6, cursor: 'pointer', background: i === postMentionIndex ? '#f1f5f9' : 'transparent', display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: 13, color: '#111827', fontWeight: 600 }}>{u.name}</span>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>{u.email}</span>
+                </div>
+              ))}
+          </div>
+        )}
+        <button
           type="submit" 
-          style={{ ...BUTTON_STYLES.primary, width: "100%", padding: "10px" }}
+          style={{ ...BUTTON_STYLES.primary, width: "100%", padding: "10px", opacity: isPosting ? 0.7 : 1 }}
+          disabled={isPosting}
         >
-          Post
-                    </button>
+          {isPosting ? 'Posting...' : 'Post'}
+        </button>
       </form>
 
       {/* Posts List */}
@@ -953,6 +1128,18 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
           ))
         )}
       </div>
+
+      {/* Composer modals */}
+      <LocationModal
+        isOpen={showComposerLocationModal}
+        onClose={() => setShowComposerLocationModal(false)}
+        onSave={(loc) => setComposerLocation(loc)}
+      />
+      <MeetingModal
+        isOpen={showComposerMeetingModal}
+        onClose={() => setShowComposerMeetingModal(false)}
+        onSave={(meeting) => setComposerMeeting(meeting)}
+      />
 
       {/* Create/Edit Post Modal (moved from Forum.js) */}
       <CreatePostModal

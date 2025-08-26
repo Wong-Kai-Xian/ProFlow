@@ -70,7 +70,7 @@ export default function MeetingModal({ isOpen, onClose, onSave }) {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      zIndex: 1000
+      zIndex: 10000
     }}>
       <div style={{
         backgroundColor: "white",
