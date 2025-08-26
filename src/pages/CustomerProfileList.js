@@ -149,6 +149,7 @@ export default function CustomerProfileList() {
         },
         projects: [],
         lastContact: serverTimestamp(), // Set timestamp on first save
+        createdAt: serverTimestamp(), // Set creation timestamp
         userId: currentUser.uid, // Associate customer profile with the current user
       };
       const newCustomerDocRef = await addDoc(collection(db, "customerProfiles"), initialCustomerData);
@@ -601,6 +602,45 @@ export default function CustomerProfileList() {
                     }}>
                       {customer.companyProfile.company || customer.customerProfile.email || customer.companyProfile.industry}
                     </p>
+                    <div style={{
+                      margin: "4px 0 0 0",
+                      color: DESIGN_SYSTEM.colors.text.secondary,
+                      fontSize: "12px",
+                      textAlign: 'center'
+                    }}>
+                      Created: {(() => {
+                        try {
+                          // Check multiple possible timestamp fields that might exist on existing customer profiles
+                          const ts = customer.createdAt || customer.timestamp || customer.dateCreated || customer.creationDate || customer.created;
+                          if (!ts) return 'N/A';
+                          
+                          let d;
+                          if (ts?.toDate && typeof ts.toDate === 'function') {
+                            // Firestore Timestamp
+                            d = ts.toDate();
+                          } else if (typeof ts === 'number') {
+                            // Unix timestamp (seconds or milliseconds)
+                            d = new Date(ts > 1000000000000 ? ts : ts * 1000);
+                          } else if (typeof ts === 'string') {
+                            // ISO string or other date string
+                            d = new Date(ts);
+                          } else if (ts instanceof Date) {
+                            // Already a Date object
+                            d = ts;
+                          } else {
+                            d = null;
+                          }
+                          
+                          if (d && !isNaN(d.getTime())) {
+                            return d.toLocaleDateString() + ' at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                          }
+                          return 'N/A';
+                        } catch (error) {
+                          console.warn('Error parsing customer creation date:', error);
+                          return 'N/A';
+                        }
+                      })()}
+                    </div>
                   </div>
   
                   <div style={{ 

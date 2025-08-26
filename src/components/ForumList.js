@@ -321,6 +321,44 @@ export default function ForumList({ onForumSelect, onEditForum, onDeleteForum, f
                   }}>
                     {forum.name}
                   </h3>
+                  <div style={{
+                    margin: "0 0 12px 0",
+                    color: DESIGN_SYSTEM.colors.text.secondary,
+                    fontSize: "12px"
+                  }}>
+                    {(() => {
+                      try {
+                        // Check multiple possible timestamp fields that might exist on existing forums
+                        const ts = forum.createdAt || forum.timestamp || forum.dateCreated || forum.creationDate || forum.created;
+                        if (!ts) return 'Created: N/A';
+                        
+                        let d;
+                        if (ts?.toDate && typeof ts.toDate === 'function') {
+                          // Firestore Timestamp
+                          d = ts.toDate();
+                        } else if (typeof ts === 'number') {
+                          // Unix timestamp (seconds or milliseconds)
+                          d = new Date(ts > 1000000000000 ? ts : ts * 1000);
+                        } else if (typeof ts === 'string') {
+                          // ISO string or other date string
+                          d = new Date(ts);
+                        } else if (ts instanceof Date) {
+                          // Already a Date object
+                          d = ts;
+                        } else {
+                          d = null;
+                        }
+                        
+                        if (d && !isNaN(d.getTime())) {
+                          return `Created: ${d.toLocaleDateString()} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                        }
+                        return 'Created: N/A';
+                      } catch (error) {
+                        console.warn('Error parsing forum creation date:', error);
+                        return 'Created: N/A';
+                      }
+                    })()}
+                  </div>
                 </div>
 
                 {/* Card Body */}

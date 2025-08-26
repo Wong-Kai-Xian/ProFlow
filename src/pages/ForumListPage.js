@@ -75,6 +75,7 @@ export default function ForumListPage() {
         memberCount: newForumData.memberCount || 0, // Initialize memberCount
         notifications: newForumData.notifications || 0, // Initialize notifications
         lastActivity: serverTimestamp(), // Use serverTimestamp() for consistency
+        createdAt: serverTimestamp(),
         members: newForumData.members || [], // Initialize members as array
         projectId: newForumData.projectId || null, // Store selected project ID, or null if 'Unknown'
         userId: currentUser.uid, // Associate forum with the current user

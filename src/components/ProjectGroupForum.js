@@ -80,6 +80,7 @@ export default function ProjectGroupForum({ projectId, forums }) {
         notifications: 0,
         posts: 0,
         lastActivity: serverTimestamp(),
+        createdAt: serverTimestamp(),
         projectId: projectId,
         userId: currentUser.uid, // Add creator
       };

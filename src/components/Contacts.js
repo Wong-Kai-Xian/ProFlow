@@ -235,6 +235,7 @@ export default function Contacts() {
         projects: [],
         status: "Active", // Default
         lastContact: new Date().toISOString(), // Use current timestamp for new contact
+        createdAt: new Date().toISOString(), // Set creation timestamp
         userId: currentUser.uid, // Assign to current user
       };
       const newCustomerDocRef = await addDoc(collection(db, "customerProfiles"), newCustomerProfileData);
