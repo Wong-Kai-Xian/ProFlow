@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
@@ -6,10 +6,70 @@ import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDo
 // Invisible agent that triggers approval reminders/escalations via notifications
 export default function NotificationAgent() {
   const { currentUser } = useAuth();
+  const gmailIntervalRef = useRef(null);
+
+  const loadScriptOnce = (src) => new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const s = document.createElement('script'); s.src = src; s.async = true; s.onload = resolve; s.onerror = () => reject(new Error('Failed to load ' + src)); document.head.appendChild(s);
+  });
+
+  const ensureGmailToken = async () => {
+    const clientId = localStorage.getItem('google_oauth_client_id') || '';
+    if (!clientId) return null;
+    await loadScriptOnce('https://accounts.google.com/gsi/client');
+    return await new Promise((resolve) => {
+      try {
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: 'https://www.googleapis.com/auth/gmail.readonly',
+          prompt: '',
+          callback: (resp) => resolve(resp?.access_token || null)
+        });
+        tokenClient.requestAccessToken();
+      } catch { resolve(null); }
+    });
+  };
 
   useEffect(() => {
     if (!currentUser?.uid) return;
     const unsubs = [];
+    // Lightweight Gmail new mail poller -> notify center
+    const startGmailPoll = async () => {
+      try {
+        const accessToken = await ensureGmailToken();
+        if (!accessToken) return;
+        let lastIds = new Set(JSON.parse(localStorage.getItem(`proflow_gmail_seen_${currentUser.uid}`) || '[]'));
+        const poll = async () => {
+          try {
+            const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5', { headers: { Authorization: `Bearer ${accessToken}` } });
+            if (!res.ok) return;
+            const json = await res.json();
+            const msgs = Array.isArray(json.messages) ? json.messages : [];
+            const nowSeen = new Set(msgs.map(m => m.id));
+            for (const m of msgs) {
+              if (!lastIds.has(m.id)) {
+                try {
+                  await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
+                    unread: true,
+                    createdAt: serverTimestamp(),
+                    origin: 'gmail',
+                    title: 'New email received',
+                    message: 'You have a new email in your inbox',
+                    refType: 'gmail',
+                    gmailMessageId: m.id,
+                  });
+                } catch {}
+              }
+            }
+            localStorage.setItem(`proflow_gmail_seen_${currentUser.uid}`, JSON.stringify(Array.from(nowSeen)));
+            lastIds = nowSeen;
+          } catch {}
+        };
+        await poll();
+        gmailIntervalRef.current = setInterval(poll, 60000); // 1 minute
+      } catch {}
+    };
+    startGmailPoll();
     // Invitations to me -> notify
     const qInvIncoming = query(collection(db, 'invitations'), where('toUserId', '==', currentUser.uid), where('status', '==', 'pending'));
     const unsubIncoming = onSnapshot(qInvIncoming, async (snap) => {
@@ -276,7 +336,7 @@ export default function NotificationAgent() {
       unsubs.push(unsubProjects);
     } catch {}
 
-    return () => { try { unsub(); unsubIncoming(); unsubAccepted(); unsubAcceptedToMe(); } catch {}; unsubs.forEach(u => { try { u(); } catch {} }); };
+    return () => { try { unsub(); unsubIncoming(); unsubAccepted(); unsubAcceptedToMe(); } catch {}; unsubs.forEach(u => { try { u(); } catch {} }); if (gmailIntervalRef.current) { try { clearInterval(gmailIntervalRef.current); } catch {} } };
   }, [currentUser]);
 
   useEffect(() => {

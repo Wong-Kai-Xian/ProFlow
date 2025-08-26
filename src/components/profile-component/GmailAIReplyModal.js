@@ -467,6 +467,7 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
           <button onClick={onClose} style={{ ...BUTTON_STYLES.secondary }}>Close</button>
         </div>
 
+        <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 6 }}>Note: Set OAuth Client ID at top bar Settings or in console: localStorage.setItem('google_oauth_client_id','YOUR_CLIENT_ID')</div>
         <div style={{ display: 'flex', gap: 16, marginBottom: 12, flex: '0 0 auto', borderBottom: '1px solid #e5e7eb', paddingBottom: 6 }}>
           <button onClick={() => setMode('reply')} style={{
             background: 'transparent',
@@ -633,7 +634,8 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
               <button onClick={analyze} disabled={loading || !selected} style={{ ...BUTTON_STYLES.secondary }}>Analyze</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, minHeight: 0 }}>
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: 0, maxHeight: '50vh', overflow: 'auto' }}>
+              <div style={{ minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: 0, flex: '1 1 auto', minHeight: 0, overflow: 'auto' }}>
                 {threads.length === 0 ? <div style={{ color: '#6b7280', padding: 8 }}>No messages loaded.</div> : (
                   threads.map(m => (
                     <div key={m.id} onClick={() => setSelected(m)} style={{ padding: 10, borderBottom: '1px solid #e5e7eb', cursor: 'pointer', background: selected?.id === m.id ? '#eef2ff' : 'transparent' }}>
@@ -643,18 +645,19 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
                     </div>
                   ))
                 )}
-              </div>
-              {selected?.attachmentsMeta?.length ? (
-                <div style={{ marginTop: 8, border: '1px solid #e5e7eb', borderRadius: 6, padding: 8, background: '#f9fafb' }}>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Attachments</div>
-                  {selected.attachmentsMeta.map((a, i) => (
-                    <div key={`${a.attachmentId}_${i}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderTop: i===0 ? 'none' : '1px solid #e5e7eb' }}>
-                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }} title={a.filename}>{a.filename}</div>
-                      <button onClick={() => downloadAttachment(a, selected.id)} style={{ ...BUTTON_STYLES.secondary }}>Download</button>
-                    </div>
-                  ))}
                 </div>
-              ) : null}
+                {selected?.attachmentsMeta?.length ? (
+                  <div style={{ marginTop: 8, border: '1px solid #e5e7eb', borderRadius: 6, padding: 8, background: '#f9fafb', maxHeight: '30vh', overflow: 'auto', flex: '0 0 auto' }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Attachments</div>
+                    {selected.attachmentsMeta.map((a, i) => (
+                      <div key={`${a.attachmentId}_${i}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderTop: i===0 ? 'none' : '1px solid #e5e7eb' }}>
+                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }} title={a.filename}>{a.filename}</div>
+                        <button onClick={() => downloadAttachment(a, selected.id)} style={{ ...BUTTON_STYLES.secondary }}>Download</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <div style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ marginBottom: 10 }}>
                   <label style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}>Summary</label>
@@ -675,9 +678,7 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
           </div>
         ) : null}
 
-        <div style={{ marginTop: 10, color: '#6b7280', fontSize: 12 }}>
-          Note: Set your Google OAuth Client ID once via localStorage: localStorage.setItem('google_oauth_client_id','YOUR_CLIENT_ID')
-        </div>
+        
 
         {confirmStep > 0 ? (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2147483647 }}>
