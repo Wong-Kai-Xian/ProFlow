@@ -7,6 +7,7 @@ import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDo
 export default function NotificationAgent() {
   const { currentUser } = useAuth();
   const gmailIntervalRef = useRef(null);
+  const gmailStartedRef = useRef(false);
 
   const loadScriptOnce = (src) => new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) return resolve();
@@ -22,10 +23,10 @@ export default function NotificationAgent() {
         const tokenClient = window.google.accounts.oauth2.initTokenClient({
           client_id: clientId,
           scope: 'https://www.googleapis.com/auth/gmail.readonly',
-          prompt: '',
+          prompt: 'none',
           callback: (resp) => resolve(resp?.access_token || null)
         });
-        tokenClient.requestAccessToken();
+        tokenClient.requestAccessToken({ prompt: 'none' });
       } catch { resolve(null); }
     });
   };
@@ -35,9 +36,15 @@ export default function NotificationAgent() {
     const unsubs = [];
     // Lightweight Gmail new mail poller -> notify center
     const startGmailPoll = async () => {
+      if (gmailStartedRef.current) return;
+      // Only start if user previously authorized and opted-in to Gmail polling
+      const isAuthorized = localStorage.getItem('gmail_authorized') === '1';
+      const isOptIn = localStorage.getItem('gmail_poll_enabled') === '1';
+      if (!isAuthorized || !isOptIn) return;
       try {
         const accessToken = await ensureGmailToken();
         if (!accessToken) return;
+        gmailStartedRef.current = true;
         let lastIds = new Set(JSON.parse(localStorage.getItem(`proflow_gmail_seen_${currentUser.uid}`) || '[]'));
         const poll = async () => {
           try {

@@ -17,6 +17,7 @@ import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, getDoc, query, 
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 import { Link } from 'react-router-dom'; // Import Link
 import UserAvatar from './shared/UserAvatar';
+import GmailAIReplyModal from "./profile-component/GmailAIReplyModal";
 
 export default function Contacts() {
   const navigate = useNavigate();
@@ -30,6 +31,8 @@ export default function Contacts() {
   const [clientToDelete, setClientToDelete] = useState(null); // To store client to delete
   const [teamMembersList, setTeamMembersList] = useState([]); // Unified state for team members
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailTarget, setEmailTarget] = useState({ email: '', name: '' });
 
   useEffect(() => {
     if (!currentUser) {
@@ -132,8 +135,8 @@ export default function Contacts() {
 
   const openEmail = (email) => {
     if (email) {
-      console.log("Email address:", email); // Debugging: log the email
-      window.open(`mailto:${email}`, "_blank");
+      setEmailTarget({ email, name: '' });
+      setEmailModalOpen(true);
     } else {
       console.warn("Email address is undefined or null.", email);
     }
@@ -352,6 +355,7 @@ export default function Contacts() {
   };
 
   return (
+    <>
     <Card style={{
       height: "100%",
       overflowY: "auto",
@@ -471,7 +475,7 @@ export default function Contacts() {
                       </div>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-start", width: "100%", marginTop: "8px" }}> {/* Changed to flex-start, increased gap, added margin-top */}
                         <button onClick={(e) => { e.stopPropagation(); openWhatsApp(c.phone); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.success, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaWhatsapp /></button> {/* Increased size */}
-                        <button onClick={(e) => { e.stopPropagation(); openEmail(c.email); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><MdEmail /></button> {/* Increased size */}
+                        <button onClick={(e) => { e.stopPropagation(); setEmailTarget({ email: c.email, name: c.name }); setEmailModalOpen(true); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.secondary, padding: "6px 12px", fontSize: "16px", display: "flex", justifyContent: "center", alignItems: "center" }}><MdEmail /></button> {/* Increased size */}
                         <button onClick={(e) => { e.stopPropagation(); removeClient(idx, c); }} style={{ ...BUTTON_STYLES.primary, background: COLORS.danger, padding: "6px 12px", fontSize: "16px", borderRadius: "3px", display: "flex", justifyContent: "center", alignItems: "center" }}><FaTrash /></button> {/* Increased size */}
                       </div>
                     </div>
@@ -561,5 +565,12 @@ export default function Contacts() {
         />
       )}
     </Card>
+      <GmailAIReplyModal
+        isOpen={emailModalOpen}
+        onClose={() => setEmailModalOpen(false)}
+        toEmail={emailTarget.email}
+        toName={emailTarget.name}
+      />
+    </>
   );
 }

@@ -156,6 +156,8 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
     setSubject('');
     setBody('');
     setSelected(null);
+    // Mark that user authorized Gmail at least once
+    try { localStorage.setItem('gmail_authorized', '1'); } catch {}
   }, [isOpen]);
 
   const ensureToken = async () => {
@@ -166,13 +168,13 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
         const tokenClient = window.google.accounts.oauth2.initTokenClient({
           client_id: clientId,
           scope: GMAIL_SCOPES,
-          prompt: '',
+          prompt: 'none',
           callback: (resp) => {
             if (resp?.access_token) { resolve(resp.access_token); }
             else { reject(new Error('Failed to get access token')); }
           },
         });
-        tokenClient.requestAccessToken();
+        tokenClient.requestAccessToken({ prompt: 'none' });
       });
     } catch (e) {
       throw e;
