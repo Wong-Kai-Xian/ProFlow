@@ -1,0 +1,16 @@
+{
+  "projects": {
+    "default": "your-firebase-project-id",
+    "staging": "proflow-30144"
+  },
+  "targets": {
+    "proflow-30144": {
+      "hosting": {
+        "staging": [
+          "proflow-30144"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

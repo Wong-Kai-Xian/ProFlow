@@ -3,10 +3,51 @@ import React, { useState } from "react";
 import Card from "./Card";
 import { BUTTON_STYLES, INPUT_STYLES } from "./constants"; // Import BUTTON_STYLES and INPUT_STYLES
 import { COLORS } from "./constants"; // Import COLORS
+import GmailAIReplyModal from "./GmailAIReplyModal";
 
 export default function CustomerInfo({ data, setCustomerProfile }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedData, setEditedData] = useState(data);
+  const [gmailAiOpen, setGmailAiOpen] = useState(false);
+  
+
+  const openGmailCompose = (toEmail = '') => {
+    try {
+      const to = encodeURIComponent(String(toEmail || '').trim());
+      const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}`;
+      const width = 720;
+      const height = 640;
+      const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+      const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+      window.open(
+        url,
+        'gmail_compose',
+        `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${width},height=${height},top=${top},left=${left}`
+      );
+    } catch {}
+  };
+
+  const openGmailWithDraft = ({ to, subject, body }) => {
+    try {
+      const qs = new URLSearchParams({
+        view: 'cm',
+        fs: '1',
+        to: String(to || '').trim(),
+        su: subject || '',
+        body: body || ''
+      });
+      const url = `https://mail.google.com/mail/?${qs.toString()}`;
+      const width = 720;
+      const height = 640;
+      const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+      const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+      window.open(
+        url,
+        'gmail_compose',
+        `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${width},height=${height},top=${top},left=${left}`
+      );
+    } catch {}
+  };
 
   const handleEditToggle = () => {
     if (isEditing) {
@@ -49,11 +90,27 @@ export default function CustomerInfo({ data, setCustomerProfile }) {
         ) : (
           <div>
             <p><strong>Name:</strong> {data.name}</p>
-            <p><strong>Email:</strong> {data.email}</p>
+            <p>
+              <strong>Email:</strong> {data.email}
+              {data?.email ? (
+                <button
+                  onClick={() => setGmailAiOpen(true)}
+                  style={{ ...BUTTON_STYLES.secondary, marginLeft: "8px" }}
+                >
+                  Email
+                </button>
+              ) : null}
+            </p>
             <p><strong>Phone:</strong> {data.phone}</p>
           </div>
         )
       }
+      <GmailAIReplyModal
+        isOpen={gmailAiOpen}
+        onClose={() => setGmailAiOpen(false)}
+        toEmail={data?.email || ''}
+        toName={data?.name || ''}
+      />
     </Card>
   );
 }
