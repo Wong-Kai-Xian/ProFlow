@@ -16,7 +16,7 @@ import FinancePanel from '../components/project-component/FinancePanel';
 import ProjectQuotesPanel from '../components/project-component/ProjectQuotesPanel';
 import { db, storage } from "../firebase";
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, getDocs, arrayUnion, arrayRemove, addDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 import { useNavigate } from 'react-router-dom';
@@ -1176,6 +1176,57 @@ export default function ProjectDetail() {
                         {f.url && (
                           <a href={f.url} target="_blank" rel="noreferrer" style={{ ...getButtonStyle('secondary', 'projects'), padding: '4px 8px', fontSize: 12 }}>Open</a>
                         )}
+                        <button
+                          onClick={() => {
+                            // Step 1 modal
+                            setConfirmModalConfig({
+                              title: 'Delete File',
+                              message: `Delete "${f.name || 'this file'}" from project files?`,
+                              confirmText: 'Delete',
+                              confirmButtonType: 'danger',
+                              onConfirm: async () => {
+                                // Close first and open second modal
+                                setShowConfirmModal(false);
+                                setTimeout(() => {
+                                  setConfirmModalConfig({
+                                    title: 'Confirm Permanent Delete',
+                                    message: 'This will permanently delete the file from storage and cannot be undone.',
+                                    confirmText: 'Delete Permanently',
+                                    confirmButtonType: 'danger',
+                                    onConfirm: async () => {
+                                      try {
+                                        if (!f.url) { alert('No URL to delete'); return; }
+                                        let fileRef;
+                                        try {
+                                          const m = (f.url || '').match(/\/v0\/b\/([^/]+)\/o\/([^?]+)/);
+                                          if (m) {
+                                            const objectPath = decodeURIComponent(m[2]);
+                                            fileRef = storageRef(storage, objectPath);
+                                          }
+                                        } catch {}
+                                        if (fileRef) {
+                                          await deleteObject(fileRef);
+                                        }
+                                        const remaining = (projectData.files || []).filter((_, idx) => idx !== i);
+                                        await updateDoc(doc(db, 'projects', projectId), { files: remaining });
+                                      } catch (e) {
+                                        console.error('Failed to delete file:', e);
+                                        alert('Failed to delete file');
+                                      } finally {
+                                        setShowConfirmModal(false);
+                                      }
+                                    }
+                                  });
+                                  setShowConfirmModal(true);
+                                }, 0);
+                              }
+                            });
+                            setShowConfirmModal(true);
+                          }}
+                          style={{ ...getButtonStyle('secondary', 'projects'), padding: '4px 8px', fontSize: 12 }}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   ))}

@@ -2052,7 +2052,7 @@ export default function ApprovalPage() {
             </div>
             <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
               <div style={{ marginBottom: DESIGN_SYSTEM.spacing.sm, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>
-                Review the document (full width with scrolling) and draw your signature below, then click Apply. A signed copy will be downloaded.
+                Review the document (full width with scrolling) and draw your signature below, then click Apply. A signed copy will be downloaded. Note: if the pen doesn't appear or size looks off, click Refresh to re-render before signing.
               </div>
               <div style={{ position: 'relative', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8, marginBottom: DESIGN_SYSTEM.spacing.sm, overflow: 'auto', height: '70vh' }}>
                 <div ref={pdfContainerRef} style={{ position: 'relative', width: '100%', margin: '0 auto' }} />

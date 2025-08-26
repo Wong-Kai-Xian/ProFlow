@@ -99,6 +99,21 @@ export default function TopBar() {
     }}>
       <NotificationAgent />
       <FollowUpAgent />
+      {/* Back button */}
+      <button
+        onClick={() => navigate(-1)}
+        style={{
+          background: 'rgba(255,255,255,0.15)',
+          color: '#fff',
+          border: '1px solid rgba(255,255,255,0.25)',
+          borderRadius: 8,
+          padding: '8px 12px',
+          cursor: 'pointer'
+        }}
+        title="Back"
+      >
+        ← Back
+      </button>
       <img 
         src="/proflow-logo.png" 
         alt="ProFlow Logo" 
