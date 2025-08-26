@@ -393,7 +393,8 @@ export default function ApprovalPage() {
       const taxRate = Number(data.taxRate || 0);
       const discount = Number(data.discount || 0);
       const taxAmount = subtotal * (taxRate/100);
-      const total = Number((data.total ?? (subtotal + taxAmount - discount)) || 0);
+      // Always recompute total to include tax and discount, ignoring any pre-saved total
+      const total = subtotal + taxAmount - discount;
       const today = new Date();
       const dateStr = today.toLocaleDateString();
       const logoUrl = '/proflow-logo.png';
@@ -879,7 +880,7 @@ export default function ApprovalPage() {
             });
           }
 
-          // Migrate only unassigned quotesDrafts from customer to this project and tag them with projectId
+          // Migrate only ONE unassigned quotesDraft from customer to this project and remove others
           try {
             const draftsSnap = await getDocs(collection(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts'));
             const ops = [];
@@ -928,47 +929,66 @@ export default function ApprovalPage() {
                 const taxAmount = Number(q.taxAmount || (draftSubtotal * (Number(taxRate||0)/100)));
                 const total = Number(q.total || (draftSubtotal + taxAmount - Number(discount || 0)));
 
-                if (selectedDraftId) {
-                  // Only migrate the selected draft; delete others
-                  if (d.id === selectedDraftId) {
-                    ops.push(addDoc(collection(db, 'projects', projRef.id, 'quotes'), {
-                      client: q.client || '',
-                      validUntil: q.validUntil || '',
-                      items,
-                      subtotal: draftSubtotal,
-                      taxRate,
-                      discount,
-                      taxAmount,
-                      total,
-                      status: q.status || 'draft',
-                      createdAt: serverTimestamp(),
-                      movedFromCustomerId: selectedRequest.customerId,
-                    }).catch(() => {}));
-                    // Tag the selected draft with projectId so it won't appear as a customer-level draft
-                    ops.push(updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts', d.id), { projectId: projRef.id }).catch(() => {}));
-                  } else {
-                    ops.push(deleteDoc(doc(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts', d.id)).catch(() => {}));
-                  }
-                } else {
-                  // Legacy behavior: migrate all drafts and tag
-                  ops.push(addDoc(collection(db, 'projects', projRef.id, 'quotes'), {
-                    client: q.client || '',
-                    validUntil: q.validUntil || '',
-                    items,
-                    subtotal: draftSubtotal,
-                    taxRate,
-                    discount,
-                    taxAmount,
-                    total,
-                    status: q.status || 'draft',
-                    createdAt: serverTimestamp(),
-                    movedFromCustomerId: selectedRequest.customerId,
-                  }).catch(() => {}));
-                  ops.push(updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts', d.id), { projectId: projRef.id }).catch(() => {}));
+                if (!selectedDraftId) {
+                  // If still not identified, pick the newest unassigned draft
+                  // We'll compute the newest below after iterating
                 }
               }
             });
+
+            // If no selectedDraftId, pick newest unassigned now
+            if (!selectedDraftId) {
+              let newest = null;
+              draftsSnap.forEach(d => {
+                const data = d.data() || {};
+                if (data.projectId) return;
+                const sec = (data.createdAt?.seconds || 0);
+                if (!newest || sec > (newest.sec || 0)) newest = { id: d.id, sec };
+              });
+              if (newest) selectedDraftId = newest.id;
+            }
+
+            // Second pass: migrate only selectedDraftId and delete others
+            draftsSnap.forEach(d => {
+              const q = d.data() || {};
+              if (q.projectId) return;
+              const items = Array.isArray(q.items) ? q.items : [];
+              const draftSubtotal = Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0));
+              const taxRate = Number(q.taxRate || 0);
+              const discount = Number(q.discount || 0);
+              const taxAmount = Number(q.taxAmount || (draftSubtotal * (taxRate/100)));
+              const total = Number(q.total || (draftSubtotal + taxAmount - discount));
+              if (selectedDraftId && d.id === selectedDraftId) {
+                ops.push(addDoc(collection(db, 'projects', projRef.id, 'quotes'), {
+                  client: q.client || '',
+                  validUntil: q.validUntil || '',
+                  items,
+                  subtotal: draftSubtotal,
+                  taxRate,
+                  discount,
+                  taxAmount,
+                  total,
+                  status: q.status || 'draft',
+                  createdAt: serverTimestamp(),
+                  movedFromCustomerId: selectedRequest.customerId,
+                }).catch(() => {}));
+                ops.push(updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts', d.id), { projectId: projRef.id }).catch(() => {}));
+              } else {
+                ops.push(deleteDoc(doc(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts', d.id)).catch(() => {}));
+              }
+            });
             if (ops.length > 0) await Promise.all(ops);
+            // Safety: ensure only one quote under project (remove extras if any)
+            try {
+              const projQuotesSnap = await getDocs(collection(db, 'projects', projRef.id, 'quotes'));
+              let kept = false;
+              const removals = [];
+              projQuotesSnap.forEach(qdoc => {
+                if (!kept) { kept = true; return; }
+                removals.push(deleteDoc(doc(db, 'projects', projRef.id, 'quotes', qdoc.id)).catch(() => {}));
+              });
+              if (removals.length > 0) await Promise.all(removals);
+            } catch {}
           } catch {}
 
           // Move customer transcripts to the new project's transcripts collection

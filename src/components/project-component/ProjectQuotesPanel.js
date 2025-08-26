@@ -1,3 +1,4 @@
+import { renderQuotePdf } from '../../utils/quotePdf';
 import React, { useEffect, useState } from 'react';
 import { db } from '../../firebase';
 import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
@@ -18,55 +19,7 @@ export default function ProjectQuotesPanel({ projectId, hideConvert = false }) {
     return () => unsub();
   }, [projectId]);
 
-  const printQuote = (q) => {
-    try {
-      const items = Array.isArray(q.items) ? q.items : [];
-      const subtotal = items.reduce((a,it)=> a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
-      const taxRate = Number(q.taxRate || 0);
-      const discount = Number(q.discount || 0);
-      const taxAmount = subtotal * (taxRate / 100);
-      const total = Number((q.total ?? (subtotal + taxAmount - discount)) || 0);
-      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Quote - ${q.client || ''}</title><style>
-        body{font-family:Arial,sans-serif;color:#111827;margin:24px}
-        .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-        .brand{font-weight:700;font-size:20px}
-        .muted{color:#6b7280;font-size:12px}
-        table{width:100%;border-collapse:collapse;margin-top:16px}
-        th,td{border:1px solid #e5e7eb;padding:8px;text-align:left}
-        .total{font-weight:700}
-      </style></head><body>
-        <div class="head">
-          <div>
-            <div class="brand">ProFlow</div>
-            <div class="muted">Project Quote</div>
-          </div>
-          <div class="muted">
-            <div>Client: ${q.client || ''}</div>
-            <div>Valid Until: ${q.validUntil || '-'}</div>
-            <div>Tax Rate: ${taxRate.toFixed(2)}%</div>
-            <div>Discount: ${discount.toFixed(2)}</div>
-          </div>
-        </div>
-        <table>
-          <thead><tr><th>Description</th><th style="width:120px">Qty</th><th style="width:140px">Unit Price</th><th style="width:140px">Amount</th></tr></thead>
-          <tbody>
-            ${items.map(it => `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td>${Number(it.qty||0)}</td><td>${Number(it.unitPrice||0).toFixed(2)}</td><td>${(Number(it.qty||0)*Number(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('')}
-            <tr><td colspan="3" class="total">Subtotal</td><td class="total">${subtotal.toFixed(2)}</td></tr>
-            <tr><td colspan="3" class="total">Tax (${taxRate.toFixed(2)}%)</td><td class="total">${taxAmount.toFixed(2)}</td></tr>
-            <tr><td colspan="3" class="total">Discount</td><td class="total">${discount.toFixed(2)}</td></tr>
-            <tr><td colspan="3" class="total">Total</td><td class="total">${total.toFixed(2)}</td></tr>
-          </tbody>
-        </table>
-      </body></html>`;
-      const w = window.open('', '_blank');
-      if (!w) return;
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
-      w.focus();
-      w.print();
-    } catch {}
-  };
+  const printQuote = (q) => { try { renderQuotePdf(q, { title: 'Quotation' }); } catch {} };
 
   const convertToInvoice = async (q) => {
     try {

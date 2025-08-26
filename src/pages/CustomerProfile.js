@@ -826,58 +826,76 @@ export default function CustomerProfile() {
         });
       } catch {}
 
-      // Copy only unassigned customer draft quotes into the new project's quotes collection and tag them with this projectId
+      // Copy only ONE unassigned customer draft quote into the new project's quotes collection and remove others
       try {
         const draftsSnap = await getDocs(collection(db, 'customerProfiles', id, 'quotesDrafts'));
-        const addPromises = [];
+        // Determine which draft to keep: prefer explicitly selected; else keep the most recent unassigned
+        let selectedDraftId = projectData?.selectedDraftQuoteId || null;
+        if (!selectedDraftId) {
+          // Find newest unassigned draft by createdAt
+          let newest = null;
+          draftsSnap.forEach(d => {
+            const data = d.data() || {};
+            if (data.projectId) return;
+            const createdAtSec = (data.createdAt?.seconds || 0);
+            if (!newest || createdAtSec > (newest.createdAtSec || 0)) {
+              newest = { id: d.id, createdAtSec, data };
+            }
+          });
+          selectedDraftId = newest ? newest.id : null;
+        }
+        const ops = [];
+        let addedQuoteId = null;
         draftsSnap.forEach(d => {
           const q = d.data() || {};
-          if (!q.projectId) {
-            const items = Array.isArray(q.items) ? q.items : [];
-            // If a specific draft quote was selected during conversion, only keep that one and delete others
-            if (projectData?.selectedDraftQuoteId) {
-              if (d.id === projectData.selectedDraftQuoteId) {
-                addPromises.push(addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
-                  client: q.client || '',
-                  validUntil: q.validUntil || '',
-                  items,
-                  subtotal: Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0)),
-                  taxRate: Number(q.taxRate || 0),
-                  discount: Number(q.discount || 0),
-                  taxAmount: Number(q.taxAmount || 0),
-                  total: Number(q.total || 0),
-                  status: q.status || 'draft',
-                  createdAt: serverTimestamp(),
-                  movedFromCustomerId: id,
-                }).catch(() => {}));
-                // Tag the selected draft with projectId so it won't appear as a customer-level draft
-                addPromises.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
-              } else {
-                addPromises.push(deleteDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id)).catch(() => {}));
-              }
-            } else {
-              // Legacy behavior: migrate all unassigned drafts
-              addPromises.push(addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
+          if (q.projectId) return;
+          const items = Array.isArray(q.items) ? q.items : [];
+          const subtotal = Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0));
+          const taxRate = Number(q.taxRate || 0);
+          const discount = Number(q.discount || 0);
+          const taxAmount = Number(q.taxAmount || (subtotal * (taxRate/100)));
+          const total = Number(q.total || (subtotal + taxAmount - discount));
+          if (selectedDraftId && d.id === selectedDraftId) {
+            // Add only the selected draft
+            ops.push(
+              addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
                 client: q.client || '',
                 validUntil: q.validUntil || '',
                 items,
-                subtotal: Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0)),
-                taxRate: Number(q.taxRate || 0),
-                discount: Number(q.discount || 0),
-                taxAmount: Number(q.taxAmount || 0),
-                total: Number(q.total || 0),
+                subtotal,
+                taxRate,
+                discount,
+                taxAmount,
+                total,
                 status: q.status || 'draft',
                 createdAt: serverTimestamp(),
                 movedFromCustomerId: id,
-              }).catch(() => {}));
-              // Tag the customer-level draft with projectId so it won't appear across other projects in profile or get re-migrated
-              addPromises.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
-            }
+              })
+                .then(ref => { addedQuoteId = ref.id; })
+                .catch(() => {})
+            );
+            // Tag selected draft so it won't appear as customer-level
+            ops.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
+          } else {
+            // Remove other drafts
+            ops.push(deleteDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id)).catch(() => {}));
           }
         });
-        if (addPromises.length > 0) {
-          await Promise.all(addPromises);
-        }
+        if (ops.length > 0) await Promise.all(ops);
+        // Safety: ensure only one quote under the project by removing any extras that may exist
+        try {
+          const projQuotesSnap = await getDocs(collection(db, 'projects', newProjectRef.id, 'quotes'));
+          const deletes = [];
+          let keepFound = false;
+          projQuotesSnap.forEach(qdoc => {
+            if (!keepFound && (addedQuoteId ? qdoc.id === addedQuoteId : true)) {
+              keepFound = true;
+              return;
+            }
+            deletes.push(deleteDoc(doc(db, 'projects', newProjectRef.id, 'quotes', qdoc.id)).catch(() => {}));
+          });
+          if (deletes.length > 0) await Promise.all(deletes);
+        } catch {}
       } catch {}
 
       // Move customer transcripts to the new project's transcripts collection
@@ -1285,19 +1303,15 @@ export default function CustomerProfile() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151' }}>
-                    <input type="checkbox" onChange={(e) => {
-                      if (e.target.checked) {
-                        handleSaveProjectFromConversion({ 
-                          name: convertForm.name || '', 
-                          description: convertForm.description || '',
-                          startDate: convertForm.startDate || '',
-                          endDate: convertForm.endDate || '',
-                          budget: convertForm.budget || '',
-                          priority: convertForm.priority || 'Normal',
-                          team: convertForm.recipientUids || [] 
-                        });
-                      }
-                    }} />
+                    <input
+                      type="checkbox"
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setShowConvertPanel(false);
+                          setShowProjectConversionApprovalModal(true);
+                        }
+                      }}
+                    />
                     No Approval Needed (create directly)
                   </label>
                 </div>
@@ -1355,15 +1369,10 @@ export default function CustomerProfile() {
                   
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
                     <button onClick={() => setShowProjectConversionApprovalModal(true)} style={{ ...getButtonStyle('secondary', 'customers') }}>Send Approval Request</button>
-                    <button onClick={() => handleSaveProjectFromConversion({ 
-                      name: convertForm.name || '',
-                      description: convertForm.description || '',
-                      startDate: convertForm.startDate || '',
-                      endDate: convertForm.endDate || '',
-                      budget: convertForm.budget || '',
-                      priority: convertForm.priority || 'Normal',
-                      team: convertForm.recipientUids || []
-                    })} style={{ ...getButtonStyle('primary', 'customers') }}>Create Project</button>
+                    <button
+                      onClick={() => { setShowConvertPanel(false); setShowProjectConversionApprovalModal(true); }}
+                      style={{ ...getButtonStyle('primary', 'customers') }}
+                    >Create Project</button>
                   </div>
                   {hasPendingConversionRequest && !hasApprovedConversion && (
                     <div style={{ fontSize: 12, color: '#92400E', marginTop: 6 }}>Awaiting Approval</div>

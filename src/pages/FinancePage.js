@@ -1,3 +1,4 @@
+import { renderQuotePdf } from '../utils/quotePdf';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
@@ -623,57 +624,7 @@ export default function FinancePage() {
   const [recordPaymentFor, setRecordPaymentFor] = useState(null);
   const openRecordPayment = (inv) => setRecordPaymentFor(inv);
 
-  const printQuote = (q) => {
-    try {
-      const items = Array.isArray(q.items) ? q.items : [];
-      const hasItems = items.length > 0;
-      const subtotal = items.reduce((a,it)=> a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
-      const taxRate = Number(q.taxRate || 0);
-      const discount = Number(q.discount || 0);
-      const taxAmount = hasItems ? (subtotal * (taxRate/100)) : Number(q.taxAmount || 0);
-      const total = Number((q.total ?? (hasItems ? (subtotal + taxAmount - discount) : 0)) || 0);
-      const rows = hasItems
-        ? items.map(it => `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td style="text-align:right">${Number(it.qty||0)}</td><td style="text-align:right">${Number(it.unitPrice||0).toFixed(2)}</td><td style="text-align:right">${(Number(it.qty||0)*Number(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('')
-        : `<tr><td>Quoted Total</td><td style="text-align:right">${total.toFixed(2)}</td></tr>`;
-      const totalsRow = hasItems
-        ? `<tr><td colspan="3" class="total">Subtotal</td><td class="total" style="text-align:right">${subtotal.toFixed(2)}</td></tr>`
-          + `<tr><td colspan="3" class="total">Tax (${taxRate.toFixed(2)}%)</td><td class="total" style="text-align:right">${taxAmount.toFixed(2)}</td></tr>`
-          + `<tr><td colspan="3" class="total">Discount</td><td class="total" style="text-align:right">${discount.toFixed(2)}</td></tr>`
-          + `<tr><td colspan="3" class="total">Total</td><td class="total" style="text-align:right">${total.toFixed(2)}</td></tr>`
-        : `<tr><td class="total">Total</td><td class="total" style="text-align:right">${total.toFixed(2)}</td></tr>`;
-      const table = hasItems
-        ? `<table><thead><tr><th>Description</th><th style="width:100px;text-align:right">Qty</th><th style="width:140px;text-align:right">Unit Price</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`
-        : `<table><thead><tr><th>Description</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`;
-      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Quote - ${q.client || ''}</title><style>
-        body{font-family:Arial,sans-serif;color:#111827;margin:24px}
-        .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-        .brand{font-weight:700;font-size:20px}
-        .muted{color:#6b7280;font-size:12px}
-        table{width:100%;border-collapse:collapse;margin-top:16px}
-        th,td{border:1px solid #e5e7eb;padding:8px;text-align:left}
-        .total{font-weight:700}
-      </style></head><body>
-        <div class="head">
-          <div>
-            <div class="brand">ProFlow</div>
-            <div class="muted">Quote</div>
-          </div>
-          <div class="muted">
-            <div>Project: ${q.projectName || ''}</div>
-            <div>Client: ${q.client || ''}</div>
-            <div>Valid Until: ${q.validUntil || '-'}</div>
-            <div>Status: ${q.status || 'draft'}</div>
-            <div>Tax Rate: ${taxRate.toFixed(2)}%</div>
-            <div>Discount: ${discount.toFixed(2)}</div>
-          </div>
-        </div>
-        ${table}
-      </body></html>`;
-      const w = window.open('', '_blank');
-      if (!w) return;
-      w.document.open(); w.document.write(html); w.document.close(); w.focus(); w.print();
-    } catch {}
-  };
+  const printQuote = (q) => { try { renderQuotePdf(q, { title: 'Quotation' }); } catch {} };
   const renderQuoteWithTemplate = (tplContent, q) => {
     try {
       const items = Array.isArray(q.items) ? q.items : [];
@@ -793,7 +744,15 @@ export default function FinancePage() {
       trySet('validUntil', overrides.validUntil ?? (q.validUntil ?? ''));
       trySet('status', overrides.status ?? (q.status ?? 'draft'));
       const items = Array.isArray(q.items) ? q.items : [];
-      const total = (typeof q.total === 'number' ? q.total : (items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0))) || 0;
+      const subtotal = items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0);
+      const taxRate = Number(q.taxRate ?? overrides.taxRate ?? 0);
+      const discount = Number(q.discount ?? overrides.discount ?? 0);
+      const taxAmount = (typeof q.taxAmount === 'number') ? Number(q.taxAmount||0) : (subtotal * (taxRate/100));
+      const total = (typeof q.total === 'number' ? Number(q.total||0) : (subtotal + taxAmount - discount)) || 0;
+      trySet('subtotal', overrides.subtotal ?? Number(subtotal||0).toFixed(2));
+      trySet('taxRate', overrides.taxRate ?? (Number(taxRate||0).toFixed(2)));
+      trySet('taxAmount', overrides.taxAmount ?? Number(taxAmount||0).toFixed(2));
+      trySet('discount', overrides.discount ?? Number(discount||0).toFixed(2));
       trySet('total', overrides.total ?? Number(total||0).toFixed(2));
       try { form.flatten(); } catch {}
       const bytes = await pdfDoc.save();
