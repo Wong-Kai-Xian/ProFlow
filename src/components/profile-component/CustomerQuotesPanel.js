@@ -6,7 +6,7 @@ import { DESIGN_SYSTEM, getCardStyle } from '../../styles/designSystem';
 export default function CustomerQuotesPanel({ customerId, projects = [], customerProfile = {}, readOnly = false }) {
   const [quotes, setQuotes] = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ client: '', validUntil: '', items: [] });
+  const [form, setForm] = useState({ client: '', validUntil: '', taxRate: 0, discount: 0, items: [] });
   
 
   useEffect(() => {
@@ -24,7 +24,8 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
   const subtotal = useMemo(() => (form.items || []).reduce((a,it)=> a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0), [form.items]);
 
   const openNew = () => {
-    setForm({ client: customerProfile?.name || customerProfile?.email || '', validUntil: '', items: [{ description: '', qty: 1, unitPrice: 0 }] });
+    const defaultTax = (customerProfile?.financeDefaults?.taxRate ?? customerProfile?.taxRate ?? 0);
+    setForm({ client: customerProfile?.name || customerProfile?.email || '', validUntil: '', taxRate: defaultTax, discount: 0, items: [{ description: '', qty: 1, unitPrice: 0 }] });
     setShowModal(true);
   };
 
@@ -33,8 +34,12 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
       if (!customerId) return;
       const col = collection(db, 'customerProfiles', customerId, 'quotesDrafts');
       const items = (form.items || []).map(it => ({ description: it.description || '', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) }));
-      const total = items.reduce((a,it)=> a + (it.qty*it.unitPrice), 0);
-      await addDoc(col, { client: form.client || '', validUntil: form.validUntil || '', items, total, status: 'draft', createdAt: serverTimestamp() });
+      const subtotal = items.reduce((a,it)=> a + (it.qty*it.unitPrice), 0);
+      const taxRate = Number(form.taxRate || 0);
+      const discount = Number(form.discount || 0);
+      const taxAmount = subtotal * (taxRate / 100);
+      const total = subtotal + taxAmount - discount;
+      await addDoc(col, { client: form.client || '', validUntil: form.validUntil || '', taxRate, discount, items, subtotal, taxAmount, total, status: 'draft', createdAt: serverTimestamp() });
       setShowModal(false);
     } catch {}
   };
@@ -49,6 +54,10 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
     try {
       const items = Array.isArray(q.items) ? q.items : [];
       const subtotal = items.reduce((a,it)=> a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
+      const taxRate = Number(q.taxRate || 0);
+      const discount = Number(q.discount || 0);
+      const taxAmount = subtotal * (taxRate / 100);
+      const total = Number((q.total ?? (subtotal + taxAmount - discount)) || 0);
       const html = `<!doctype html><html><head><meta charset="utf-8"><title>Quote - ${q.client || ''}</title><style>
         body{font-family:Arial,sans-serif;color:#111827;margin:24px}
         .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
@@ -66,13 +75,18 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
           <div class="muted">
             <div>Customer: ${q.client || ''}</div>
             <div>Valid Until: ${q.validUntil || '-'}</div>
+            <div>Tax Rate: ${taxRate.toFixed(2)}%</div>
+            <div>Discount: ${discount.toFixed(2)}</div>
           </div>
         </div>
         <table>
           <thead><tr><th>Description</th><th style="width:120px">Qty</th><th style="width:140px">Unit Price</th><th style="width:140px">Amount</th></tr></thead>
           <tbody>
             ${items.map(it => `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td>${Number(it.qty||0)}</td><td>${Number(it.unitPrice||0).toFixed(2)}</td><td>${(Number(it.qty||0)*Number(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('')}
-            <tr><td class="total" colspan="3">Total</td><td class="total">${Number(q.total||subtotal||0).toFixed(2)}</td></tr>
+            <tr><td colspan="3" class="total">Subtotal</td><td class="total">${subtotal.toFixed(2)}</td></tr>
+            <tr><td colspan="3" class="total">Tax (${taxRate.toFixed(2)}%)</td><td class="total">${taxAmount.toFixed(2)}</td></tr>
+            <tr><td colspan="3" class="total">Discount</td><td class="total">${discount.toFixed(2)}</td></tr>
+            <tr><td colspan="3" class="total">Total</td><td class="total">${total.toFixed(2)}</td></tr>
           </tbody>
         </table>
       </body></html>`;
@@ -105,9 +119,10 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
         </div>
       </div>
       <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 100px 200px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 240px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
           <div>Client</div>
           <div>Valid Until</div>
+          <div>Tax %</div>
           <div>Total</div>
           <div>Actions</div>
         </div>
@@ -116,14 +131,18 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
             <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No draft quotes</div>
           ) : (
             quotes.map((q) => (
-              <div key={q.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 100px 200px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+              <div key={q.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 240px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.client || 'Client'}</div>
                 <div>{q.validUntil || '-'}</div>
+                <div>{Number(q.taxRate || 0).toFixed(2)}</div>
                 <div>{Number(q.total||0).toFixed(2)}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button onClick={() => printDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Print</button>
                   {!readOnly && (
-                    <button onClick={() => removeDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Delete</button>
+                    <>
+                      <button onClick={() => setForm({ client: q.client || '', validUntil: q.validUntil || '', taxRate: Number(q.taxRate||0), discount: Number(q.discount||0), items: Array.isArray(q.items) ? q.items.map(it => ({ description: it.description||'', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) })) : [] }) || setShowModal(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Edit</button>
+                      <button onClick={() => removeDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Delete</button>
+                    </>
                   )}
                 </div>
               </div>
@@ -139,14 +158,22 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
               <div style={{ fontWeight: 700 }}>New Quote</div>
               <button onClick={() => setShowModal(false)} style={{ padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 12 }}>Close</button>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280', flex: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 140px 140px', gap: 8 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
                 <span style={{ marginBottom: 4 }}>Client</span>
                 <input value={form.client} onChange={(e)=> setForm(f=>({ ...f, client: e.target.value }))} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280', width: 200 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
                 <span style={{ marginBottom: 4 }}>Valid Until</span>
                 <input type="date" value={form.validUntil} onChange={(e)=> setForm(f=>({ ...f, validUntil: e.target.value }))} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                <span style={{ marginBottom: 4 }}>Tax Rate %</span>
+                <input type="number" step="0.01" value={form.taxRate} onChange={(e)=> setForm(f=>({ ...f, taxRate: e.target.value }))} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                <span style={{ marginBottom: 4 }}>Discount</span>
+                <input type="number" step="0.01" value={form.discount} onChange={(e)=> setForm(f=>({ ...f, discount: e.target.value }))} />
               </label>
             </div>
             <div style={{ fontWeight: 600, margin: '8px 0' }}>Items</div>
@@ -169,8 +196,20 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
                 <button onClick={()=> setForm(f=>({ ...f, items: [...(f.items||[]), { description: '', qty: 1, unitPrice: 0 }] }))} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>+ Add Item</button>
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 12 }}>
-              <div>Subtotal: {subtotal.toFixed(2)}</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 12, fontSize: 12, color: '#374151' }}>
+              {(() => {
+                const tax = subtotal * (Number(form.taxRate||0)/100);
+                const discount = Number(form.discount||0);
+                const total = subtotal + tax - discount;
+                return (
+                  <>
+                    <div>Subtotal: {subtotal.toFixed(2)}</div>
+                    <div>Tax: {tax.toFixed(2)}</div>
+                    <div>Discount: {discount.toFixed(2)}</div>
+                    <div style={{ fontWeight: 700, color: '#111827' }}>Total: {total.toFixed(2)}</div>
+                  </>
+                );
+              })()}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
               <button onClick={saveQuote} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Save</button>

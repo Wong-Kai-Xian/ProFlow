@@ -213,8 +213,8 @@ export default function FinancePage() {
 
   useEffect(() => {
     if (!currentUser?.uid) { setCustomersBook([]); return; }
-    const ref = collection(db, 'customerProfiles');
-    const unsub = onSnapshot(ref, (snap) => {
+    const qref = query(collection(db, 'customerProfiles'), where('userId', '==', currentUser.uid));
+    const unsub = onSnapshot(qref, (snap) => {
       const list = snap.docs.map(d => {
         const data = d.data() || {};
         const name = data.customerProfile?.name || data.companyProfile?.company || d.id;
@@ -256,7 +256,28 @@ export default function FinancePage() {
       });
       unsubs.push(unsubExp, unsubInv, unsubQuo);
     }
-    return () => unsubs.forEach(u => { try { u(); } catch {} });
+    // Also include customer quote drafts (not yet linked to a project)
+    // Only my customers' drafts
+    const qMyCustomers = query(collection(db, 'customerProfiles'), where('userId', '==', currentUser?.uid || ''));
+    const unsubCustDrafts = onSnapshot(qMyCustomers, async (snap) => {
+      try {
+        const drafts = [];
+        for (const d of snap.docs) {
+          const cid = d.id;
+          const cname = (d.data()?.customerProfile?.name || d.data()?.companyProfile?.company || '(Customer)');
+          const qSnap = await (await import('firebase/firestore')).getDocs(collection(db, 'customerProfiles', cid, 'quotesDrafts'));
+          qSnap.forEach(qd => {
+            const q = qd.data() || {};
+            if (!q.projectId) drafts.push({ id: qd.id, type: 'quote_draft', projectId: '', projectName: '(Customer Draft)', client: q.client || '', validUntil: q.validUntil || '', status: 'draft', total: Number(q.total || 0), items: Array.isArray(q.items) ? q.items : [], customerId: cid });
+          });
+        }
+        // Replace any existing customer-draft rows
+        for (let i = quoBundle.length - 1; i >= 0; i--) if (quoBundle[i].type === 'quote_draft') quoBundle.splice(i, 1);
+        quoBundle.push(...drafts);
+        setQuoteRows([...quoBundle]);
+      } catch {}
+    });
+    return () => { try { unsubs.forEach(u => { try { u(); } catch {} }); } catch {} };
   }, [projects.map(p => p.id).join(',')]);
 
   // tab sync with URL
@@ -1055,7 +1076,7 @@ export default function FinancePage() {
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => exportQuotesCsv(quoteRows)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Export CSV</button>
                       <button onClick={() => setShowQuoteTemplates(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Templates</button>
-                      <button onClick={() => { setNewQuote({ projectId: '', client: '', validUntil: '', items: [], taxRate: financeDefaults.taxRate || 0, discount: financeDefaults.discount || 0 }); setShowQuoteModal(true); }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>+ New Quote</button>
+                      <button onClick={() => { setNewQuote({ customerId: '', isNewCustomer: false, newCustomer: { name: '', email: '', phone: '', company: '' }, client: '', validUntil: '', items: [], taxRate: financeDefaults.taxRate || 0, discount: financeDefaults.discount || 0, currency: financeDefaults.currency || 'USD' }); setShowQuoteModal(true); }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>+ New Quote</button>
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 160px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
@@ -1071,12 +1092,12 @@ export default function FinancePage() {
                     ) : (
                       sortedQuotes.map((r, idx) => (
                         <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 160px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
-                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.client || 'Client'} ({r.status})</div>
+                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.client || 'Client'}</div>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.projectName}</div>
                           <div>{r.validUntil || '-'}</div>
                           <div>{r.total.toFixed(2)} {r.currency || financeDefaults.currency || 'USD'}</div>
                           <div style={{ display: 'flex', gap: 8 }}>
-                            <button disabled={r.status === 'converted'} onClick={() => convertQuoteToInvoice(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: r.status === 'converted' ? 'not-allowed' : 'pointer', opacity: r.status === 'converted' ? 0.6 : 1, fontSize: 12 }}>{r.status === 'converted' ? 'Converted' : 'Convert to Invoice'}</button>
+                            <button disabled={r.status === 'converted' || r.type === 'quote_draft'} onClick={() => convertQuoteToInvoice(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: (r.status === 'converted' || r.type === 'quote_draft') ? 'not-allowed' : 'pointer', opacity: (r.status === 'converted' || r.type === 'quote_draft') ? 0.6 : 1, fontSize: 12 }}>{r.type === 'quote_draft' ? 'Draft (convert via project)' : (r.status === 'converted' ? 'Converted' : 'Convert to Invoice')}</button>
                             <button onClick={() => printQuote(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Print</button>
                             <button onClick={() => { setApplyTplForQuote(r); setSelectedTemplateId(quoteTemplates[0]?.id || ''); }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Print (Template)</button>
                           </div>
@@ -1085,7 +1106,7 @@ export default function FinancePage() {
                     )}
                   </div>
                 </div>
-                <QuoteModal isOpen={showQuoteModal} onClose={() => setShowQuoteModal(false)} projects={projects} value={newQuote} onChange={setNewQuote} onSave={saveNewQuote} />
+                <QuoteModal isOpen={showQuoteModal} onClose={() => setShowQuoteModal(false)} customers={customersBook} value={newQuote} onChange={setNewQuote} onSave={saveNewQuote} />
               </>
             )}
 
@@ -1849,21 +1870,82 @@ function Stat({ label, value }) {
 }
 
 // Quote creation modal (shown when showQuoteModal)
-export function QuoteModal({ isOpen, onClose, projects, value, onChange, onSave }) {
+export function QuoteModal({ isOpen, onClose, customers = [], value, onChange, onSave }) {
   if (!isOpen) return null;
   return (
-    <Modal title="Create Quote" onClose={onClose} onSave={onSave}>
+    <Modal title="Create Quote" onClose={onClose} onSave={async () => {
+      try {
+        if (value.isNewCustomer) {
+          const payload = {
+            customerProfile: { name: value.newCustomer?.name || '', email: value.newCustomer?.email || '', phone: value.newCustomer?.phone || '' },
+            companyProfile: { company: value.newCustomer?.company || '' },
+            financeDefaults: { currency: value.currency || 'USD' },
+            createdAt: serverTimestamp(),
+          };
+          const cref = await addDoc(collection(db, 'customerProfiles'), payload);
+          await addDoc(collection(db, 'customerProfiles', cref.id, 'quotesDrafts'), {
+            client: value.client || payload.customerProfile.name || payload.customerProfile.email || '',
+            validUntil: value.validUntil || '',
+            items: (value.items||[]).map(it => ({ description: it.description||'', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) })),
+            total: (value.items||[]).reduce((a,it)=> a + Number(it.qty||0)*Number(it.unitPrice||0), 0),
+            status: 'draft',
+            createdAt: serverTimestamp()
+          });
+        } else if (value.customerId) {
+          await addDoc(collection(db, 'customerProfiles', value.customerId, 'quotesDrafts'), {
+            client: value.client || '',
+            validUntil: value.validUntil || '',
+            items: (value.items||[]).map(it => ({ description: it.description||'', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) })),
+            total: (value.items||[]).reduce((a,it)=> a + Number(it.qty||0)*Number(it.unitPrice||0), 0),
+            status: 'draft',
+            createdAt: serverTimestamp()
+          });
+        } else {
+          alert('Please select a customer or create a new one.');
+          return;
+        }
+        if (onSave) onSave();
+        onClose();
+      } catch (e) {
+        console.error('Failed to save quote', e);
+        alert('Failed to save quote');
+      }
+    }}>
       <div style={{ display: 'flex', gap: 8 }}>
-        <Field label="Project">
-          <select value={value.projectId} onChange={(e) => onChange(v => ({ ...v, projectId: e.target.value }))} style={{ width: '100%' }}>
-            <option value="">Select project</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}
+        <Field label="Customer">
+          <select value={value.customerId || ''} onChange={(e) => onChange(v => {
+            const id = e.target.value;
+            const cust = customers.find(c => c.id === id);
+            // Auto-fill client display and finance defaults
+            const next = { ...v, customerId: id, isNewCustomer: false, client: cust ? (cust.name || '') : v.client };
+            if (cust) {
+              if (cust.currency && !next.currency) next.currency = cust.currency;
+              if (typeof cust.taxRate === 'number' && (next.taxRate === undefined || next.taxRate === '')) next.taxRate = cust.taxRate;
+            }
+            return next;
+          })} style={{ width: '100%' }}>
+            <option value="">Select customer</option>
+            {customers.map(c => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
           </select>
         </Field>
-        <Field label="Client"><input value={value.client} onChange={(e) => onChange(v => ({ ...v, client: e.target.value }))} /></Field>
+        <Field label="New Customer?">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={!!value.isNewCustomer} onChange={(e) => onChange(v => ({ ...v, isNewCustomer: e.target.checked, customerId: e.target.checked ? '' : v.customerId }))} />
+            <span style={{ fontSize: 12, color: '#6b7280' }}>Create new profile</span>
+          </label>
+        </Field>
         <Field label="Currency (ISO)"><input value={value.currency || ''} onChange={(e) => onChange(v => ({ ...v, currency: e.target.value }))} /></Field>
       </div>
+      {value.isNewCustomer && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <Field label="Customer Name"><input value={value.newCustomer?.name || ''} onChange={(e) => onChange(v => ({ ...v, newCustomer: { ...(v.newCustomer||{}), name: e.target.value } }))} /></Field>
+          <Field label="Email"><input type="email" value={value.newCustomer?.email || ''} onChange={(e) => onChange(v => ({ ...v, newCustomer: { ...(v.newCustomer||{}), email: e.target.value } }))} /></Field>
+          <Field label="Phone"><input value={value.newCustomer?.phone || ''} onChange={(e) => onChange(v => ({ ...v, newCustomer: { ...(v.newCustomer||{}), phone: e.target.value } }))} /></Field>
+          <Field label="Company"><input value={value.newCustomer?.company || ''} onChange={(e) => onChange(v => ({ ...v, newCustomer: { ...(v.newCustomer||{}), company: e.target.value } }))} /></Field>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8 }}>
+        <Field label="Client (display)"><input value={value.client} onChange={(e) => onChange(v => ({ ...v, client: e.target.value }))} /></Field>
         <Field label="Valid Until"><input type="date" value={value.validUntil || ''} onChange={(e) => onChange(v => ({ ...v, validUntil: e.target.value }))} /></Field>
         <Field label="Tax Rate %"><input type="number" step="0.01" value={value.taxRate ?? ''} onChange={(e) => onChange(v => ({ ...v, taxRate: e.target.value }))} /></Field>
         <Field label="Discount"><input type="number" step="0.01" value={value.discount ?? ''} onChange={(e) => onChange(v => ({ ...v, discount: e.target.value }))} /></Field>

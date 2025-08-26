@@ -271,7 +271,7 @@ export default function AdvancedApprovalRequestModal({
           setRequestTitle(`Approval Request for ${effectiveEntityName}`);
         } else {
           if (autoAttachQuotation) {
-            setRequestTitle(`Convert Customer "${effectiveEntityName}" to Project`);
+          setRequestTitle(`Convert Customer "${effectiveEntityName}" to Project`);
           } else {
             // Generic send approval from customer profile: use customer profile name without quotes
             const nameForTitle = (
@@ -313,7 +313,7 @@ export default function AdvancedApprovalRequestModal({
           console.warn('Failed to attach selected quotation', e);
         }
       } else if (isOpen && autoAttachQuotation) {
-        // Auto-attach quotation based on selected project (if provided) else fallback to customer drafts
+      // Auto-attach quotation based on selected project (if provided) else fallback to customer drafts
         try {
           if (quoteProjectId) {
             // Fetch latest quote from selected project
@@ -423,7 +423,7 @@ export default function AdvancedApprovalRequestModal({
         customerName: cpCustomerName.trim()
       },
       team: resolvedTeam,
-      stage: cpSelectedStage,
+      stage: 'Planning',
       description: cpDescription,
       deadline: cpDeadline || '',
       ownerId: currentUser.uid,
@@ -827,22 +827,89 @@ export default function AdvancedApprovalRequestModal({
           overflow: "auto",
           flex: 1
         }}>
+          {/* Quotation Selection (required for conversion) */}
+          {(!isStageAdvancement && autoAttachQuotation) && (
+            <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
+              <label style={{
+                display: "block",
+                marginBottom: DESIGN_SYSTEM.spacing.xs,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
+                color: DESIGN_SYSTEM.colors.text.primary
+              }}>
+                Quotation (required for conversion)
+              </label>
+              <select
+                value={selectedQuoteIdLocal}
+                onChange={async (e) => {
+                  setSelectedQuoteIdLocal(e.target.value);
+                  setQuoteAttachError("");
+                  await attachQuoteById(e.target.value);
+                }}
+                disabled={modalProjectQuotes.length === 0 || loading}
+                style={{
+                  width: '100%',
+                  padding: DESIGN_SYSTEM.spacing.sm,
+                  border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                }}
+              >
+                {modalProjectQuotes.length === 0 && (
+                  <option value="">No quotes found (select a project or add drafts)</option>
+                )}
+                {modalProjectQuotes.length > 0 && (
+                  <>
+                    {modalProjectQuotes.some(q => q.scope === 'project') && (
+                      <optgroup label="Project Quotes">
+                        {modalProjectQuotes.filter(q => q.scope === 'project').map((q, idx) => {
+                          const label = q.name || q.title || q.client || `Quote ${idx + 1}`;
+                          const total = Number(q.total || 0);
+                          const suffix = isNaN(total) || total === 0 ? '' : ` • Total ${total.toFixed(2)}`;
+                          return (
+                            <option key={q.id} value={q.id}>{`${label}${suffix}`}</option>
+                          );
+                        })}
+                      </optgroup>
+                    )}
+                    {modalProjectQuotes.some(q => q.scope === 'customer') && (
+                      <optgroup label="Customer Drafts">
+                        {modalProjectQuotes.filter(q => q.scope === 'customer').map((q, idx) => {
+                          const label = q.name || q.title || q.client || `Draft ${idx + 1}`;
+                          const total = Number(q.total || 0);
+                          const suffix = isNaN(total) || total === 0 ? '' : ` • Total ${total.toFixed(2)}`;
+                          return (
+                            <option key={q.id} value={q.id}>{`${label}${suffix}`}</option>
+                          );
+                        })}
+                      </optgroup>
+                    )}
+                  </>
+                )}
+              </select>
+              {quoteAttachError && (
+                <div style={{ marginTop: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.xs, color: DESIGN_SYSTEM.colors.error }}>
+                  {quoteAttachError}
+                </div>
+              )}
+            </div>
+          )}
           {/* No approval needed toggle: show only for conversion and stage-advance flows */}
           {showNoApprovalToggle && (autoAttachQuotation || isStageAdvancement) && (
-            <div style={{
-              marginBottom: DESIGN_SYSTEM.spacing.base,
-              padding: DESIGN_SYSTEM.spacing.sm,
-              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
-              borderRadius: DESIGN_SYSTEM.borderRadius.base,
-              background: DESIGN_SYSTEM.colors.background.secondary
-            }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <input type="checkbox" checked={noApprovalNeeded} onChange={(e) => setNoApprovalNeeded(e.target.checked)} />
-                <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>
-                  No approval needed ({isStageAdvancement ? 'advance immediately' : 'do not send approval'})
-                </span>
-              </label>
-            </div>
+          <div style={{
+            marginBottom: DESIGN_SYSTEM.spacing.base,
+            padding: DESIGN_SYSTEM.spacing.sm,
+            border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+            borderRadius: DESIGN_SYSTEM.borderRadius.base,
+            background: DESIGN_SYSTEM.colors.background.secondary
+          }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={noApprovalNeeded} onChange={(e) => setNoApprovalNeeded(e.target.checked)} />
+              <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>
+                No approval needed ({isStageAdvancement ? 'advance immediately' : 'do not send approval'})
+              </span>
+            </label>
+          </div>
           )}
 
           {!noApprovalNeeded && (
@@ -938,72 +1005,7 @@ export default function AdvancedApprovalRequestModal({
             </div>
           </div>
 
-          {/* Quotation Selection (from selected project) – only for conversion flow */}
-          {(!isStageAdvancement && autoAttachQuotation) && (
-            <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
-              <label style={{
-                display: "block",
-                marginBottom: DESIGN_SYSTEM.spacing.xs,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
-                color: DESIGN_SYSTEM.colors.text.primary
-              }}>
-                Attach Quotation (from selected project)
-              </label>
-              <select
-                value={selectedQuoteIdLocal}
-                onChange={async (e) => {
-                  setSelectedQuoteIdLocal(e.target.value);
-                  await attachQuoteById(e.target.value);
-                }}
-                disabled={modalProjectQuotes.length === 0 || loading}
-                style={{
-                  width: '100%',
-                  padding: DESIGN_SYSTEM.spacing.sm,
-                  border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
-                  borderRadius: DESIGN_SYSTEM.borderRadius.base,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                }}
-              >
-                {modalProjectQuotes.length === 0 && (
-                  <option value="">No quotes found (select a project or add drafts)</option>
-                )}
-                {modalProjectQuotes.length > 0 && (
-                  <>
-                    {modalProjectQuotes.some(q => q.scope === 'project') && (
-                      <optgroup label="Project Quotes">
-                        {modalProjectQuotes.filter(q => q.scope === 'project').map((q, idx) => {
-                          const label = q.name || q.title || q.client || `Quote ${idx + 1}`;
-                          const total = Number(q.total || 0);
-                          const suffix = isNaN(total) || total === 0 ? '' : ` • Total ${total.toFixed(2)}`;
-                          return (
-                            <option key={q.id} value={q.id}>{`${label}${suffix}`}</option>
-                          );
-                        })}
-                      </optgroup>
-                    )}
-                    {modalProjectQuotes.some(q => q.scope === 'customer') && (
-                      <optgroup label="Customer Drafts">
-                        {modalProjectQuotes.filter(q => q.scope === 'customer').map((q, idx) => {
-                          const label = q.name || q.title || q.client || `Draft ${idx + 1}`;
-                          const total = Number(q.total || 0);
-                          const suffix = isNaN(total) || total === 0 ? '' : ` • Total ${total.toFixed(2)}`;
-                          return (
-                            <option key={q.id} value={q.id}>{`${label}${suffix}`}</option>
-                          );
-                        })}
-                      </optgroup>
-                    )}
-                  </>
-                )}
-              </select>
-              {quoteAttachError && (
-                <div style={{ marginTop: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.xs, color: DESIGN_SYSTEM.colors.error }}>
-                  {quoteAttachError}
-                </div>
-              )}
-            </div>
-          )}
+          
 
           {/* File Attachments */}
           <div style={{ marginBottom: DESIGN_SYSTEM.spacing.base }}>
@@ -1294,15 +1296,7 @@ export default function AdvancedApprovalRequestModal({
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DESIGN_SYSTEM.spacing.base, marginTop: DESIGN_SYSTEM.spacing.base }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>Stage</label>
-                <select value={cpSelectedStage} onChange={(e) => setCpSelectedStage(e.target.value)} style={{ width: '100%', padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }}>
-                  <option value="Planning">Planning</option>
-                  <option value="Development">Development</option>
-                  <option value="Testing">Testing</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
+              {/* Stage selection removed; default will be Planning */}
               <div>
                 <label style={{ display: 'block', marginBottom: 6, fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.primary }}>Deadline</label>
                 <input type="date" value={cpDeadline} onChange={(e) => setCpDeadline(e.target.value)} style={{ width: '100%', padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }} />

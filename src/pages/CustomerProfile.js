@@ -1359,7 +1359,7 @@ export default function CustomerProfile() {
         nextStage=""
         isStageAdvancement={false}
         autoAttachQuotation={true}
-        showNoApprovalToggle={false}
+        showNoApprovalToggle={true}
         onCreateProject={(data) => handleSaveProjectFromConversion({ ...data, team: data.team || [] })}
         customerProfileData={customerProfile}
         companyProfileData={companyProfile}
