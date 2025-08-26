@@ -104,6 +104,12 @@ export default function ApprovalPage() {
       
       setAllRequests(requestsArray);
       setLoading(false);
+      // If we are deleting and the target is now gone, close modal and reset state
+      if (deleteLoading && requestToDelete && !requestsArray.find(r => r.id === requestToDelete.id)) {
+        setDeleteLoading(false);
+        setShowDeleteModal(false);
+        setRequestToDelete(null);
+      }
       console.log('Processed approval requests:', requestsArray);
     };
 
@@ -316,12 +322,11 @@ export default function ApprovalPage() {
     setDeleteLoading(true);
     try {
       await deleteDoc(doc(db, 'approvalRequests', requestToDelete.id));
-      setShowDeleteModal(false);
-      setRequestToDelete(null);
+      // Keep modal open and button in "Deleting..." state
+      // We'll close the modal once the item is actually removed from the list (see effect below)
     } catch (error) {
       console.error("Error deleting approval request:", error);
       alert("Failed to delete approval request. Please try again.");
-    } finally {
       setDeleteLoading(false);
     }
   };
@@ -2045,7 +2050,10 @@ export default function ApprovalPage() {
           <div style={{ background: '#fff', borderRadius: 12, width: '96%', maxWidth: 1200, maxHeight: '90vh', overflow: 'auto', boxShadow: DESIGN_SYSTEM.shadows.lg, display: 'flex', flexDirection: 'column' }}>
             <div style={{ padding: DESIGN_SYSTEM.spacing.base, borderBottom: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm }}>
               <div style={{ fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>Sign PDF: {signTarget.fileName}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.xs, color: DESIGN_SYSTEM.colors.text.secondary }}>
+                  If pen doesn’t appear or size looks off, click Refresh then sign
+                </span>
                 <button onClick={refreshPdfLayout} style={{ ...getButtonStyle('secondary', 'neutral') }}>Refresh</button>
                 <button onClick={() => setShowSignModal(false)} style={{ ...getButtonStyle('secondary', 'neutral') }}>Close</button>
               </div>
