@@ -1136,9 +1136,19 @@ export default function CustomerProfile() {
                 <div style={{ flex: 1 }} />
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
-                    onClick={() => { setApprovalModalType('general'); setShowProjectConversionApprovalModal(true); }}
-                    style={{ ...getButtonStyle('primary', 'customers') }}
+                    onClick={() => {
+                      if (Boolean(selectedProjectId) || (hasPendingConversionRequest && !hasApprovedConversion)) return;
+                      setApprovalModalType('general'); setShowProjectConversionApprovalModal(true);
+                    }}
+                    style={{ 
+                      ...getButtonStyle('primary', 'customers'),
+                      pointerEvents: (Boolean(selectedProjectId) || (hasPendingConversionRequest && !hasApprovedConversion)) ? 'none' : 'auto',
+                      opacity: (Boolean(selectedProjectId) || (hasPendingConversionRequest && !hasApprovedConversion)) ? 0.6 : 1,
+                      cursor: (Boolean(selectedProjectId) || (hasPendingConversionRequest && !hasApprovedConversion)) ? 'not-allowed' : 'pointer'
+                    }}
                     disabled={Boolean(selectedProjectId) || (hasPendingConversionRequest && !hasApprovedConversion)}
+                    aria-disabled={Boolean(selectedProjectId) || (hasPendingConversionRequest && !hasApprovedConversion)}
+                    tabIndex={(Boolean(selectedProjectId) || (hasPendingConversionRequest && !hasApprovedConversion)) ? -1 : 0}
                   >
                     {selectedProjectId
                       ? 'Converted'
@@ -1302,10 +1312,12 @@ export default function CustomerProfile() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151', opacity: (hasPendingConversionRequest && !hasApprovedConversion) ? 0.6 : 1 }}>
                     <input
                       type="checkbox"
+                      disabled={hasPendingConversionRequest && !hasApprovedConversion}
                       onChange={(e) => {
+                        if (hasPendingConversionRequest && !hasApprovedConversion) return;
                         if (e.target.checked) {
                           setShowConvertPanel(false);
                           setShowProjectConversionApprovalModal(true);
@@ -1368,10 +1380,15 @@ export default function CustomerProfile() {
                   </div>
                   
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-                    <button onClick={() => setShowProjectConversionApprovalModal(true)} style={{ ...getButtonStyle('secondary', 'customers') }}>Send Approval Request</button>
                     <button
-                      onClick={() => { setShowConvertPanel(false); setShowProjectConversionApprovalModal(true); }}
-                      style={{ ...getButtonStyle('primary', 'customers') }}
+                      onClick={() => { if (hasPendingConversionRequest && !hasApprovedConversion) return; setShowProjectConversionApprovalModal(true); }}
+                      disabled={hasPendingConversionRequest && !hasApprovedConversion}
+                      style={{ ...getButtonStyle('secondary', 'customers'), opacity: (hasPendingConversionRequest && !hasApprovedConversion) ? 0.6 : 1, cursor: (hasPendingConversionRequest && !hasApprovedConversion) ? 'not-allowed' : 'pointer' }}
+                    >Send Approval Request</button>
+                    <button
+                      onClick={() => { if (hasPendingConversionRequest && !hasApprovedConversion) return; setShowConvertPanel(false); setShowProjectConversionApprovalModal(true); }}
+                      disabled={hasPendingConversionRequest && !hasApprovedConversion}
+                      style={{ ...getButtonStyle('primary', 'customers'), opacity: (hasPendingConversionRequest && !hasApprovedConversion) ? 0.6 : 1, cursor: (hasPendingConversionRequest && !hasApprovedConversion) ? 'not-allowed' : 'pointer' }}
                     >Create Project</button>
                   </div>
                   {hasPendingConversionRequest && !hasApprovedConversion && (

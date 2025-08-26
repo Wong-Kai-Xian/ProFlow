@@ -483,8 +483,18 @@ export default function ApprovalPage() {
   };
 
   // eSign helpers
-  const openSignModal = (requestId, fileUrl, fileName) => {
-    setSignTarget({ requestId, fileUrl, fileName });
+  const openSignModal = (requestId, fileUrl, fileName, fileBytesOrBlob) => {
+    const next = { requestId, fileUrl, fileName, fileBytes: null, fileBlob: null };
+    try {
+      if (fileBytesOrBlob) {
+        if (typeof fileBytesOrBlob === 'object' && typeof fileBytesOrBlob.arrayBuffer === 'function') {
+          next.fileBlob = fileBytesOrBlob; // File/Blob
+        } else {
+          next.fileBytes = fileBytesOrBlob; // ArrayBuffer
+        }
+      }
+    } catch {}
+    setSignTarget(next);
     setShowSignModal(true);
     setSignMode(true);
     setTimeout(() => { try { initPdfJs(fileUrl); } catch {} try { initCanvas(); } catch {} }, 0);
@@ -504,9 +514,17 @@ export default function ApprovalPage() {
       } catch {}
       const pdfjsLib = pdfjsLibStatic || (await import('pdfjs-dist/build/pdf'));
       setPdfjsApi(pdfjsLib);
-      // Resolve bytes via Firebase Storage SDK only (no direct fetch to avoid CORS)
+      // Resolve bytes via provided blob/bytes, or Firebase Storage, or fetch as fallback
       const resolveBytes = async () => {
         try {
+          // Prefer blob (local upload) for fresh buffer each time
+          if (signTarget && signTarget.fileBlob && typeof signTarget.fileBlob.arrayBuffer === 'function') {
+            return await signTarget.fileBlob.arrayBuffer();
+          }
+          // If bytes provided (loose eSign), clone if possible
+          if (signTarget && signTarget.fileBytes && typeof signTarget.fileBytes.byteLength === 'number' && signTarget.fileBytes.byteLength > 0) {
+            try { return signTarget.fileBytes.slice(0); } catch { return signTarget.fileBytes; }
+          }
           // 1) Try using the SDK with the full download URL
           try {
             const directRef = ref(storage, url);
@@ -526,6 +544,13 @@ export default function ApprovalPage() {
               const gsRef = ref(storage, gsUrl);
               const blob = await getBlob(gsRef);
               return await blob.arrayBuffer();
+            }
+          } catch {}
+          // 3) If this is a blob: URL, fetch it
+          try {
+            if ((url || '').startsWith('blob:')) {
+              const resp = await fetch(url);
+              if (resp.ok) return await resp.arrayBuffer();
             }
           } catch {}
           // Give up (show fallback link)
@@ -709,8 +734,18 @@ export default function ApprovalPage() {
 
   const applySignature = async () => {
     try {
-      // Load original PDF bytes via Storage SDK (avoid direct fetch)
+      // Load original PDF bytes via provided blob/bytes, or Storage, or fetch
       const loadBytes = async () => {
+        try {
+          if (signTarget && signTarget.fileBlob && typeof signTarget.fileBlob.arrayBuffer === 'function') {
+            return await signTarget.fileBlob.arrayBuffer();
+          }
+        } catch {}
+        try {
+          if (signTarget && signTarget.fileBytes && typeof signTarget.fileBytes.byteLength === 'number' && signTarget.fileBytes.byteLength > 0) {
+            try { return signTarget.fileBytes.slice(0); } catch { return signTarget.fileBytes; }
+          }
+        } catch {}
         try {
           const directRef = ref(storage, signTarget.fileUrl);
           const blob = await getBlob(directRef);
@@ -732,6 +767,11 @@ export default function ApprovalPage() {
           let url = signTarget.fileUrl || '';
           if (url.includes('firebasestorage.googleapis.com') && !/alt=media/.test(url)) {
             url += (url.includes('?') ? '&' : '?') + 'alt=media';
+          }
+          // If object URL (blob:), fetch normally
+          if ((url || '').startsWith('blob:')) {
+            const resp = await fetch(url, { method: 'GET', credentials: 'omit' });
+            if (resp.ok) return await resp.arrayBuffer();
           }
           const resp = await fetch(url, { method: 'GET', credentials: 'omit' });
           if (resp.ok) {
@@ -788,7 +828,7 @@ export default function ApprovalPage() {
       a.download = (signTarget.fileName?.replace(/\.pdf$/i, '') || 'document') + '-signed.pdf';
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setShowSignModal(false);
-      setSignTarget({ fileUrl: '', fileName: '', requestId: '' });
+      setSignTarget({ fileUrl: '', fileName: '', requestId: '', fileBytes: null, fileBlob: null });
       setIsSigning(false);
     } catch (e) {
       console.error('Failed to sign PDF', e);
@@ -1272,7 +1312,7 @@ export default function ApprovalPage() {
           </p>
         </div>
 
-        {/* Filters and Search */}
+        {/* Filters, Search, and eSign */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -1281,8 +1321,8 @@ export default function ApprovalPage() {
           gap: DESIGN_SYSTEM.spacing.base,
           flexWrap: 'wrap'
         }}>
-          {/* Status Filters */}
-          <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.sm }}>
+          {/* Left group: filters and search (search next to Rejected) */}
+          <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.sm, alignItems: 'center', flexWrap: 'wrap' }}>
             {['All', 'Pending', 'Approved', 'Rejected'].map(filter => (
               <button
                 key={filter}
@@ -1297,24 +1337,37 @@ export default function ApprovalPage() {
                 })
               </button>
             ))}
+            <input
+              type="text"
+              placeholder="Search requests..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                padding: DESIGN_SYSTEM.spacing.sm,
+                border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                outline: 'none',
+                minWidth: '220px',
+                background: DESIGN_SYSTEM.colors.background.primary
+              }}
+            />
           </div>
 
-          {/* Search */}
-          <input
-            type="text"
-            placeholder="Search requests..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              padding: DESIGN_SYSTEM.spacing.sm,
-              border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
-              borderRadius: DESIGN_SYSTEM.borderRadius.base,
-              fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-              outline: 'none',
-              minWidth: '280px',
-              background: DESIGN_SYSTEM.colors.background.primary
-            }}
-          />
+          {/* Right: eSign quick button */}
+          <div>
+            <input type="file" accept="application/pdf" id="approval-loose-esign-input" style={{ display: 'none' }} onChange={async (e) => {
+              try {
+                const file = e?.target?.files?.[0];
+                if (!file) return;
+                const url = URL.createObjectURL(file);
+                // Pass the File directly instead of an ArrayBuffer to avoid detached buffer issues
+                openSignModal('', url, file.name, file);
+                try { e.target.value = ''; } catch {}
+              } catch {}
+            }} />
+            <button onClick={() => { try { document.getElementById('approval-loose-esign-input').click(); } catch {} }} style={{ ...getButtonStyle('secondary', 'neutral') }} title="eSign a PDF without creating a request">eSign</button>
+          </div>
         </div>
 
         {/* Main Table */}
