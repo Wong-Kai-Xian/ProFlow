@@ -104,6 +104,12 @@ export default function CustomerProfile() {
   // Default CRM tab to Stages on load
   const [defaultCrmTab, setDefaultCrmTab] = useState('Stages');
 
+  // Access management
+  const [accessList, setAccessList] = useState([]); // [{ uid, name, email }]
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [sharing, setSharing] = useState(false);
+
   
 
   // Wire AI Actions button inside CRM transcripts to this page modal
@@ -243,6 +249,22 @@ export default function CustomerProfile() {
           setProjects(data.projects || []);
           setProjectSnapshots(data.projectSnapshots || {});
           setLastContact(data.lastContact || "N/A");
+          // Load access list details
+          try {
+            const access = Array.isArray(data.access) ? data.access : (data.userId ? [data.userId] : []);
+            const details = [];
+            const chunkSize = 10;
+            for (let i = 0; i < access.length; i += chunkSize) {
+              const chunk = access.slice(i, i + chunkSize);
+              const usersQuery = query(collection(db, "users"), where("uid", "in", chunk));
+              const usersSnapshot = await getDocs(usersQuery);
+              usersSnapshot.forEach(userDoc => {
+                const u = userDoc.data();
+                details.push({ uid: userDoc.id, name: u.name || u.email || 'User', email: u.email || '' });
+              });
+            }
+            setAccessList(details);
+          } catch {}
         } else {
           console.log("No such customer document!");
           // If ID exists but document doesn't, navigate back to list or show error
@@ -1245,6 +1267,75 @@ export default function CustomerProfile() {
                   }} 
                   onSave={(updated) => handleSaveCustomer({ companyProfile: updated })}
                 />
+              </div>
+            </div>
+
+            {/* Access Panel */}
+            <div style={getCardStyle('customers')}>
+              <div style={{
+                background: DESIGN_SYSTEM.pageThemes.customers.gradient,
+                color: DESIGN_SYSTEM.colors.text.inverse,
+                padding: DESIGN_SYSTEM.spacing.base,
+                borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+              }}>
+                <h2 style={{ margin: 0, fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>
+                  Access
+                </h2>
+              </div>
+              <div style={{ padding: DESIGN_SYSTEM.spacing.base, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={shareEmail} onChange={(e) => setShareEmail(e.target.value)} placeholder="Share with email" style={{ flex: 1, padding: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }} />
+                  <button
+                    onClick={async () => {
+                      if (!id || !currentUser || !shareEmail.trim()) return;
+                      setSharing(true);
+                      try {
+                        // Lookup user by email
+                        const usersQuery = query(collection(db, 'users'), where('email', '==', shareEmail.trim()))
+                        const snap = await getDocs(usersQuery);
+                        let toUserId = null;
+                        if (!snap.empty) toUserId = snap.docs[0].id;
+                        // Create share request
+                        await addDoc(collection(db, 'customerShares'), {
+                          customerId: id,
+                          customerName: getCustomerName(),
+                          fromUserId: currentUser.uid,
+                          fromUserEmail: currentUser.email || '',
+                          toUserId: toUserId || null,
+                          toUserEmail: shareEmail.trim(),
+                          status: 'pending',
+                          createdAt: serverTimestamp(),
+                        });
+                        setShareEmail('');
+                        alert('Share invitation sent');
+                      } catch (e) {
+                        alert('Failed to send share');
+                      } finally {
+                        setSharing(false);
+                      }
+                    }}
+                    disabled={sharing}
+                    style={{ ...getButtonStyle('primary', 'customers'), opacity: sharing ? 0.7 : 1 }}
+                  >
+                    {sharing ? 'Sending…' : 'Share'}
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary }}>People with access</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {accessList.length === 0 ? (
+                    <div style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.tertiary }}>Only you</div>
+                  ) : (
+                    accessList.map(u => (
+                      <div key={u.uid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, borderRadius: 8, padding: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{u.name}</div>
+                          <div style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary }}>{u.email}</div>
+                        </div>
+                        {/* Optional: add remove button for owner to revoke others later */}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
 

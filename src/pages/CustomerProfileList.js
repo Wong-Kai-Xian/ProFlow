@@ -4,7 +4,8 @@ import TopBar from "../components/TopBar";
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 // import customerDataArray from "../components/profile-component/customerData.js"; // Remove mock data import
 import { db } from "../firebase"; // Import db
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore"; // Import Firestore functions
+import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, serverTimestamp, arrayRemove, getDoc } from "firebase/firestore"; // Import Firestore functions
+import IncomingCustomerSharesModal from "../components/profile-component/IncomingCustomerSharesModal";
 import AddProfileModal from "../components/profile-component/AddProfileModal"; // Import AddProfileModal
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 import { FaTrash } from 'react-icons/fa'; // Import FaTrash icon
@@ -60,43 +61,68 @@ const getProgress = (customer) => {
 };
 
 export default function CustomerProfileList() {
-  const [customers, setCustomers] = useState([]); // Initialize with empty array
+  const [customers, setCustomers] = useState([]); // Combined list (legacy + shared)
+  const [legacyCustomers, setLegacyCustomers] = useState([]); // where userId == currentUser.uid (legacy)
+  const [sharedCustomers, setSharedCustomers] = useState([]); // where access array-contains currentUser.uid
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false); // New state for modal
   const [showDeleteCustomerModal, setShowDeleteCustomerModal] = useState(false); // State for delete confirmation modal
   const [customerToDelete, setCustomerToDelete] = useState(null); // State to hold the customer to be deleted
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false); // Loading state for customer creation
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const [showIncomingShares, setShowIncomingShares] = useState(false);
 
   useEffect(() => {
     if (!currentUser) {
       setCustomers([]);
+      setLegacyCustomers([]);
+      setSharedCustomers([]);
       return;
     }
 
     const customerProfilesCollectionRef = collection(db, "customerProfiles");
-    const userCustomerProfilesQuery = query(customerProfilesCollectionRef, where("userId", "==", currentUser.uid));
+    const legacyQuery = query(customerProfilesCollectionRef, where("userId", "==", currentUser.uid));
+    const sharedQuery = query(customerProfilesCollectionRef, where("access", "array-contains", currentUser.uid));
 
-    const unsubscribe = onSnapshot(userCustomerProfilesQuery, (snapshot) => {
-      const customerList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        // Ensure nested objects are handled and default values are set
-        customerProfile: doc.data().customerProfile || {},
-        companyProfile: doc.data().companyProfile || {},
-        reputation: doc.data().reputation || {},
-        activities: doc.data().activities || [],
-        reminders: doc.data().reminders || [],
-        files: doc.data().files || [],
-        stageData: doc.data().stageData || {},
-        projects: doc.data().projects || [], // Ensure projects is an array
-        lastContact: doc.data().lastContact || "N/A",
-        stages: doc.data().stages || STAGES, // Ensure stages are loaded
-      }));
-      setCustomers(customerList);
+    const mapDoc = (docSnap) => ({
+      id: docSnap.id,
+      ...docSnap.data(),
+      customerProfile: docSnap.data().customerProfile || {},
+      companyProfile: docSnap.data().companyProfile || {},
+      reputation: docSnap.data().reputation || {},
+      activities: docSnap.data().activities || [],
+      reminders: docSnap.data().reminders || [],
+      files: docSnap.data().files || [],
+      stageData: docSnap.data().stageData || {},
+      projects: docSnap.data().projects || [],
+      lastContact: docSnap.data().lastContact || "N/A",
+      stages: docSnap.data().stages || STAGES,
     });
 
-    return () => unsubscribe();
-  }, [currentUser]); // Add currentUser to dependency array
+    const unsubLegacy = onSnapshot(legacyQuery, (snapshot) => {
+      const list = snapshot.docs
+        .map(mapDoc)
+        .filter((d) => {
+          const access = Array.isArray(d.access) ? d.access : null;
+          if (!access) return true; // legacy doc without access -> still show
+          return access.includes(currentUser.uid);
+        });
+      setLegacyCustomers(list);
+    });
+    const unsubShared = onSnapshot(sharedQuery, (snapshot) => {
+      const list = snapshot.docs.map(mapDoc);
+      setSharedCustomers(list);
+    });
+
+    return () => { unsubLegacy(); unsubShared(); };
+  }, [currentUser]);
+
+  // Merge lists and de-duplicate
+  useEffect(() => {
+    const map = new Map();
+    for (const c of legacyCustomers) map.set(c.id, c);
+    for (const c of sharedCustomers) map.set(c.id, c);
+    setCustomers(Array.from(map.values()));
+  }, [legacyCustomers, sharedCustomers]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
@@ -150,7 +176,9 @@ export default function CustomerProfileList() {
         projects: [],
         lastContact: serverTimestamp(), // Set timestamp on first save
         createdAt: serverTimestamp(), // Set creation timestamp
-        userId: currentUser.uid, // Associate customer profile with the current user
+        userId: currentUser.uid, // Legacy owner field (for backward compatibility)
+        ownerId: currentUser.uid, // New explicit owner field
+        access: [currentUser.uid], // Access control: users who can view/manage this profile
       };
       const newCustomerDocRef = await addDoc(collection(db, "customerProfiles"), initialCustomerData);
       console.log("New customer profile created from modal with ID:", newCustomerDocRef.id);
@@ -295,11 +323,23 @@ export default function CustomerProfileList() {
     console.log("Attempting to delete customer:", customerToDelete.id);
 
     try {
-      // 1. Delete the customer profile document
-      await deleteDoc(doc(db, "customerProfiles", customerToDelete.id));
-      console.log("Customer profile deleted with ID:", customerToDelete.id);
+      // Load current access list
+      const ref = doc(db, "customerProfiles", customerToDelete.id);
+      const snap = await getDoc(ref);
+      let data = snap.exists() ? snap.data() : {};
+      const access = Array.isArray(data.access) ? data.access : (data.userId ? [data.userId] : []);
 
-      // 2. Remove the reference from the associated organization's clients array
+      if (access.length > 1) {
+        // Not the last user -> remove current user from access and do NOT delete document
+        await updateDoc(ref, { access: arrayRemove(currentUser.uid) });
+        console.log(`Removed user ${currentUser.uid} from access of ${customerToDelete.id}`);
+      } else {
+        // Last user -> delete the document
+        await deleteDoc(ref);
+        console.log("Customer profile deleted with ID:", customerToDelete.id);
+      }
+
+      // 2. Remove the reference from the associated organization's clients array for this user
       if (customerToDelete.companyProfile?.company) {
         const organizationsRef = collection(db, "organizations");
         const q = query(organizationsRef, where("name", "==", customerToDelete.companyProfile.company), where("userId", "==", currentUser.uid));
@@ -384,6 +424,21 @@ export default function CustomerProfileList() {
               }}
             >
               Add New Customer
+            </button>
+          )}
+          {currentUser && (
+            <button
+              onClick={() => setShowIncomingShares(true)}
+              style={{
+                ...getButtonStyle('secondary', 'customers'),
+                padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                fontWeight: DESIGN_SYSTEM.typTypography?.fontWeight?.semibold || DESIGN_SYSTEM.typography.fontWeight.semibold,
+                borderRadius: DESIGN_SYSTEM.borderRadius.lg,
+                marginLeft: DESIGN_SYSTEM.spacing.base
+              }}
+            >
+              Incoming Shares
             </button>
           )}
         </div>
@@ -701,6 +756,11 @@ export default function CustomerProfileList() {
         onClose={() => setShowDeleteCustomerModal(false)}
         onDeleteConfirm={confirmDeleteCustomer}
         contactName={customerToDelete?.customerProfile?.name || customerToDelete?.companyProfile?.company || "this customer"}
+      />
+      {/* Incoming Shares Modal */}
+      <IncomingCustomerSharesModal
+        isOpen={showIncomingShares}
+        onClose={() => setShowIncomingShares(false)}
       />
     </div>
   );

@@ -236,7 +236,9 @@ export default function Contacts() {
         status: "Active", // Default
         lastContact: new Date().toISOString(), // Use current timestamp for new contact
         createdAt: new Date().toISOString(), // Set creation timestamp
-        userId: currentUser.uid, // Assign to current user
+        userId: currentUser.uid, // Assign to current user (legacy)
+        ownerId: currentUser.uid, // Explicit owner field
+        access: [currentUser.uid], // Access control list
       };
       const newCustomerDocRef = await addDoc(collection(db, "customerProfiles"), newCustomerProfileData);
       const newCustomerProfileId = newCustomerDocRef.id;
@@ -305,12 +307,25 @@ export default function Contacts() {
     const newClients = organizations[orgIndex].clients.filter(client => client.id !== clientIdToRemove);
     await updateDoc(orgRef, { clients: newClients });
 
-    // Also delete the corresponding customer profile
+    // Remove current user's access to the customer profile, and delete only if last user
     try {
-      await deleteDoc(doc(db, "customerProfiles", clientIdToRemove));
-      console.log("Corresponding customer profile deleted for ID:", clientIdToRemove);
+      const cRef = doc(db, "customerProfiles", clientIdToRemove);
+      const cSnap = await getDoc(cRef);
+      if (cSnap.exists()) {
+        const data = cSnap.data() || {};
+        const access = Array.isArray(data.access) ? data.access : (data.userId ? [data.userId] : []);
+        if (access.length > 1) {
+          // Remove current user from access
+          await updateDoc(cRef, { access: newClients.length >= 0 ? access.filter(uid => uid !== (currentUser?.uid || '')) : access.filter(uid => uid !== (currentUser?.uid || '')) });
+          console.log("Removed current user access from customer:", clientIdToRemove);
+        } else {
+          // Last user -> safe to delete
+          await deleteDoc(cRef);
+          console.log("Deleted customer profile as last accessor:", clientIdToRemove);
+        }
+      }
     } catch (error) {
-      console.error("Error deleting customer profile:", error);
+      console.error("Error updating customer access/deletion:", error);
     }
 
     // Optimistically update UI
