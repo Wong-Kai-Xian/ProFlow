@@ -119,10 +119,11 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
         </div>
       </div>
       <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 240px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 100px 240px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
           <div>Client</div>
           <div>Valid Until</div>
           <div>Tax %</div>
+          <div>Discount</div>
           <div>Total</div>
           <div>Actions</div>
         </div>
@@ -131,10 +132,11 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
             <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No draft quotes</div>
           ) : (
             quotes.map((q) => (
-              <div key={q.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 240px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+              <div key={q.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 100px 240px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.client || 'Client'}</div>
                 <div>{q.validUntil || '-'}</div>
                 <div>{Number(q.taxRate || 0).toFixed(2)}</div>
+                <div>{Number(q.discount || 0).toFixed(2)}</div>
                 <div>{Number(q.total||0).toFixed(2)}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button onClick={() => printDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Print</button>

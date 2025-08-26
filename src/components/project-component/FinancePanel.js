@@ -161,8 +161,8 @@ function InvoicesList({ projectId, items }) {
   const markPaid = async (id) => { try { await updateDoc(doc(db, 'projects', projectId, 'invoices', id), { status: 'paid', paidAt: serverTimestamp() }); } catch {} };
   const remove = async (id) => { try { await deleteDoc(doc(db, 'projects', projectId, 'invoices', id)); } catch {} };
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 100px 120px', gap: 8 }}>
-      <HeaderRow cols={["Client", "Due Date", "Status", "Total", "Actions"]} />
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 80px 100px 100px 120px', gap: 8 }}>
+      <HeaderRow cols={["Client", "Due Date", "Status", "Tax %", "Discount", "Total", "Actions"]} />
       {items.length === 0 ? (
         <div style={{ gridColumn: '1 / -1', color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No invoices yet.</div>
       ) : items.map(inv => (
@@ -172,6 +172,8 @@ function InvoicesList({ projectId, items }) {
           <div>
             <span style={{ padding: '2px 8px', borderRadius: 999, background: inv.status === 'paid' ? '#ECFDF5' : '#FEF3C7', color: inv.status === 'paid' ? '#065F46' : '#92400E', fontSize: 12 }}>{inv.status || 'unpaid'}</span>
           </div>
+          <div>{Number(inv.taxRate || 0).toFixed(2)}</div>
+          <div>{Number(inv.discount || 0).toFixed(2)}</div>
           <div>{Number(inv.total || 0).toFixed(2)}</div>
           <div style={{ display: 'flex', gap: 6 }}>
             {inv.status !== 'paid' && <button onClick={() => markPaid(inv.id)} style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Mark paid</button>}
@@ -223,12 +225,15 @@ function InvoiceModal({ projectId, onClose, initialClient, initialCurrency, init
   const [notes, setNotes] = useState('');
   const [currency, setCurrency] = useState(initialCurrency || '');
   const [taxRate, setTaxRate] = useState(typeof initialTaxRate === 'number' ? initialTaxRate : 0);
+  const [discount, setDiscount] = useState(0);
   const save = async () => {
     if (!projectId || !client || !total) return;
     try {
       const subtotal = Number(total);
       const taxAmount = subtotal * (Number(taxRate || 0) / 100);
-      await addDoc(collection(db, 'projects', projectId, 'invoices'), { client, dueDate, total: Number(total), status, notes, currency: currency || undefined, taxRate: Number(taxRate || 0), taxAmount, createdAt: serverTimestamp() });
+      const discountNum = Number(discount || 0);
+      const finalTotal = subtotal + taxAmount - discountNum;
+      await addDoc(collection(db, 'projects', projectId, 'invoices'), { client, dueDate, items: [], subtotal, taxRate: Number(taxRate || 0), taxAmount, discount: discountNum, total: finalTotal, status, notes, currency: currency || undefined, createdAt: serverTimestamp() });
       onClose();
     } catch {}
   };
@@ -248,7 +253,7 @@ function InvoiceModal({ projectId, onClose, initialClient, initialCurrency, init
         <Field label="Due Date"><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={inputStyle} /></Field>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <Field label="Total"><input type="number" step="0.01" value={total} onChange={(e) => setTotal(e.target.value)} style={inputStyle} /></Field>
+        <Field label="Subtotal"><input type="number" step="0.01" value={total} onChange={(e) => setTotal(e.target.value)} style={inputStyle} /></Field>
         <Field label="Status">
           <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
             <option value="unpaid">Unpaid</option>
@@ -257,6 +262,23 @@ function InvoiceModal({ projectId, onClose, initialClient, initialCurrency, init
         </Field>
         <Field label="Currency"><input value={currency} onChange={(e) => setCurrency(e.target.value)} style={inputStyle} /></Field>
         <Field label="Tax %"><input type="number" step="0.01" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} style={inputStyle} /></Field>
+        <Field label="Discount"><input type="number" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} style={inputStyle} /></Field>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 12, color: '#374151' }}>
+        {(() => {
+          const subtotal = Number(total || 0);
+          const tax = subtotal * (Number(taxRate || 0) / 100);
+          const disc = Number(discount || 0);
+          const finalTotal = subtotal + tax - disc;
+          return (
+            <>
+              <div>Subtotal: {subtotal.toFixed(2)}</div>
+              <div>Tax: {tax.toFixed(2)}</div>
+              <div>Discount: {disc.toFixed(2)}</div>
+              <div style={{ fontWeight: 700, color: '#111827' }}>Total: {finalTotal.toFixed(2)}</div>
+            </>
+          );
+        })()}
       </div>
       <Field label="Notes"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, minHeight: 80 }} /></Field>
     </Modal>

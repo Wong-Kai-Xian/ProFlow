@@ -22,6 +22,10 @@ export default function ProjectQuotesPanel({ projectId, hideConvert = false }) {
     try {
       const items = Array.isArray(q.items) ? q.items : [];
       const subtotal = items.reduce((a,it)=> a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
+      const taxRate = Number(q.taxRate || 0);
+      const discount = Number(q.discount || 0);
+      const taxAmount = subtotal * (taxRate / 100);
+      const total = Number((q.total ?? (subtotal + taxAmount - discount)) || 0);
       const html = `<!doctype html><html><head><meta charset="utf-8"><title>Quote - ${q.client || ''}</title><style>
         body{font-family:Arial,sans-serif;color:#111827;margin:24px}
         .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
@@ -39,13 +43,18 @@ export default function ProjectQuotesPanel({ projectId, hideConvert = false }) {
           <div class="muted">
             <div>Client: ${q.client || ''}</div>
             <div>Valid Until: ${q.validUntil || '-'}</div>
+            <div>Tax Rate: ${taxRate.toFixed(2)}%</div>
+            <div>Discount: ${discount.toFixed(2)}</div>
           </div>
         </div>
         <table>
           <thead><tr><th>Description</th><th style="width:120px">Qty</th><th style="width:140px">Unit Price</th><th style="width:140px">Amount</th></tr></thead>
           <tbody>
             ${items.map(it => `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td>${Number(it.qty||0)}</td><td>${Number(it.unitPrice||0).toFixed(2)}</td><td>${(Number(it.qty||0)*Number(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('')}
-            <tr><td class="total" colspan="3">Total</td><td class="total">${Number(q.total||subtotal||0).toFixed(2)}</td></tr>
+            <tr><td colspan="3" class="total">Subtotal</td><td class="total">${subtotal.toFixed(2)}</td></tr>
+            <tr><td colspan="3" class="total">Tax (${taxRate.toFixed(2)}%)</td><td class="total">${taxAmount.toFixed(2)}</td></tr>
+            <tr><td colspan="3" class="total">Discount</td><td class="total">${discount.toFixed(2)}</td></tr>
+            <tr><td colspan="3" class="total">Total</td><td class="total">${total.toFixed(2)}</td></tr>
           </tbody>
         </table>
       </body></html>`;
@@ -110,9 +119,11 @@ export default function ProjectQuotesPanel({ projectId, hideConvert = false }) {
         </h3>
       </div>
       <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 100px 220px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 100px 220px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
           <div>Client</div>
           <div>Valid Until</div>
+          <div>Tax %</div>
+          <div>Discount</div>
           <div>Total</div>
           <div>Actions</div>
         </div>
@@ -121,9 +132,11 @@ export default function ProjectQuotesPanel({ projectId, hideConvert = false }) {
             <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No quotes yet</div>
           ) : (
             quotes.map((q) => (
-              <div key={q.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 100px 220px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+              <div key={q.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 100px 220px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.client || 'Client'}</div>
                 <div>{q.validUntil || '-'}</div>
+                <div>{Number(q.taxRate || 0).toFixed(2)}</div>
+                <div>{Number(q.discount || 0).toFixed(2)}</div>
                 <div>{Number(q.total||0).toFixed(2)}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button onClick={() => printQuote(q)} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>Print</button>

@@ -243,13 +243,44 @@ export default function FinancePage() {
         setExpensesRows([...expBundle]);
       });
       const unsubInv = onSnapshot(collection(db, 'projects', p.id, 'invoices'), (s) => {
-        const list = s.docs.map(d => ({ id: d.id, type: 'invoice', projectId: p.id, projectName: p.name || p.id, client: d.data().client || '', dueDate: d.data().dueDate || '', status: d.data().status || 'unpaid', total: Number(d.data().total || 0), items: Array.isArray(d.data().items) ? d.data().items : [] }));
+        const list = s.docs.map(d => ({
+          id: d.id,
+          type: 'invoice',
+          projectId: p.id,
+          projectName: p.name || p.id,
+          client: d.data().client || '',
+          dueDate: d.data().dueDate || '',
+          status: d.data().status || 'unpaid',
+          total: Number(d.data().total || 0),
+          items: Array.isArray(d.data().items) ? d.data().items : [],
+          // include tax/discount/subtotal for UI and printing
+          taxRate: Number(d.data().taxRate || 0),
+          discount: Number(d.data().discount || 0),
+          taxAmount: Number(d.data().taxAmount || 0),
+          subtotal: Number(d.data().subtotal || 0),
+          currency: d.data().currency || ''
+        }));
         for (let i = invBundle.length - 1; i >= 0; i--) if (invBundle[i].projectId === p.id) invBundle.splice(i, 1);
         invBundle.push(...list);
         setInvoiceRows([...invBundle]);
       });
       const unsubQuo = onSnapshot(collection(db, 'projects', p.id, 'quotes'), (s) => {
-        const list = s.docs.map(d => ({ id: d.id, type: 'quote', projectId: p.id, projectName: p.name || p.id, client: d.data().client || '', validUntil: d.data().validUntil || '', status: d.data().status || 'draft', total: Number(d.data().total || 0), items: Array.isArray(d.data().items) ? d.data().items : [] }));
+        const list = s.docs.map(d => ({
+          id: d.id,
+          type: 'quote',
+          projectId: p.id,
+          projectName: p.name || p.id,
+          client: d.data().client || '',
+          validUntil: d.data().validUntil || '',
+          status: d.data().status || 'draft',
+          total: Number(d.data().total || 0),
+          items: Array.isArray(d.data().items) ? d.data().items : [],
+          // include tax/discount/subtotal for printing
+          taxRate: Number(d.data().taxRate || 0),
+          discount: Number(d.data().discount || 0),
+          taxAmount: Number(d.data().taxAmount || 0),
+          subtotal: Number(d.data().subtotal || 0)
+        }));
         for (let i = quoBundle.length - 1; i >= 0; i--) if (quoBundle[i].projectId === p.id) quoBundle.splice(i, 1);
         quoBundle.push(...list);
         setQuoteRows([...quoBundle]);
@@ -268,7 +299,23 @@ export default function FinancePage() {
           const qSnap = await (await import('firebase/firestore')).getDocs(collection(db, 'customerProfiles', cid, 'quotesDrafts'));
           qSnap.forEach(qd => {
             const q = qd.data() || {};
-            if (!q.projectId) drafts.push({ id: qd.id, type: 'quote_draft', projectId: '', projectName: '(Customer Draft)', client: q.client || '', validUntil: q.validUntil || '', status: 'draft', total: Number(q.total || 0), items: Array.isArray(q.items) ? q.items : [], customerId: cid });
+            if (!q.projectId) drafts.push({
+              id: qd.id,
+              type: 'quote_draft',
+              projectId: '',
+              projectName: '(Customer Draft)',
+              client: q.client || '',
+              validUntil: q.validUntil || '',
+              status: 'draft',
+              total: Number(q.total || 0),
+              items: Array.isArray(q.items) ? q.items : [],
+              customerId: cid,
+              // include tax/discount for printing
+              taxRate: Number(q.taxRate || 0),
+              discount: Number(q.discount || 0),
+              taxAmount: Number(q.taxAmount || 0),
+              subtotal: Number(q.subtotal || 0)
+            });
           });
         }
         // Replace any existing customer-draft rows
@@ -449,11 +496,22 @@ export default function FinancePage() {
   const convertQuoteToInvoice = async (q) => {
     try {
       if (!q?.projectId) return;
+      const items = Array.isArray(q.items) ? q.items.map(it => ({ description: it.description || '', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) })) : [];
+      const subtotal = items.reduce((a,it)=> a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
+      const taxRate = Number(q.taxRate || 0);
+      const discount = Number(q.discount || 0);
+      const taxAmount = subtotal * (taxRate/100);
+      const total = Number((q.total ?? (subtotal + taxAmount - discount)) || 0);
       await addDoc(collection(db, 'projects', q.projectId, 'invoices'), {
         client: q.client || '',
         dueDate: q.validUntil || '',
-        total: q.total || 0,
         status: 'unpaid',
+        items,
+        subtotal,
+        taxRate,
+        taxAmount,
+        discount,
+        total,
         createdAt: serverTimestamp()
       });
       // Optionally update quote status
@@ -465,16 +523,27 @@ export default function FinancePage() {
   const [newQuote, setNewQuote] = useState({ projectId: '', client: '', total: '', validUntil: '' });
   const saveNewQuote = async () => {
     try {
-      if (!newQuote.projectId || !newQuote.client || !newQuote.total) return;
+      if (!newQuote.projectId || !newQuote.client) return;
+      const items = Array.isArray(newQuote.items) ? newQuote.items.map(it => ({ description: it.description || '', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) })) : [];
+      const subtotal = items.reduce((a, it) => a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
+      const taxRate = Number(newQuote.taxRate || 0);
+      const discount = Number(newQuote.discount || 0);
+      const taxAmount = subtotal * (taxRate/100);
+      const total = (newQuote.total !== undefined && newQuote.total !== '') ? Number(newQuote.total || 0) : (subtotal + taxAmount - discount);
       await addDoc(collection(db, 'projects', newQuote.projectId, 'quotes'), {
         client: newQuote.client,
-        total: Number(newQuote.total || 0),
         validUntil: newQuote.validUntil || '',
+        items,
+        subtotal,
+        taxRate,
+        discount,
+        taxAmount,
+        total: Number(total || 0),
         status: 'draft',
         createdAt: serverTimestamp()
       });
       setShowQuoteModal(false);
-      setNewQuote({ projectId: '', client: '', total: '', validUntil: '' });
+      setNewQuote({ projectId: '', client: '', validUntil: '', items: [], taxRate: 0, discount: 0, total: '' });
     } catch {}
   };
 
@@ -483,12 +552,19 @@ export default function FinancePage() {
       const items = Array.isArray(inv.items) ? inv.items : [];
       const hasItems = items.length > 0;
       const subtotal = items.reduce((a,it)=> a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
+      const taxRate = Number(inv.taxRate || 0);
+      const discount = Number(inv.discount || 0);
+      const taxAmount = hasItems ? (subtotal * (taxRate/100)) : Number(inv.taxAmount || 0);
+      const total = Number((inv.total ?? (hasItems ? (subtotal + taxAmount - discount) : 0)) || 0);
       const rows = hasItems
         ? items.map(it => `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td style="text-align:right">${Number(it.qty||0)}</td><td style="text-align:right">${Number(it.unitPrice||0).toFixed(2)}</td><td style="text-align:right">${(Number(it.qty||0)*Number(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('')
-        : `<tr><td>Invoice Total</td><td style="text-align:right">${Number(inv.total||0).toFixed(2)}</td></tr>`;
+        : `<tr><td>Invoice Total</td><td style="text-align:right">${total.toFixed(2)}</td></tr>`;
       const totalsRow = hasItems
-        ? `<tr><td colspan="3" class="total">Total</td><td class="total" style="text-align:right">${Number((inv.total ?? subtotal ?? 0)).toFixed(2)}</td></tr>`
-        : `<tr><td class="total">Total</td><td class="total" style="text-align:right">${Number((inv.total ?? 0)).toFixed(2)}</td></tr>`;
+        ? `<tr><td colspan="3" class="total">Subtotal</td><td class="total" style="text-align:right">${subtotal.toFixed(2)}</td></tr>`
+          + `<tr><td colspan="3" class="total">Tax (${taxRate.toFixed(2)}%)</td><td class="total" style="text-align:right">${taxAmount.toFixed(2)}</td></tr>`
+          + `<tr><td colspan="3" class="total">Discount</td><td class="total" style="text-align:right">${discount.toFixed(2)}</td></tr>`
+          + `<tr><td colspan="3" class="total">Total</td><td class="total" style="text-align:right">${total.toFixed(2)}</td></tr>`
+        : `<tr><td class="total">Total</td><td class="total" style="text-align:right">${total.toFixed(2)}</td></tr>`;
       const table = hasItems
         ? `<table><thead><tr><th>Description</th><th style="width:100px;text-align:right">Qty</th><th style="width:140px;text-align:right">Unit Price</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`
         : `<table><thead><tr><th>Description</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`;
@@ -511,6 +587,8 @@ export default function FinancePage() {
             <div>Client: ${inv.client || ''}</div>
             <div>Due: ${inv.dueDate || '-'}</div>
             <div>Status: ${inv.status || 'unpaid'}</div>
+            <div>Tax Rate: ${taxRate.toFixed(2)}%</div>
+            <div>Discount: ${discount.toFixed(2)}</div>
           </div>
         </div>
         ${table}
@@ -550,12 +628,19 @@ export default function FinancePage() {
       const items = Array.isArray(q.items) ? q.items : [];
       const hasItems = items.length > 0;
       const subtotal = items.reduce((a,it)=> a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
+      const taxRate = Number(q.taxRate || 0);
+      const discount = Number(q.discount || 0);
+      const taxAmount = hasItems ? (subtotal * (taxRate/100)) : Number(q.taxAmount || 0);
+      const total = Number((q.total ?? (hasItems ? (subtotal + taxAmount - discount) : 0)) || 0);
       const rows = hasItems
         ? items.map(it => `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td style="text-align:right">${Number(it.qty||0)}</td><td style="text-align:right">${Number(it.unitPrice||0).toFixed(2)}</td><td style="text-align:right">${(Number(it.qty||0)*Number(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('')
-        : `<tr><td>Quoted Total</td><td style="text-align:right">${Number(q.total||0).toFixed(2)}</td></tr>`;
+        : `<tr><td>Quoted Total</td><td style="text-align:right">${total.toFixed(2)}</td></tr>`;
       const totalsRow = hasItems
-        ? `<tr><td colspan="3" class="total">Total</td><td class="total" style="text-align:right">${Number((q.total ?? subtotal ?? 0)).toFixed(2)}</td></tr>`
-        : `<tr><td class="total">Total</td><td class="total" style="text-align:right">${Number((q.total ?? 0)).toFixed(2)}</td></tr>`;
+        ? `<tr><td colspan="3" class="total">Subtotal</td><td class="total" style="text-align:right">${subtotal.toFixed(2)}</td></tr>`
+          + `<tr><td colspan="3" class="total">Tax (${taxRate.toFixed(2)}%)</td><td class="total" style="text-align:right">${taxAmount.toFixed(2)}</td></tr>`
+          + `<tr><td colspan="3" class="total">Discount</td><td class="total" style="text-align:right">${discount.toFixed(2)}</td></tr>`
+          + `<tr><td colspan="3" class="total">Total</td><td class="total" style="text-align:right">${total.toFixed(2)}</td></tr>`
+        : `<tr><td class="total">Total</td><td class="total" style="text-align:right">${total.toFixed(2)}</td></tr>`;
       const table = hasItems
         ? `<table><thead><tr><th>Description</th><th style="width:100px;text-align:right">Qty</th><th style="width:140px;text-align:right">Unit Price</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`
         : `<table><thead><tr><th>Description</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`;
@@ -578,6 +663,8 @@ export default function FinancePage() {
             <div>Client: ${q.client || ''}</div>
             <div>Valid Until: ${q.validUntil || '-'}</div>
             <div>Status: ${q.status || 'draft'}</div>
+            <div>Tax Rate: ${taxRate.toFixed(2)}%</div>
+            <div>Discount: ${discount.toFixed(2)}</div>
           </div>
         </div>
         ${table}
@@ -955,7 +1042,7 @@ export default function FinancePage() {
                       <button onClick={() => setShowNewInvoice(true)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>+ New Invoice</button>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 200px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 100px 100px 120px 200px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
                     <div onClick={() => toggleInvoiceSort('projectName')} style={{ cursor: 'pointer', userSelect: 'none' }}>
                       Project {invoiceSort.key === 'projectName' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
                     </div>
@@ -965,6 +1052,8 @@ export default function FinancePage() {
                     <div onClick={() => toggleInvoiceSort('dueDate')} style={{ cursor: 'pointer', userSelect: 'none' }}>
                       Due {invoiceSort.key === 'dueDate' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
                     </div>
+                    <div>Tax %</div>
+                    <div>Discount</div>
                     <div onClick={() => toggleInvoiceSort('total')} style={{ cursor: 'pointer', userSelect: 'none' }}>
                       Amount {invoiceSort.key === 'total' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
                     </div>
@@ -975,10 +1064,12 @@ export default function FinancePage() {
                       <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No invoices</div>
                     ) : (
                       sortedInvoices.map((r, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 200px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 100px 100px 120px 200px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.projectName}</div>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.client || 'Client'}</div>
                           <div>{r.dueDate || '-'}</div>
+                          <div>{Number(r.taxRate || 0).toFixed(2)}</div>
+                          <div>{Number(r.discount || 0).toFixed(2)}</div>
                           <div>{r.total.toFixed(2)} {r.currency || financeDefaults.currency || 'USD'}</div>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             <button onClick={() => { setEditInvoice(r); setShowInvoiceModal(true); }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Edit</button>

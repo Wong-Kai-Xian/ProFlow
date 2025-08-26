@@ -191,7 +191,9 @@ export default function AdvancedApprovalRequestModal({
         client: q.client || q.customer || '',
         items,
         total,
-        validUntil: q.validUntil || ''
+        validUntil: q.validUntil || '',
+        taxRate: Number(q.taxRate || 0),
+        discount: Number(q.discount || 0)
       });
       // Skip adding PDF attachments per requirement
     } catch {}
@@ -427,7 +429,9 @@ export default function AdvancedApprovalRequestModal({
       description: cpDescription,
       deadline: cpDeadline || '',
       ownerId: currentUser.uid,
-      allowJoinById: cpAllowJoinById
+      allowJoinById: cpAllowJoinById,
+      // pass selected draft quote id when converting from customer
+      selectedDraftQuoteId: (customerId && selectedQuoteIdLocal) ? selectedQuoteIdLocal : undefined
     })).catch(()=>{});
     onClose();
   };
@@ -624,6 +628,8 @@ export default function AdvancedApprovalRequestModal({
             customerEmail: cpCustomerEmail
           } : null),
           quotationData: selectedQuoteData || null,
+          // Include selected draft id so approval flow can migrate only that one
+          selectedDraftQuoteId: selectedQuoteIdLocal || null,
           
           // User information
           requestedBy: currentUser.uid,
@@ -648,6 +654,10 @@ export default function AdvancedApprovalRequestModal({
           dateRequested: serverTimestamp(),
           dueDate: dueDate || null,
           dueTime: dueTime || null,
+          
+          // Upload traces
+          uploadStatus: uploading ? "uploading" : "done",
+          uploadProgress: uploading ? uploadProgress : {},
           
           // Decision tracking
           decisionMade: false,

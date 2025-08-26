@@ -834,17 +834,45 @@ export default function CustomerProfile() {
           const q = d.data() || {};
           if (!q.projectId) {
             const items = Array.isArray(q.items) ? q.items : [];
-            addPromises.push(addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
-              client: q.client || '',
-              validUntil: q.validUntil || '',
-              items,
-              total: Number(q.total || 0),
-              status: q.status || 'draft',
-              createdAt: serverTimestamp(),
-              movedFromCustomerId: id,
-            }).catch(() => {}));
-            // Tag the customer-level draft with projectId so it won't appear across other projects in profile or get re-migrated
-            addPromises.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
+            // If a specific draft quote was selected during conversion, only keep that one and delete others
+            if (projectData?.selectedDraftQuoteId) {
+              if (d.id === projectData.selectedDraftQuoteId) {
+                addPromises.push(addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
+                  client: q.client || '',
+                  validUntil: q.validUntil || '',
+                  items,
+                  subtotal: Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0)),
+                  taxRate: Number(q.taxRate || 0),
+                  discount: Number(q.discount || 0),
+                  taxAmount: Number(q.taxAmount || 0),
+                  total: Number(q.total || 0),
+                  status: q.status || 'draft',
+                  createdAt: serverTimestamp(),
+                  movedFromCustomerId: id,
+                }).catch(() => {}));
+                // Tag the selected draft with projectId so it won't appear as a customer-level draft
+                addPromises.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
+              } else {
+                addPromises.push(deleteDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id)).catch(() => {}));
+              }
+            } else {
+              // Legacy behavior: migrate all unassigned drafts
+              addPromises.push(addDoc(collection(db, 'projects', newProjectRef.id, 'quotes'), {
+                client: q.client || '',
+                validUntil: q.validUntil || '',
+                items,
+                subtotal: Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0)),
+                taxRate: Number(q.taxRate || 0),
+                discount: Number(q.discount || 0),
+                taxAmount: Number(q.taxAmount || 0),
+                total: Number(q.total || 0),
+                status: q.status || 'draft',
+                createdAt: serverTimestamp(),
+                movedFromCustomerId: id,
+              }).catch(() => {}));
+              // Tag the customer-level draft with projectId so it won't appear across other projects in profile or get re-migrated
+              addPromises.push(updateDoc(doc(db, 'customerProfiles', id, 'quotesDrafts', d.id), { projectId: newProjectRef.id }).catch(() => {}));
+            }
           }
         });
         if (addPromises.length > 0) {

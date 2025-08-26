@@ -390,7 +390,10 @@ export default function ApprovalPage() {
           <td class="num">${(Number(it.qty||1)*Number(it.unitPrice||0)).toFixed(2)}</td>
         </tr>`).join('');
       const subtotal = items.reduce((s,it)=> s + Number(it.qty||1)*Number(it.unitPrice||0),0);
-      const total = Number(data.total ?? subtotal);
+      const taxRate = Number(data.taxRate || 0);
+      const discount = Number(data.discount || 0);
+      const taxAmount = subtotal * (taxRate/100);
+      const total = Number((data.total ?? (subtotal + taxAmount - discount)) || 0);
       const today = new Date();
       const dateStr = today.toLocaleDateString();
       const logoUrl = '/proflow-logo.png';
@@ -460,6 +463,8 @@ export default function ApprovalPage() {
             <div class="totals">
               <div class="totals-box">
                 <div class="row"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+                <div class="row"><span>Tax (${taxRate.toFixed(2)}%)</span><span>${taxAmount.toFixed(2)}</span></div>
+                <div class="row"><span>Discount</span><span>${discount.toFixed(2)}</span></div>
                 <div class="row total"><span>Total</span><span>${total.toFixed(2)}</span></div>
               </div>
             </div>
@@ -878,20 +883,89 @@ export default function ApprovalPage() {
           try {
             const draftsSnap = await getDocs(collection(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts'));
             const ops = [];
+            let selectedDraftId = selectedRequest?.selectedDraftQuoteId || selectedRequest?.quotationData?.id || null;
+            const quotedItems = Array.isArray(selectedRequest?.quotationData?.items) ? selectedRequest.quotationData.items : [];
+
+            // If no selected id provided, attempt to match by items (description, qty, unitPrice), order-insensitive
+            if (!selectedDraftId && quotedItems.length > 0) {
+              const normMap = it => ({
+                description: String(it.description || '').trim(),
+                qty: Number(it.qty || 0),
+                unitPrice: Number(it.unitPrice || 0)
+              });
+              const sig = arr => JSON.stringify(arr.map(normMap).sort((a,b)=>{
+                const ka = `${a.description}|${a.qty}|${a.unitPrice}`;
+                const kb = `${b.description}|${b.qty}|${b.unitPrice}`;
+                return ka < kb ? -1 : ka > kb ? 1 : 0;
+              }));
+              const targetSig = sig(quotedItems);
+              draftsSnap.forEach(d => {
+                if (selectedDraftId) return;
+                const q = d.data() || {};
+                if (q.projectId) return;
+                const srcItems = Array.isArray(q.items) ? q.items : [];
+                if (sig(srcItems) === targetSig) selectedDraftId = d.id;
+              });
+            }
+
             draftsSnap.forEach(d => {
               const q = d.data() || {};
               if (!q.projectId) {
                 const items = Array.isArray(q.items) ? q.items : [];
-                ops.push(addDoc(collection(db, 'projects', projRef.id, 'quotes'), {
-                  client: q.client || '',
-                  validUntil: q.validUntil || '',
-                  items,
-                  total: Number(q.total || 0),
-                  status: q.status || 'draft',
-                  createdAt: serverTimestamp(),
-                  movedFromCustomerId: selectedRequest.customerId,
-                }).catch(() => {}));
-                ops.push(updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts', d.id), { projectId: projRef.id }).catch(() => {}));
+                // prefer values from draft; fall back to selected quotation; finally derive from total
+                const fallbackTaxRateFromQuote = Number(selectedRequest?.quotationData?.taxRate || 0);
+                const fallbackDiscountFromQuote = Number(selectedRequest?.quotationData?.discount || 0);
+
+                const draftSubtotal = Number(q.subtotal || items.reduce((a,it)=> a + (Number(it.qty||0)*Number(it.unitPrice||0)), 0));
+                let taxRate = (q.taxRate !== undefined ? Number(q.taxRate) : fallbackTaxRateFromQuote);
+                let discount = (q.discount !== undefined ? Number(q.discount) : fallbackDiscountFromQuote);
+                // derive from total if taxRate missing
+                const draftTotal = (q.total !== undefined ? Number(q.total||0) : NaN);
+                if ((!Number.isFinite(taxRate) || taxRate === 0) && Number.isFinite(draftTotal)) {
+                  const impliedTaxAmount = Math.max(0, draftTotal + Number(discount||0) - draftSubtotal);
+                  taxRate = draftSubtotal > 0 ? (impliedTaxAmount / draftSubtotal) * 100 : 0;
+                }
+                const taxAmount = Number(q.taxAmount || (draftSubtotal * (Number(taxRate||0)/100)));
+                const total = Number(q.total || (draftSubtotal + taxAmount - Number(discount || 0)));
+
+                if (selectedDraftId) {
+                  // Only migrate the selected draft; delete others
+                  if (d.id === selectedDraftId) {
+                    ops.push(addDoc(collection(db, 'projects', projRef.id, 'quotes'), {
+                      client: q.client || '',
+                      validUntil: q.validUntil || '',
+                      items,
+                      subtotal: draftSubtotal,
+                      taxRate,
+                      discount,
+                      taxAmount,
+                      total,
+                      status: q.status || 'draft',
+                      createdAt: serverTimestamp(),
+                      movedFromCustomerId: selectedRequest.customerId,
+                    }).catch(() => {}));
+                    // Tag the selected draft with projectId so it won't appear as a customer-level draft
+                    ops.push(updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts', d.id), { projectId: projRef.id }).catch(() => {}));
+                  } else {
+                    ops.push(deleteDoc(doc(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts', d.id)).catch(() => {}));
+                  }
+                } else {
+                  // Legacy behavior: migrate all drafts and tag
+                  ops.push(addDoc(collection(db, 'projects', projRef.id, 'quotes'), {
+                    client: q.client || '',
+                    validUntil: q.validUntil || '',
+                    items,
+                    subtotal: draftSubtotal,
+                    taxRate,
+                    discount,
+                    taxAmount,
+                    total,
+                    status: q.status || 'draft',
+                    createdAt: serverTimestamp(),
+                    movedFromCustomerId: selectedRequest.customerId,
+                  }).catch(() => {}));
+                  ops.push(updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId, 'quotesDrafts', d.id), { projectId: projRef.id }).catch(() => {}));
+                }
               }
             });
             if (ops.length > 0) await Promise.all(ops);
@@ -2059,7 +2133,7 @@ export default function ApprovalPage() {
               <div style={{ fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold }}>Sign PDF: {signTarget.fileName}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: DESIGN_SYSTEM.spacing.sm, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.xs, color: DESIGN_SYSTEM.colors.text.secondary }}>
-                  If pen doesn’t appear or size looks off, click Refresh then sign
+                  If pen doesn't appear or size looks off, click Refresh then sign
                 </span>
                 <button onClick={refreshPdfLayout} style={{ ...getButtonStyle('secondary', 'neutral') }}>Refresh</button>
                 <button onClick={() => setShowSignModal(false)} style={{ ...getButtonStyle('secondary', 'neutral') }}>Close</button>
