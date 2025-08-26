@@ -5,7 +5,7 @@ import CreateProjectModal from "../components/project-component/CreateProjectMod
 import JoinProjectModal from "../components/project-component/JoinProjectModal";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
-import { collection, getDocs, addDoc, updateDoc, doc, getDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, updateDoc, doc, getDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { useAuth } from '../contexts/AuthContext';
 import { FaTrash } from 'react-icons/fa';
@@ -171,6 +171,8 @@ export default function ProjectList() {
       completedTasks: newProject.completedTasks || 0,
       userId: currentUser.uid, // Assign project to current user
       createdBy: currentUser.uid, // normalized creator field
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
       description: newProject.description || '', // Include description
       allowJoinById: newProject.allowJoinById !== undefined ? newProject.allowJoinById : true, // Include allowJoinById
       deadline: newProject.deadline || null,
@@ -614,7 +616,7 @@ export default function ProjectList() {
                   </div>
 
                   <h3 style={{ 
-                    margin: "0 0 8px 0", 
+                    margin: "0 0 4px 0", 
                     color: DESIGN_SYSTEM.colors.text.primary, 
                     fontSize: "20px", 
                     fontWeight: "700",
@@ -622,6 +624,22 @@ export default function ProjectList() {
                   }}>
                     {project.name}
                   </h3>
+                  <div style={{
+                    margin: "0 0 12px 0",
+                    color: DESIGN_SYSTEM.colors.text.secondary,
+                    fontSize: "12px"
+                  }}>
+                    {(() => {
+                      try {
+                        const ts = project.createdAt;
+                        if (!ts) return 'Created: N/A';
+                        const d = ts?.toDate ? ts.toDate() : (typeof ts === 'number' ? new Date(ts) : (typeof ts === 'string' ? new Date(ts) : null));
+                        return d ? `Created: ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Created: N/A';
+                      } catch {
+                        return 'Created: N/A';
+                      }
+                    })()}
+                  </div>
 
                   {/* Stage + Deadline Badges */}
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>

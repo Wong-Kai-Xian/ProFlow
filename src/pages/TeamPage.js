@@ -237,6 +237,26 @@ export default function TeamPage() {
     invitation.toUserEmail.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Cancel a pending invitation
+  const handleCancelPendingInvitation = async () => {
+    if (!inviteToCancel?.id) return;
+    try {
+      setIsCancellingInvite(true);
+      await updateDoc(doc(db, 'invitations', inviteToCancel.id), {
+        status: 'cancelled',
+        cancelledAt: serverTimestamp(),
+      });
+      setPendingInvitations(prev => prev.filter(i => i.id !== inviteToCancel.id));
+      setInviteToCancel(null);
+      setShowCancelInviteModal(false);
+    } catch (e) {
+      console.error('Failed to cancel invitation', e);
+      alert('Failed to cancel invitation');
+    } finally {
+      setIsCancellingInvite(false);
+    }
+  };
+
   return (
     <div style={{ 
       fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", 
@@ -764,6 +784,25 @@ export default function TeamPage() {
         onClose={() => setShowIncomingInvitationsModal(false)}
         onInvitationAction={refreshTeamData}
       />
+      {showCancelInviteModal && inviteToCancel && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2200 }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: 420, maxWidth: '92vw', boxShadow: '0 20px 45px rgba(0,0,0,0.2)', border: '1px solid #e5e7eb' }}>
+            <div style={{ padding: 20, borderBottom: '1px solid #f1f5f9' }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#111827' }}>Cancel invitation</h3>
+            </div>
+            <div style={{ padding: 20 }}>
+              <p style={{ margin: '0 0 12px 0', color: '#374151', lineHeight: 1.5 }}>Cancel the pending invitation to <strong>{inviteToCancel.toUserEmail || inviteToCancel.toUser?.name || 'user'}</strong>?</p>
+              <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>They will no longer see this invite.</p>
+            </div>
+            <div style={{ padding: 20, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button disabled={isCancellingInvite} onClick={() => { setShowCancelInviteModal(false); setInviteToCancel(null); }} style={{ border: '1px solid #e5e7eb', background: '#fff', color: '#111827', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Close</button>
+              <button onClick={handleCancelPendingInvitation} disabled={isCancellingInvite} style={{ border: '1px solid #ef4444', background: '#ef4444', color: '#fff', padding: '8px 12px', borderRadius: 8, cursor: isCancellingInvite ? 'wait' : 'pointer', fontWeight: 800, minWidth: 110 }}>
+                {isCancellingInvite ? 'Cancelling…' : 'Cancel Invite'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showDeleteMemberConfirm && memberToDelete && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
           <div style={{ background: '#fff', borderRadius: 16, width: 420, maxWidth: '92vw', boxShadow: '0 20px 45px rgba(0,0,0,0.2)', border: '1px solid #e5e7eb' }}>
