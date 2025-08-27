@@ -186,6 +186,27 @@ export default function Forum() {
     return () => unsubscribeForum();
   }, [forumId, showMeeting, suppressMeetingBar]);
 
+  // When visiting a forum, mark all forum-related notifications for this forum as read for the current user
+  useEffect(() => {
+    if (!forumId || !currentUser?.uid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const notifQuery = query(collection(db, 'users', currentUser.uid, 'notifications'));
+        const snap = await getDocs(notifQuery);
+        const updates = [];
+        snap.forEach(d => {
+          const n = d.data();
+          if (n && n.unread && n.origin === 'forum' && n.forumId === forumId) {
+            updates.push(updateDoc(doc(db, 'users', currentUser.uid, 'notifications', d.id), { unread: false }));
+          }
+        });
+        if (!cancelled && updates.length) await Promise.allSettled(updates);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [forumId, currentUser?.uid]);
+
   // Effect to fetch linked project data in real-time
   useEffect(() => {
     if (!forumData?.projectId) {
