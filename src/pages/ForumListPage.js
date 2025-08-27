@@ -15,6 +15,7 @@ export default function ForumListPage() {
   const [editingForum, setEditingForum] = useState(null);
   const [forums, setForums] = useState([]); // Will be populated from Firebase
   const [projects, setProjects] = useState([]); // New state for projects
+  const [forumUnreadMap, setForumUnreadMap] = useState({}); // forumId -> unread count
   const [joinForumError, setJoinForumError] = useState(null); // New state for join forum error
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [forumToDelete, setForumToDelete] = useState(null);
@@ -26,6 +27,7 @@ export default function ForumListPage() {
     if (!currentUser) {
       setForums([]);
       setProjects([]);
+      setForumUnreadMap({});
       return;
     }
 
@@ -50,10 +52,24 @@ export default function ForumListPage() {
       setProjects(projectsData);
     });
 
+    // Listen to user's notifications and compute per-forum unread counts
+    const notificationsRef = collection(db, 'users', currentUser.uid, 'notifications');
+    const unsubscribeNotifs = onSnapshot(notificationsRef, (snap) => {
+      const counts = {};
+      snap.docs.forEach(d => {
+        const n = d.data();
+        if (n && n.unread && n.origin === 'forum' && n.forumId) {
+          counts[n.forumId] = (counts[n.forumId] || 0) + 1;
+        }
+      });
+      setForumUnreadMap(counts);
+    });
+
     // Cleanup subscriptions on unmount
     return () => {
       unsubscribeForums();
       unsubscribeProjects();
+      unsubscribeNotifs();
     };
   }, [currentUser]); // Add currentUser to dependency array
 
@@ -276,7 +292,7 @@ export default function ForumListPage() {
             onForumSelect={handleForumSelect} 
             onEditForum={handleEditForum}
             onDeleteForum={handleDeleteForum} // Pass delete handler
-            forums={forums} // Pass forums from Firebase
+            forums={forums.map(f => ({ ...f, notifications: forumUnreadMap[f.id] || 0 }))} // Merge per-forum unread counts
             projects={projects} // Pass projects to ForumList
           />
         )}

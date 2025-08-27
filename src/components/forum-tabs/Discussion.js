@@ -19,6 +19,16 @@ const formatTimestamp = (timestamp) => {
 };
 
 // Mention helpers
+const makeSnippet = (text = '', maxLen = 120) => {
+  try {
+    const oneLine = String(text).replace(/\s+/g, ' ').trim();
+    if (oneLine.length > maxLen) return oneLine.slice(0, Math.max(0, maxLen - 3)) + '...';
+    return oneLine;
+  } catch {
+    return '';
+  }
+};
+
 const extractMentionEmails = (text = "") => {
   const emails = new Set();
   const regex = /@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
@@ -40,7 +50,7 @@ const notifyMentions = async ({ text, forumId, postId, db, currentUser }) => {
         for (const udoc of snap.docs) {
           const uid = udoc.id;
           if (uid === (currentUser?.uid || '')) continue;
-          const snippet = (text || '').slice(0, 140);
+          const snippet = makeSnippet(text, 140);
           await addDoc(collection(db, 'users', uid, 'notifications'), {
             unread: true,
             createdAt: serverTimestamp(),
@@ -52,6 +62,34 @@ const notifyMentions = async ({ text, forumId, postId, db, currentUser }) => {
             postId
           });
         }
+      } catch {}
+    }
+  } catch {}
+};
+
+// Notify forum members about a new post (except the author)
+const notifyForumMembersNewPost = async ({ forumId, postId, db, currentUser, postText }) => {
+  try {
+    const fref = doc(db, 'forums', forumId);
+    const fsnap = await getDoc(fref);
+    if (!fsnap.exists()) return;
+    const data = fsnap.data();
+    const members = Array.isArray(data.members) ? data.members : [];
+    const actor = currentUser?.displayName || currentUser?.name || currentUser?.email || 'Someone';
+    const snippet = makeSnippet(postText || '', 140);
+    for (const uid of members) {
+      if (!uid || uid === (currentUser?.uid || '')) continue;
+      try {
+        await addDoc(collection(db, 'users', uid, 'notifications'), {
+          unread: true,
+          createdAt: serverTimestamp(),
+          origin: 'forum',
+          title: `New post by ${actor}`,
+          message: snippet,
+          refType: 'forumPost',
+          forumId,
+          postId
+        });
       } catch {}
     }
   } catch {}
@@ -200,6 +238,24 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
         comments: [...currentComments, newComment]
       });
       await notifyMentions({ text: newCommentText.trim(), forumId: post.forumId, postId: post.id, db, currentUser });
+      // Notify post author if someone commented on their post
+      try {
+        const targetUserId = postData.authorId;
+        if (targetUserId && targetUserId !== currentUserId) {
+          const actor = currentUser?.displayName || currentUser?.name || currentUser?.email || 'Someone';
+          const snippet = makeSnippet(newCommentText.trim(), 140);
+          await addDoc(collection(db, 'users', targetUserId, 'notifications'), {
+            unread: true,
+            createdAt: serverTimestamp(),
+            origin: 'forum',
+            title: 'New comment on your post',
+            message: `${actor}: ${snippet}`,
+            refType: 'forumComment',
+            forumId: post.forumId,
+            postId: post.id
+          });
+        }
+      } catch {}
       
       setNewCommentText(''); // Clear input after commenting
       setCommentFiles([]);
@@ -983,6 +1039,8 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
         meeting: composerMeeting,
       });
       await notifyMentions({ text: newPostContent.trim(), forumId, postId: refDoc.id, db, currentUser });
+      // Notify all forum members of new post
+      try { await notifyForumMembersNewPost({ forumId, postId: refDoc.id, db, currentUser, postText: newPostContent.trim() }); } catch {}
       setNewPostContent('');
       setComposerFiles([]);
       setComposerLocation('');

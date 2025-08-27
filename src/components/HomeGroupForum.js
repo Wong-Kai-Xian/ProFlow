@@ -11,12 +11,14 @@ export default function HomeGroupForum() {
 
   const [forums, setForums] = useState([]);
   const postsUnsubsRef = useRef([]);
+  const [unreadMap, setUnreadMap] = useState({}); // forumId -> unread count for current user
   const navigate = useNavigate();
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
 
   useEffect(() => {
     if (!currentUser) {
       setForums([]);
+      setUnreadMap({});
       return;
     }
 
@@ -41,10 +43,24 @@ export default function HomeGroupForum() {
       });
     });
 
+    // Also listen to this user's notifications to compute unread per forum
+    const notifRef = collection(db, 'users', currentUser.uid, 'notifications');
+    const unsubNotifs = onSnapshot(notifRef, (snap) => {
+      const counts = {};
+      snap.docs.forEach(d => {
+        const n = d.data();
+        if (n && n.unread && n.origin === 'forum' && n.forumId) {
+          counts[n.forumId] = (counts[n.forumId] || 0) + 1;
+        }
+      });
+      setUnreadMap(counts);
+    });
+
     return () => {
       try { unsubscribe(); } catch {}
       postsUnsubsRef.current.forEach(unsub => { try { unsub(); } catch {} });
       postsUnsubsRef.current = [];
+      try { unsubNotifs(); } catch {}
     };
   }, [currentUser]); // Add currentUser to dependency array
 
@@ -128,7 +144,7 @@ export default function HomeGroupForum() {
                 {(typeof forum.actualPostCount === 'number' ? forum.actualPostCount : (forum.posts || 0)) > 0 ? 'Last activity: ' : 'Created: '}{getActivityDate(forum)}
               </small>
             </div>
-            {forum.notifications > 0 && (
+            {(unreadMap[forum.id] || 0) > 0 && (
               <div style={{
                 position: "absolute",
                 top: "8px",
@@ -145,7 +161,7 @@ export default function HomeGroupForum() {
                 fontWeight: "bold",
                 zIndex: 1
               }}>
-                {forum.notifications}
+                {unreadMap[forum.id]}
               </div>
             )}
           </li>

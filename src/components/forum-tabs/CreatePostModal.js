@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import LocationModal from "./LocationModal";
 import MeetingModal from "./MeetingModal";
 import { db, storage } from '../../firebase'; // Import db and storage
-import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'; // Import Storage functions
 
 export default function CreatePostModal({
@@ -24,6 +24,82 @@ export default function CreatePostModal({
   const [uploadingFiles, setUploadingFiles] = useState(false); // State for tracking file upload progress
   const [fileUploadProgress, setFileUploadProgress] = useState({}); // Track progress for each file
   const [isSubmitting, setIsSubmitting] = useState(false); // New state for overall submission status
+  // Mention + notification helpers
+  const makeSnippet = (text = '', maxLen = 120) => {
+    try {
+      const oneLine = String(text).replace(/\s+/g, ' ').trim();
+      if (oneLine.length > maxLen) return oneLine.slice(0, Math.max(0, maxLen - 3)) + '...';
+      return oneLine;
+    } catch {
+      return '';
+    }
+  };
+
+  const extractMentionEmails = (text = '') => {
+    const emails = new Set();
+    const regex = /@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      emails.add(m[1].toLowerCase());
+    }
+    return Array.from(emails);
+  };
+
+  const notifyMentions = async ({ text, forumId, postId, currentUser }) => {
+    try {
+      const emails = extractMentionEmails(text || '');
+      if (emails.length === 0) return;
+      for (const email of emails) {
+        try {
+          const uq = query(collection(db, 'users'), where('email', '==', email));
+          const snap = await getDocs(uq);
+          for (const udoc of snap.docs) {
+            const uid = udoc.id;
+            if (uid === (currentUser?.uid || '')) continue;
+            const snippet = makeSnippet(text, 140);
+            await addDoc(collection(db, 'users', uid, 'notifications'), {
+              unread: true,
+              createdAt: serverTimestamp(),
+              origin: 'forum',
+              title: 'You were mentioned',
+              message: `${currentUser?.displayName || currentUser?.email || 'Someone'}: ${snippet}`,
+              refType: 'mention',
+              forumId,
+              postId
+            });
+          }
+        } catch {}
+      }
+    } catch {}
+  };
+
+  const notifyForumMembersNewPost = async ({ forumId, postId, currentUser, postText }) => {
+    try {
+      const fref = doc(db, 'forums', forumId);
+      const fsnap = await getDoc(fref);
+      if (!fsnap.exists()) return;
+      const data = fsnap.data();
+      const members = Array.isArray(data.members) ? data.members : [];
+      const actor = currentUser?.displayName || currentUser?.name || currentUser?.email || 'Someone';
+      const snippet = makeSnippet(postText || '', 140);
+      for (const uid of members) {
+        if (!uid || uid === (currentUser?.uid || '')) continue;
+        try {
+          await addDoc(collection(db, 'users', uid, 'notifications'), {
+            unread: true,
+            createdAt: serverTimestamp(),
+            origin: 'forum',
+            title: `New post by ${actor}`,
+            message: snippet,
+            refType: 'forumPost',
+            forumId,
+            postId
+          });
+        } catch {}
+      }
+    } catch {}
+  };
+
 
   // Effect to populate form when editing an existing post
   useEffect(() => {
@@ -187,12 +263,15 @@ export default function CreatePostModal({
       });
     } else {
       // Add new post
-      addDoc(postsRef, {
-        ...newPost,
-        timestamp: serverTimestamp(),
-        forumId: forumId
-      })
-      .then(() => {
+      try {
+        const refDoc = await addDoc(postsRef, {
+          ...newPost,
+          timestamp: serverTimestamp(),
+          forumId: forumId
+        });
+        // Notify mentions and forum members
+        try { await notifyMentions({ text: newPost.content || '', forumId, postId: refDoc.id, currentUser }); } catch {}
+        try { await notifyForumMembersNewPost({ forumId, postId: refDoc.id, currentUser, postText: newPost.content || '' }); } catch {}
         console.log("Post added successfully!");
         updateForumPostCount();
         updateForumLastActivity();
@@ -201,13 +280,12 @@ export default function CreatePostModal({
         setIsSubmitting(false);
         onClose();
         if (onConfirm) onConfirm(); // Notify parent of creation
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error("Error adding post:", error);
         setUploadingFiles(false);
         setIsSubmitting(false);
         alert("Failed to create post.");
-      });
+      }
     }
     
     // Reset form states (these will be cleared on success anyway, but good for immediate feedback)
