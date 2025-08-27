@@ -71,9 +71,17 @@ export default function FinancePanel({ projectId }) {
     return () => unsub();
   }, [currentUser?.uid]);
 
-  const totalExpenses = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  const totalInvoiced = invoices.reduce((s, inv) => s + (Number(inv.total) || 0), 0);
-  const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, inv) => s + (Number(inv.total) || 0), 0);
+  const toUsd = (amt, currency, fxBase, fxRate) => {
+    const base = 'USD';
+    const cur = (currency || base).toUpperCase();
+    if (cur === base) return Number(amt || 0);
+    const rate = Number(fxRate || 0);
+    if ((fxBase || '').toUpperCase() === base && rate > 0) return Number(amt || 0) / rate;
+    return Number(amt || 0);
+  };
+  const totalExpenses = expenses.reduce((s, e) => s + toUsd(e.amount, e.currency, e.fxBase, e.fxRate), 0);
+  const totalInvoiced = invoices.reduce((s, inv) => s + (Number.isFinite(inv.totalBase) ? Number(inv.totalBase) : toUsd(inv.total, inv.currency, inv.fxBase, inv.fxRate)), 0);
+  const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, inv) => s + (Number.isFinite(inv.totalBase) ? Number(inv.totalBase) : toUsd(inv.total, inv.currency, inv.fxBase, inv.fxRate)), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -161,8 +169,8 @@ function InvoicesList({ projectId, items }) {
   const markPaid = async (id) => { try { await updateDoc(doc(db, 'projects', projectId, 'invoices', id), { status: 'paid', paidAt: serverTimestamp() }); } catch {} };
   const remove = async (id) => { try { await deleteDoc(doc(db, 'projects', projectId, 'invoices', id)); } catch {} };
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 80px 100px 100px 120px', gap: 8 }}>
-      <HeaderRow cols={["Client", "Due Date", "Status", "Tax %", "Discount", "Total", "Actions"]} />
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 80px 160px 180px 120px', gap: 8 }}>
+      <HeaderRow cols={["Client", "Due Date", "Status", "Tax %", "Discount (USD/Currency)", "Total (USD/Currency)", "Actions"]} />
       {items.length === 0 ? (
         <div style={{ gridColumn: '1 / -1', color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No invoices yet.</div>
       ) : items.map(inv => (
@@ -173,8 +181,8 @@ function InvoicesList({ projectId, items }) {
             <span style={{ padding: '2px 8px', borderRadius: 999, background: inv.status === 'paid' ? '#ECFDF5' : '#FEF3C7', color: inv.status === 'paid' ? '#065F46' : '#92400E', fontSize: 12 }}>{inv.status || 'unpaid'}</span>
           </div>
           <div>{Number(inv.taxRate || 0).toFixed(2)}</div>
-          <div>{(() => { const cur=(inv.currency||'USD').toUpperCase(); const base=(inv.fxBase||cur).toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{ style:'currency', currency:c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } }; const disc=Number(inv.discount||0); const discBase=(typeof inv.discountBase==='number')?Number(inv.discountBase):(cur===base?disc:(Number(inv.fxRate||0)>0?disc/Number(inv.fxRate):disc)); return `${fmt(disc,cur)}  •  ${fmt(discBase,base)}`; })()}</div>
-          <div>{(() => { const cur=(inv.currency||'USD').toUpperCase(); const base=(inv.fxBase||cur).toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{ style:'currency', currency:c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } }; const tot=Number(inv.total||0); const totBase=(typeof inv.totalBase==='number')?Number(inv.totalBase):(cur===base?tot:(Number(inv.fxRate||0)>0?tot/Number(inv.fxRate):tot)); return `${fmt(tot,cur)}  •  ${fmt(totBase,base)}`; })()}</div>
+          <div>{(() => { const base='USD'; const cur=((inv.currency||'')||'USD').toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{ style:'currency', currency:c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } }; const discCur=Number(inv.discount||0); let discUsd=(typeof inv.discountBase==='number' && (inv.fxBase||'').toUpperCase()===base)?Number(inv.discountBase):NaN; if(!Number.isFinite(discUsd)){ const savedRate=Number(inv.fxRate||0); if(savedRate>0 && (inv.fxBase||'').toUpperCase()===base && cur!==base){ discUsd=discCur/savedRate; } } if(!Number.isFinite(discUsd)){ if(cur===base) discUsd=discCur; else { discUsd=discCur; } } return (cur===base)? `${fmt(discUsd,base)}` : `${fmt(discUsd,base)}  •  ${fmt(discCur,cur)}`; })()}</div>
+          <div>{(() => { const base='USD'; const cur=((inv.currency||'')||'USD').toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{ style:'currency', currency:c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } }; const totCur=Number(inv.total||0); let totUsd=(typeof inv.totalBase==='number' && (inv.fxBase||'').toUpperCase()===base)?Number(inv.totalBase):NaN; if(!Number.isFinite(totUsd)){ const savedRate=Number(inv.fxRate||0); if(savedRate>0 && (inv.fxBase||'').toUpperCase()===base && cur!==base){ totUsd=totCur/savedRate; } } if(!Number.isFinite(totUsd)){ if(cur===base) totUsd=totCur; else { totUsd=totCur; } } return (cur===base)? `${fmt(totUsd,base)}` : `${fmt(totUsd,base)}  •  ${fmt(totCur,cur)}`; })()}</div>
           <div style={{ display: 'flex', gap: 6 }}>
             {inv.status !== 'paid' && <button onClick={() => markPaid(inv.id)} style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Mark paid</button>}
             <button onClick={() => remove(inv.id)} style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Delete</button>

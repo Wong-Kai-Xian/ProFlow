@@ -6,19 +6,25 @@ export function renderQuotePdf(quoteData = {}, options = {}) {
     const data = quoteData || {};
     const items = Array.isArray(data.items) ? data.items : [];
     const currency = (data.currency || 'USD').toUpperCase();
+    const baseCurrency = (data.fxBase || currency || 'USD').toUpperCase();
+    const rate = (baseCurrency === currency) ? 1 : Number(data.fxRate || 1);
     const fmt = (n) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(Number(n||0)); } catch { return `${currency} ${Number(n||0).toFixed(2)}`; } };
+    const unitToDisplay = (unit) => (baseCurrency === currency) ? Number(unit||0) : Number(unit||0) * (rate || 1);
     const rows = items.map((it, i) => `
       <tr>
         <td>${(it.description || `Item ${i+1}`)}</td>
         <td class="num">${Number(it.qty||1)}</td>
-        <td class="num">${fmt(Number(it.unitPrice||0))}</td>
-        <td class="num">${fmt(Number(it.qty||1)*Number(it.unitPrice||0))}</td>
+        <td class="num">${fmt(unitToDisplay(it.unitPrice))}</td>
+        <td class="num">${fmt(Number(it.qty||1)*unitToDisplay(it.unitPrice))}</td>
       </tr>`).join('');
-    const subtotal = items.reduce((s,it)=> s + Number(it.qty||1)*Number(it.unitPrice||0),0);
+    // Prefer provided totals in display currency; else compute from items (converted if needed)
+    const subtotal = (typeof data.subtotal === 'number')
+      ? Number(data.subtotal || 0)
+      : items.reduce((s,it)=> s + Number(it.qty||1)*unitToDisplay(it.unitPrice),0);
     const taxRate = Number(data.taxRate || 0);
-    const discount = Number(data.discount || 0);
-    const taxAmount = subtotal * (taxRate/100);
-    const total = subtotal + taxAmount - discount;
+    const discount = (typeof data.discount === 'number') ? Number(data.discount || 0) : 0;
+    const taxAmount = (typeof data.taxAmount === 'number') ? Number(data.taxAmount || 0) : subtotal * (taxRate/100);
+    const total = (typeof data.total === 'number') ? Number(data.total || 0) : (subtotal + taxAmount - discount);
     const today = new Date();
     const dateStr = today.toLocaleDateString();
     const logoUrl = '/proflow-logo.png';

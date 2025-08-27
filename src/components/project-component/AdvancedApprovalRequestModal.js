@@ -180,17 +180,36 @@ export default function AdvancedApprovalRequestModal({
         qty: Number(it.qty || it.quantity || 1),
         unitPrice: Number(it.unitPrice || it.price || it.rate || 0)
       })) : [];
-      const total = items.reduce((s,it)=> s + it.qty * it.unitPrice, 0);
+      // Preserve currency and FX info for accurate PDF rendering later
+      const currency = (q.currency || '').toUpperCase();
+      const fxBase = (q.fxBase || (currency || 'USD')).toUpperCase();
+      const fxRate = Number(q.fxRate || 1);
+      // Totals
+      const subtotal = (typeof q.subtotal === 'number') ? Number(q.subtotal||0) : items.reduce((s,it)=> s + it.qty*it.unitPrice, 0);
+      const taxRate = Number(q.taxRate || 0);
+      const discount = (typeof q.discount === 'number') ? Number(q.discount || 0) : 0;
+      const taxAmount = (typeof q.taxAmount === 'number') ? Number(q.taxAmount || 0) : (subtotal * (taxRate/100));
+      const total = (typeof q.total === 'number') ? Number(q.total || 0) : (subtotal + taxAmount - discount);
       setSelectedQuoteData({
         id: q.id,
         scope: q.scope,
         name: q.name || q.title || '',
         client: q.client || q.customer || '',
         items,
+        subtotal,
+        taxRate,
+        discount,
+        taxAmount,
         total,
+        currency,
+        fxBase,
+        fxRate,
         validUntil: q.validUntil || '',
-        taxRate: Number(q.taxRate || 0),
-        discount: Number(q.discount || 0)
+        // carry through base totals when available
+        subtotalBase: (typeof q.subtotalBase === 'number') ? Number(q.subtotalBase) : undefined,
+        taxAmountBase: (typeof q.taxAmountBase === 'number') ? Number(q.taxAmountBase) : undefined,
+        discountBase: (typeof q.discountBase === 'number') ? Number(q.discountBase) : undefined,
+        totalBase: (typeof q.totalBase === 'number') ? Number(q.totalBase) : undefined
       });
       // Skip adding PDF attachments per requirement
     } catch {}

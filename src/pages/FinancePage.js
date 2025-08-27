@@ -288,7 +288,13 @@ export default function FinancePage() {
           discount: Number(d.data().discount || 0),
           taxAmount: Number(d.data().taxAmount || 0),
           subtotal: Number(d.data().subtotal || 0),
-          currency: d.data().currency || ''
+          currency: d.data().currency || '',
+          fxBase: d.data().fxBase || '',
+          fxRate: Number(d.data().fxRate || 0),
+          subtotalBase: Number(d.data().subtotalBase || NaN),
+          taxAmountBase: Number(d.data().taxAmountBase || NaN),
+          discountBase: Number(d.data().discountBase || NaN),
+          totalBase: Number(d.data().totalBase || NaN)
         }));
         for (let i = invBundle.length - 1; i >= 0; i--) if (invBundle[i].projectId === p.id) invBundle.splice(i, 1);
         invBundle.push(...list);
@@ -310,7 +316,13 @@ export default function FinancePage() {
           discount: Number(d.data().discount || 0),
           taxAmount: Number(d.data().taxAmount || 0),
           subtotal: Number(d.data().subtotal || 0),
-          currency: d.data().currency || ''
+          currency: d.data().currency || '',
+          fxBase: d.data().fxBase || '',
+          fxRate: Number(d.data().fxRate || 0),
+          subtotalBase: Number(d.data().subtotalBase || NaN),
+          taxAmountBase: Number(d.data().taxAmountBase || NaN),
+          discountBase: Number(d.data().discountBase || NaN),
+          totalBase: Number(d.data().totalBase || NaN)
         }));
         for (let i = quoBundle.length - 1; i >= 0; i--) if (quoBundle[i].projectId === p.id) quoBundle.splice(i, 1);
         quoBundle.push(...list);
@@ -488,12 +500,20 @@ export default function FinancePage() {
     return rows;
   }, [filteredQuotes, quoteSort]);
   const toggleQuoteSort = (key) => setQuoteSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
-  const baseCurrency = financeDefaults.currency || 'USD';
+  const baseCurrency = 'USD';
   const getFxRate = (code) => {
-    const c = (code || baseCurrency || 'USD').toUpperCase();
-    if (c === (baseCurrency || 'USD').toUpperCase()) return 1;
-    const rate = fxRates?.rates?.[c];
-    return Number(rate || 1);
+    const tableBase = (fxRates?.base || 'USD').toUpperCase();
+    const base = 'USD';
+    const c = (code || base).toUpperCase();
+    if (c === base) return 1;
+    const rBase = Number(fxRates?.rates?.[base] || 0);
+    const rCur = Number(fxRates?.rates?.[c] || 0);
+    if (tableBase === base) {
+      // USD is table base: USD = CUR / rCur; so multiplier to USD = 1/rCur
+      return rCur > 0 ? (1 / rCur) : 1;
+    }
+    // cross-rate: USD = CUR * (rBase / rCur)
+    return (rBase > 0 && rCur > 0) ? (rBase / rCur) : 1;
   };
 
   // Auto fetch FX rates using exchangerate.host with provided API key
@@ -517,8 +537,23 @@ export default function FinancePage() {
   };
   const invTotal = filteredInvoices.reduce((a,b) => a + (b.total||0), 0);
   const invUnpaid = filteredInvoices.filter(r => r.status !== 'paid').reduce((a,b) => a + (b.total||0), 0);
-  const invTotalBase = filteredInvoices.reduce((a,b) => a + (Number(b.total||0) * getFxRate(b.currency)), 0);
-  const invUnpaidBase = filteredInvoices.filter(r => r.status !== 'paid').reduce((a,b) => a + (Number(b.total||0) * getFxRate(b.currency)), 0);
+  const toUsdInvoice = (inv) => {
+    const base = 'USD';
+    const cur = (inv.currency || base).toUpperCase();
+    // Prefer stored base when available and base is USD
+    if (typeof inv.totalBase === 'number' && (inv.fxBase || '').toUpperCase() === base) {
+      return Number(inv.totalBase || 0);
+    }
+    // Prefer saved fxRate when base is USD
+    const savedRate = Number(inv.fxRate || 0);
+    if ((inv.fxBase || '').toUpperCase() === base && savedRate > 0) {
+      return cur === base ? Number(inv.total || 0) : (Number(inv.total || 0) / savedRate);
+    }
+    // Fallback to table rate normalization
+    return Number(inv.total || 0) * getFxRate(cur);
+  };
+  const invTotalBase = filteredInvoices.reduce((sum, inv) => sum + toUsdInvoice(inv), 0);
+  const invUnpaidBase = filteredInvoices.filter(r => r.status !== 'paid').reduce((sum, inv) => sum + toUsdInvoice(inv), 0);
 
   const insights = useMemo(() => {
     const now = new Date();
@@ -555,7 +590,7 @@ export default function FinancePage() {
     }
     return { buckets, months };
   }, [invoiceRows, fxRates, financeDefaults.currency]);
-  const expTotal = expensesRows.reduce((a,b) => a + (b.amount||0), 0);
+  const expTotal = expensesRows.reduce((a,b) => a + (Number(b.amountBase || (Number(b.amount||0) * getFxRate(b.currency))) || 0), 0);
 
   const convertQuoteToInvoice = async (q) => {
     try {
@@ -566,6 +601,9 @@ export default function FinancePage() {
       const discount = Number(q.discount || 0);
       const taxAmount = subtotal * (taxRate/100);
       const total = Number((q.total ?? (subtotal + taxAmount - discount)) || 0);
+      const currency = (q.currency || financeDefaults.currency || 'USD');
+      const fxBase = (q.fxBase || currency || 'USD');
+      const fxRate = Number(q.fxRate || 1);
       await addDoc(collection(db, 'projects', q.projectId, 'invoices'), {
         client: q.client || '',
         dueDate: q.validUntil || '',
@@ -576,6 +614,9 @@ export default function FinancePage() {
         taxAmount,
         discount,
         total,
+        currency,
+        fxBase,
+        fxRate,
         createdAt: serverTimestamp()
       });
       // Optionally update quote status
@@ -1105,9 +1146,9 @@ export default function FinancePage() {
                       Due {invoiceSort.key === 'dueDate' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
                     </div>
                     <div>Tax %</div>
-                    <div>Discount (Cust/Base)</div>
+                    <div>Discount (USD/Currency)</div>
                     <div onClick={() => toggleInvoiceSort('total')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                      Amount (Cust/Base) {invoiceSort.key === 'total' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
+                      Amount (USD/Currency) {invoiceSort.key === 'total' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
                     </div>
                     <div>Actions</div>
                   </div>
@@ -1121,32 +1162,8 @@ export default function FinancePage() {
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.client || 'Client'}</div>
                           <div>{r.dueDate || '-'}</div>
                           <div>{Number(r.taxRate || 0).toFixed(2)}</div>
-                          <div>{(() => { const cur=(r.currency||financeDefaults.currency||'USD').toUpperCase(); const base=(fxRates.base||financeDefaults.currency||'USD').toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const disc=Number(r.discount||0); const rate = (cur===base)?1:(fxRates.rates?.[cur] ? (1/Number(fxRates.rates[cur])) : 1); const discBase = disc * rate; return `${fmt(disc,cur)}  •  ${fmt(discBase,base)}`; })()}</div>
-                          <div>{(() => {
-                            const cur = (r.currency || '').toUpperCase() || (financeDefaults.currency || 'USD').toUpperCase();
-                            const base = (fxRates.base || financeDefaults.currency || 'USD').toUpperCase();
-                            const fmt = (n, c) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } };
-                            const tot = Number(r.total || 0);
-                            // Prefer stored base if present and matches current base
-                            let totBase = (typeof r.totalBase === 'number' && r.totalBase >= 0 && (r.fxBase||'').toUpperCase() === base)
-                              ? Number(r.totalBase)
-                              : NaN;
-                            // Fallback: use saved fxRate if base matches
-                            if (!Number.isFinite(totBase)) {
-                              const savedRate = Number(r.fxRate || 0);
-                              if (savedRate > 0 && (r.fxBase||'').toUpperCase() === base && cur !== base) {
-                                totBase = tot / savedRate;
-                              }
-                            }
-                            // Last resort: use global fxRates table
-                            if (!Number.isFinite(totBase)) {
-                              if (cur === base) totBase = tot; else {
-                                const tableRate = Number(fxRates.rates?.[cur] || 0);
-                                totBase = tableRate > 0 ? (tot / tableRate) : tot; // if missing, show same
-                              }
-                            }
-                            return `${fmt(tot, cur)}  •  ${fmt(totBase, base)}`;
-                          })()}</div>
+                          <div>{(() => { const base='USD'; const cur=((r.currency||'')||(financeDefaults.currency||'USD')).toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const discCur=Number(r.discount||0); let discUsd=(typeof r.discountBase==='number' && (r.fxBase||'').toUpperCase()===base)?Number(r.discountBase):NaN; if(!Number.isFinite(discUsd)){ const savedRate=Number(r.fxRate||0); if(savedRate>0 && (r.fxBase||'').toUpperCase()===base && cur!==base){ discUsd=discCur/savedRate; } } if(!Number.isFinite(discUsd)){ if(cur===base){ discUsd=discCur; } else { const tblBase=(fxRates.base||'USD').toUpperCase(); const rCur=Number(fxRates.rates?.[cur]||0); const rUsd=Number(fxRates.rates?.['USD']||0); if(tblBase==='USD' && rCur>0){ discUsd=discCur/rCur; } else if(rCur>0 && rUsd>0){ discUsd=discCur*(rUsd/rCur); } else { discUsd=discCur; } } } return (cur===base)? `${fmt(discUsd, base)}` : `${fmt(discUsd, base)}  •  ${fmt(discCur, cur)}`; })()}</div>
+                          <div>{(() => { const base='USD'; const cur=((r.currency||'')||(financeDefaults.currency||'USD')).toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{ style:'currency', currency:c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } }; const totCur=Number(r.total||0); let totUsd=(typeof r.totalBase==='number' && r.totalBase>=0 && (r.fxBase||'').toUpperCase()===base)?Number(r.totalBase):NaN; if(!Number.isFinite(totUsd)){ const savedRate=Number(r.fxRate||0); if(savedRate>0 && (r.fxBase||'').toUpperCase()===base && cur!==base){ totUsd=totCur/savedRate; } } if(!Number.isFinite(totUsd)){ if(cur===base){ totUsd=totCur; } else { const tblBase=(fxRates.base||'USD').toUpperCase(); const rCur=Number(fxRates.rates?.[cur]||0); const rUsd=Number(fxRates.rates?.['USD']||0); if(tblBase==='USD' && rCur>0){ totUsd=totCur/rCur; } else if(rCur>0 && rUsd>0){ totUsd=totCur*(rUsd/rCur); } else { totUsd=totCur; } } } return (cur===base)? `${fmt(totUsd, base)}` : `${fmt(totUsd, base)}  •  ${fmt(totCur, cur)}`; })()}</div>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             <button onClick={() => { setEditInvoice(r); setShowInvoiceModal(true); }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Edit</button>
                             <select value={r.status} onChange={(e) => updateInvoiceStatus(r, e.target.value)} style={{ padding: '4px 6px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
@@ -1263,11 +1280,11 @@ export default function FinancePage() {
                       <button onClick={() => { setNewQuote({ customerId: '', isNewCustomer: false, newCustomer: { name: '', email: '', phone: '', company: '' }, client: '', validUntil: '', items: [], taxRate: financeDefaults.taxRate || 0, discount: financeDefaults.discount || 0, currency: financeDefaults.currency || 'USD' }); setShowQuoteModal(true); }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>+ New Quote</button>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 220px 160px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1fr) minmax(180px,1fr) 110px 200px 220px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
                     <div onClick={() => toggleQuoteSort('client')} style={{ cursor: 'pointer', userSelect: 'none' }}>Client {quoteSort.key === 'client' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
                     <div onClick={() => toggleQuoteSort('projectName')} style={{ cursor: 'pointer', userSelect: 'none' }}>Project {quoteSort.key === 'projectName' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
                     <div onClick={() => toggleQuoteSort('validUntil')} style={{ cursor: 'pointer', userSelect: 'none' }}>Valid Until {quoteSort.key === 'validUntil' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
-                    <div onClick={() => toggleQuoteSort('total')} style={{ cursor: 'pointer', userSelect: 'none' }}>Amount (Cust/Base) {quoteSort.key === 'total' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
+                    <div onClick={() => toggleQuoteSort('total')} style={{ cursor: 'pointer', userSelect: 'none' }}>Amount (USD/Currency) {quoteSort.key === 'total' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
                     <div>Actions</div>
                   </div>
                   <div style={{ marginTop: 6 }}>
@@ -1275,33 +1292,44 @@ export default function FinancePage() {
                       <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No quotes</div>
                     ) : (
                       sortedQuotes.map((r, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 220px 160px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1fr) minmax(180px,1fr) 110px 200px 220px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.client || 'Client'}</div>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.projectName}</div>
                           <div>{r.validUntil || '-'}</div>
                           <div>{(() => {
-                            const cur = (r.currency || '').toUpperCase() || (financeDefaults.currency || 'USD').toUpperCase();
-                            const base = (fxRates.base || financeDefaults.currency || 'USD').toUpperCase();
+                            // Total, shown as USD first then currency
+                            const base = 'USD';
+                            const cur = ((r.currency || '') || financeDefaults.currency || 'USD').toUpperCase();
                             const fmt = (n, c) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } };
-                            const disc = Number(r.discount || 0);
-                            let discBase = (typeof r.discountBase === 'number' && r.discountBase >= 0 && (r.fxBase||'').toUpperCase() === base)
-                              ? Number(r.discountBase)
-                              : NaN;
-                            if (!Number.isFinite(discBase)) {
+                            const tot = Number(r.total || 0);
+                            let totUsd = (typeof r.totalBase === 'number' && (r.fxBase||'').toUpperCase() === base) ? Number(r.totalBase) : NaN;
+                            if (!Number.isFinite(totUsd)) {
                               const savedRate = Number(r.fxRate || 0);
                               if (savedRate > 0 && (r.fxBase||'').toUpperCase() === base && cur !== base) {
-                                discBase = disc / savedRate;
+                                totUsd = tot / savedRate;
                               }
                             }
-                            if (!Number.isFinite(discBase)) {
-                              if (cur === base) discBase = disc; else {
-                                const tableRate = Number(fxRates.rates?.[cur] || 0);
-                                discBase = tableRate > 0 ? (disc / tableRate) : disc;
+                            if (!Number.isFinite(totUsd)) {
+                              if (cur === base) {
+                                totUsd = tot;
+                              } else {
+                                const tblBase = (fxRates.base || 'USD').toUpperCase();
+                                const rCur = Number(fxRates.rates?.[cur] || 0);
+                                const rUsd = Number(fxRates.rates?.['USD'] || 0);
+                                if (tblBase === 'USD' && rCur > 0) {
+                                  // USD is base: USD = CUR / rate(CUR)
+                                  totUsd = tot / rCur;
+                                } else if (rCur > 0 && rUsd > 0) {
+                                  // Cross-rate: USD = CUR * (rate(USD)/rate(CUR))
+                                  totUsd = tot * (rUsd / rCur);
+                                } else {
+                                  totUsd = tot; // fallback
+                                }
                               }
                             }
-                            return `${fmt(disc, cur)}  •  ${fmt(discBase, base)}`;
+                            return (cur === base) ? `${fmt(totUsd, base)}` : `${fmt(totUsd, base)}  •  ${fmt(tot, cur)}`;
                           })()}</div>
-                          <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             <button disabled={r.status === 'converted' || r.type === 'quote_draft'} onClick={() => convertQuoteToInvoice(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: (r.status === 'converted' || r.type === 'quote_draft') ? 'not-allowed' : 'pointer', opacity: (r.status === 'converted' || r.type === 'quote_draft') ? 0.6 : 1, fontSize: 12 }}>{r.type === 'quote_draft' ? 'Draft (convert via project)' : (r.status === 'converted' ? 'Converted' : 'Convert to Invoice')}</button>
                             <button onClick={() => printQuote(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Print</button>
                             <button onClick={() => { setApplyTplForQuote(r); setSelectedTemplateId(quoteTemplates[0]?.id || ''); }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Print (Template)</button>
@@ -2487,5 +2515,6 @@ function InvoiceModal({ isOpen, onClose, invoice, onSave }) {
     </Modal>
   );
 }
+
 
 

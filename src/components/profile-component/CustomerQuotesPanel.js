@@ -11,6 +11,7 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ client: '', validUntil: '', taxRate: 0, discount: 0, items: [], currency: '', fxBase: 'USD', fxRate: 1 });
   const [globalFxBase, setGlobalFxBase] = useState('USD');
+  const [editingId, setEditingId] = useState(null);
   
 
   useEffect(() => {
@@ -33,8 +34,9 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
         const snap = await (await import('firebase/firestore')).getDoc(ref);
         if (snap.exists()) {
           const d = snap.data() || {};
-          const b = (d.fxRates?.base || d.currency || 'USD');
-          setGlobalFxBase((b || 'USD').toUpperCase());
+          // Force base to USD for quote entry; inputs are in USD per requirement
+          const b = 'USD';
+          setGlobalFxBase((b).toUpperCase());
         }
       } catch {}
     };
@@ -45,7 +47,8 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
 
   const openNew = () => {
     const defaultTax = (customerProfile?.financeDefaults?.taxRate ?? customerProfile?.taxRate ?? 0);
-    setForm({ client: customerProfile?.name || customerProfile?.email || '', validUntil: '', taxRate: defaultTax, discount: 0, items: [{ description: '', qty: 1, unitPrice: 0 }], currency: (customerProfile?.financeDefaults?.currency || customerProfile?.currency || ''), fxBase: (customerProfile?.financeDefaults?.currency || 'USD'), fxRate: 1 });
+    setForm({ client: customerProfile?.name || customerProfile?.email || '', validUntil: '', taxRate: defaultTax, discount: 0, items: [{ description: '', qty: 1, unitPrice: 0 }], currency: 'USD', fxBase: 'USD', fxRate: 1 });
+    setEditingId(null);
     setShowModal(true);
   };
 
@@ -54,18 +57,32 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
       if (!customerId) return;
       const col = collection(db, 'customerProfiles', customerId, 'quotesDrafts');
       const items = (form.items || []).map(it => ({ description: it.description || '', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) }));
-      const subtotal = items.reduce((a,it)=> a + (it.qty*it.unitPrice), 0);
+      // All inputs are in USD (base)
+      const subtotalBase = items.reduce((a,it)=> a + (it.qty*it.unitPrice), 0);
       const taxRate = Number(form.taxRate || 0);
-      const discount = Number(form.discount || 0);
-      const taxAmount = subtotal * (taxRate / 100);
-      const total = subtotal + taxAmount - discount;
+      const discountBase = Number(form.discount || 0);
+      const taxAmountBase = subtotalBase * (taxRate / 100);
+      const totalBase = subtotalBase + taxAmountBase - discountBase;
       const cur = (form.currency || 'USD').toUpperCase();
-      const base = (globalFxBase || 'USD').toUpperCase();
+      const base = 'USD';
       const rate = Number(form.fxRate || 1);
       const isSame = cur === base;
-      const toBase = (n) => isSame ? Number(n||0) : Number(n||0) / (rate || 1);
-      await addDoc(col, { client: form.client || '', validUntil: form.validUntil || '', taxRate, discount, items, subtotal, taxAmount, total, currency: (form.currency || undefined), fxBase: (globalFxBase || undefined), fxRate: Number(form.fxRate || 1), subtotalBase: toBase(subtotal), taxAmountBase: toBase(taxAmount), discountBase: toBase(discount), totalBase: toBase(total), status: 'draft', createdAt: serverTimestamp() });
+      const toCurrency = (n) => isSame ? Number(n||0) : Number(n||0) * (rate || 1);
+      // Store both converted (customer currency) and base (USD)
+      const subtotal = toCurrency(subtotalBase);
+      const taxAmount = toCurrency(taxAmountBase);
+      const discount = toCurrency(discountBase);
+      const total = toCurrency(totalBase);
+      const payload = { client: form.client || '', validUntil: form.validUntil || '', taxRate, discount, items, subtotal, taxAmount, total, currency: (form.currency || undefined), fxBase: base, fxRate: Number(form.fxRate || 1), subtotalBase, taxAmountBase, discountBase, totalBase };
+      if (editingId) {
+        try {
+          await (await import('firebase/firestore')).updateDoc(doc(db, 'customerProfiles', customerId, 'quotesDrafts', editingId), { ...payload, updatedAt: serverTimestamp() });
+        } catch {}
+      } else {
+        await addDoc(col, { ...payload, status: 'draft', createdAt: serverTimestamp() });
+      }
       setShowModal(false);
+      setEditingId(null);
     } catch {}
   };
 
@@ -96,46 +113,50 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
         </div>
       </div>
       <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 220px 220px 240px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
-          <div>Client</div>
-          <div>Valid Until</div>
-          <div>Tax %</div>
-          <div>Discount (Cust/Base)</div>
-          <div>Total (Cust/Base)</div>
-          <div>Actions</div>
-        </div>
-        <div style={{ marginTop: 6 }}>
-          {quotes.length === 0 ? (
-            <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No draft quotes</div>
-          ) : (
-            quotes.map((q) => (
-              <div key={q.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 220px 240px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
-                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.client || 'Client'}</div>
-                <div>{q.validUntil || '-'}</div>
-                <div>{Number(q.taxRate || 0).toFixed(2)}</div>
-                <div>{(() => { const cur=(q.currency||'USD').toUpperCase(); const base=(globalFxBase||'USD').toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const disc=Number(q.discount||0); let discBase=(typeof q.discountBase==='number' && (q.fxBase||'').toUpperCase()===base)?Number(q.discountBase):NaN; if(!Number.isFinite(discBase)){ const savedRate=Number(q.fxRate||0); if(savedRate>0 && (q.fxBase||'').toUpperCase()===base && cur!==base){ discBase=disc/savedRate; } } if(!Number.isFinite(discBase)){ if(cur===base) discBase=disc; else discBase=disc; } return `${fmt(disc,cur)}  •  ${fmt(discBase,base)}`; })()}</div>
-                <div>{(() => { const cur=(q.currency||'USD').toUpperCase(); const base=(globalFxBase||'USD').toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const tot=Number(q.total||0); let totBase=(typeof q.totalBase==='number' && (q.fxBase||'').toUpperCase()===base)?Number(q.totalBase):NaN; if(!Number.isFinite(totBase)){ const savedRate=Number(q.fxRate||0); if(savedRate>0 && (q.fxBase||'').toUpperCase()===base && cur!==base){ totBase=tot/savedRate; } } if(!Number.isFinite(totBase)){ if(cur===base) totBase=tot; else totBase=tot; } return `${fmt(tot,cur)}  •  ${fmt(totBase,base)}`; })()}</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button onClick={() => printDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Print</button>
-                  {!readOnly && (
-                    <>
-                      <button onClick={() => setForm({ client: q.client || '', validUntil: q.validUntil || '', taxRate: Number(q.taxRate||0), discount: Number(q.discount||0), items: Array.isArray(q.items) ? q.items.map(it => ({ description: it.description||'', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) })) : [] }) || setShowModal(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Edit</button>
-                      <button onClick={() => removeDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Delete</button>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
+        <div style={{ overflowX: 'auto' }}>
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 2fr) 140px 80px 180px 200px 240px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
+              <div>Client</div>
+              <div>Valid Until</div>
+              <div>Tax %</div>
+              <div>Discount (USD/Currency)</div>
+              <div>Total (USD/Currency)</div>
+              <div>Actions</div>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              {quotes.length === 0 ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No draft quotes</div>
+              ) : (
+                quotes.map((q) => (
+                  <div key={q.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 2fr) 140px 80px 180px 200px 240px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                    <div title={(q.client || 'Client')} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'normal' }}>{q.client || 'Client'}</div>
+                    <div>{q.validUntil || '-'}</div>
+                    <div>{Number(q.taxRate || 0).toFixed(2)}</div>
+                    <div>{(() => { const base='USD'; const fxBase=(q.fxBase||base).toUpperCase(); const curRaw=(q.currency||''); const cur=(curRaw||base).toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const rate=Number(q.fxRate||0); const discCur=Number(q.discount||0); let discBase=(typeof q.discountBase==='number' && fxBase===base)?Number(q.discountBase):NaN; if(!Number.isFinite(discBase)){ if(cur===base){ discBase=discCur; } else if(fxBase===base && rate>0){ discBase=discCur/rate; } } if(!curRaw || cur===base){ return `${fmt(discBase, base)}`; } const discInCur = Number.isFinite(discCur) ? discCur : (Number.isFinite(discBase) && rate>0 ? discBase*rate : discBase); return `${fmt(discBase, base)}  •  ${fmt(discInCur, cur)}`; })()}</div>
+                    <div>{(() => { const base='USD'; const fxBase=(q.fxBase||base).toUpperCase(); const curRaw=(q.currency||''); const cur=(curRaw||base).toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const rate=Number(q.fxRate||0); const totCur=Number(q.total||0); let totBase=(typeof q.totalBase==='number' && fxBase===base)?Number(q.totalBase):NaN; if(!Number.isFinite(totBase)){ if(cur===base){ totBase=totCur; } else if(fxBase===base && rate>0){ totBase=totCur/rate; } } if(!curRaw || cur===base){ return `${fmt(totBase, base)}`; } const totInCur = Number.isFinite(totCur) ? totCur : (Number.isFinite(totBase) && rate>0 ? totBase*rate : totBase); return `${fmt(totBase, base)}  •  ${fmt(totInCur, cur)}`; })()}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button onClick={() => printDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Print</button>
+                      {!readOnly && (
+                        <>
+                          <button onClick={() => { setEditingId(q.id); setForm({ client: q.client || '', validUntil: q.validUntil || '', taxRate: Number(q.taxRate||0), discount: Number(q.discountBase ?? q.discount ?? 0), items: Array.isArray(q.items) ? q.items.map(it => ({ description: it.description||'', qty: Number(it.qty||0), unitPrice: Number(it.unitPrice||0) })) : [], currency: (q.currency || ''), fxBase: (q.fxBase || 'USD'), fxRate: Number(q.fxRate || 1) }); setShowModal(true); }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Edit</button>
+                          <button onClick={() => removeDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Delete</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       {showModal && !readOnly && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }} onClick={() => setShowModal(false)}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }} onClick={() => { setShowModal(false); setEditingId(null); }}>
           <div onClick={(e)=>e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '92%', maxWidth: 640, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ fontWeight: 700 }}>New Quote</div>
-              <button onClick={() => setShowModal(false)} style={{ padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 12 }}>Close</button>
+              <div style={{ fontWeight: 700 }}>{editingId ? 'Edit Quote' : 'New Quote'}</div>
+              <button onClick={() => { setShowModal(false); setEditingId(null); }} style={{ padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 12 }}>Close</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 140px 140px', gap: 8 }}>
               <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
@@ -158,27 +179,26 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
               <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
                 <span style={{ marginBottom: 4 }}>Currency (ISO)</span>
-                <input list="proflow-currencies" value={form.currency} onChange={(e)=> setForm(f=>({ ...f, currency: (e.target.value||'').toUpperCase() }))} placeholder="e.g., USD" />
-                <datalist id="proflow-currencies">
-                  <option value="USD" />
-                  <option value="EUR" />
-                  <option value="GBP" />
-                  <option value="MYR" />
-                  <option value="SGD" />
-                  <option value="AUD" />
-                  <option value="CAD" />
-                  <option value="JPY" />
-                  <option value="CNY" />
-                  <option value="INR" />
-                </datalist>
+                <select value={form.currency} onChange={(e)=> setForm(f=>({ ...f, currency: (e.target.value||'').toUpperCase() }))}>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                  <option value="MYR">MYR</option>
+                  <option value="SGD">SGD</option>
+                  <option value="AUD">AUD</option>
+                  <option value="CAD">CAD</option>
+                  <option value="JPY">JPY</option>
+                  <option value="CNY">CNY</option>
+                  <option value="INR">INR</option>
+                </select>
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
-                <span style={{ marginBottom: 4 }}>FX Rate (to base)</span>
+                <span style={{ marginBottom: 4 }}>FX Rate (USD → Currency)</span>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input type="number" step="0.0001" value={form.fxRate} onChange={(e)=> setForm(f=>({ ...f, fxRate: e.target.value }))} placeholder="1.0" />
                   <button onClick={async () => {
                     try {
-                      const base = (globalFxBase || 'USD').toUpperCase();
+                      const base = 'USD';
                       const cur = (form.currency || 'USD').toUpperCase();
                       const resp = await fetch(`https://api.exchangerate.host/latest?base=${encodeURIComponent(base)}&api_key=eb803299bef64dc80de605049727ccf4`);
                       const data = await resp.json();
@@ -210,21 +230,25 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 12, fontSize: 12, color: '#374151' }}>
               {(() => {
+                // Compute in USD (base) from inputs
+                const base = 'USD';
+                const curRaw = (form.currency || '');
+                const cur = (curRaw || 'USD').toUpperCase();
                 const tax = subtotal * (Number(form.taxRate||0)/100);
                 const discount = Number(form.discount||0);
                 const total = subtotal + tax - discount;
-                const cur = (form.currency || 'USD').toUpperCase();
-                const base = (globalFxBase || 'USD').toUpperCase();
                 const rate = Number(form.fxRate || 1);
-                const isSame = cur === base;
-                const toBase = (n) => isSame ? Number(n||0) : Number(n||0) / (rate || 1);
+                const isSame = (cur === base.toUpperCase());
+                const toCurrency = (n) => isSame ? Number(n||0) : Number(n||0) * (rate || 1);
                 const fmt = (n,c) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } };
                 return (
                   <>
-                    <div>Subtotal: {fmt(subtotal, cur)} ({fmt(toBase(subtotal), base)})</div>
-                    <div>Tax: {fmt(tax, cur)} ({fmt(toBase(tax), base)})</div>
-                    <div>Discount: {fmt(discount, cur)} ({fmt(toBase(discount), base)})</div>
-                    <div style={{ fontWeight: 700, color: '#111827' }}>Total: {fmt(total, cur)} ({fmt(toBase(total), base)})</div>
+                    <div>Subtotal: {fmt(subtotal, base)}</div>
+                    <div>Tax: {fmt(tax, base)}</div>
+                    <div>Discount: {fmt(discount, base)}</div>
+                    <div style={{ fontWeight: 700, color: '#111827' }}>
+                      Total: {fmt(total, base)}{(!curRaw || isSame) ? '' : ` (${fmt(toCurrency(total), cur)})`}
+                    </div>
                   </>
                 );
               })()}
