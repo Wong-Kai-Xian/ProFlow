@@ -1,5 +1,5 @@
 import { renderQuotePdf } from '../utils/quotePdf';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,6 +7,35 @@ import { db, storage } from '../firebase';
 import { collection, onSnapshot, query, where, addDoc, updateDoc, doc, serverTimestamp, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DESIGN_SYSTEM, getPageContainerStyle, getContentContainerStyle } from '../styles/designSystem';
+
+// Reusable searchable currency dropdown (datalist-backed with filter)
+function CurrencySelect({ value, onChange }) {
+  const [query, setQuery] = useState((value || '').toUpperCase());
+  const codes = useMemo(() => (
+    [
+      'USD','EUR','GBP','MYR','SGD','AUD','CAD','JPY','CNY','HKD','TWD','KRW','THB','VND','IDR','PHP','AED','SAR','QAR','KWD','BHD','INR','PKR','BDT','NPR','LKR','ZAR','NGN','GHS','KES','UGX','TZS','MAD','DZD','EGP','TRY','ILS','RUB','UAH','PLN','CZK','HUF','RON','CHF','SEK','NOK','DKK','ISK','MXN','BRL','ARS','CLP','COP','PEN','UYU','BOB','AUD','NZD'
+    ]
+  ), []);
+  useEffect(() => { setQuery((value || '').toUpperCase()); }, [value]);
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        value={query}
+        onChange={(e) => {
+          const v = (e.target.value || '').toUpperCase();
+          setQuery(v);
+          if (v.length === 3) onChange && onChange(v);
+        }}
+        placeholder="e.g., USD"
+        style={{ display: 'block', marginTop: 4 }}
+        list="proflow-currency-codes"
+      />
+      <datalist id="proflow-currency-codes">
+        {codes.map(c => <option key={c} value={c} />)}
+      </datalist>
+    </div>
+  );
+}
 
 export default function FinancePage() {
   const { currentUser } = useAuth();
@@ -48,7 +77,7 @@ export default function FinancePage() {
   const [aiTplBusy, setAiTplBusy] = useState(false);
   const [aiTplError, setAiTplError] = useState('');
   const [showNewInvoice, setShowNewInvoice] = useState(false);
-  const [newInvoice, setNewInvoice] = useState({ projectId: '', client: '', dueDate: '', items: [], taxRate: 0, discount: 0, currency: '' });
+  const [newInvoice, setNewInvoice] = useState({ projectId: '', client: '', dueDate: '', items: [], taxRate: 0, discount: 0, currency: '', fxBase: 'USD', fxRate: 1 });
   const [expenseAttachment, setExpenseAttachment] = useState({}); // { [rowIndex]: { file: File, uploading: boolean, url: string } }
   const [invoiceAttachment, setInvoiceAttachment] = useState({}); // for new invoice modal
   const [customersBook, setCustomersBook] = useState([]);
@@ -237,7 +266,7 @@ export default function FinancePage() {
     const quoBundle = [];
     for (const p of projects) {
       const unsubExp = onSnapshot(collection(db, 'projects', p.id, 'expenses'), (s) => {
-        const list = s.docs.map(d => ({ id: d.id, type: 'expense', projectId: p.id, projectName: p.name || p.id, date: d.data().date || '', category: d.data().category || '', amount: Number(d.data().amount || 0), note: d.data().note || '', receiptUrl: d.data().receiptUrl || '' }));
+        const list = s.docs.map(d => ({ id: d.id, type: 'expense', projectId: p.id, projectName: p.name || p.id, date: d.data().date || '', category: d.data().category || '', amount: Number(d.data().amount || 0), note: d.data().note || '', receiptUrl: d.data().receiptUrl || '', currency: d.data().currency || '' }));
         // replace for project
         for (let i = expBundle.length - 1; i >= 0; i--) if (expBundle[i].projectId === p.id) expBundle.splice(i, 1);
         expBundle.push(...list);
@@ -280,7 +309,8 @@ export default function FinancePage() {
           taxRate: Number(d.data().taxRate || 0),
           discount: Number(d.data().discount || 0),
           taxAmount: Number(d.data().taxAmount || 0),
-          subtotal: Number(d.data().subtotal || 0)
+          subtotal: Number(d.data().subtotal || 0),
+          currency: d.data().currency || ''
         }));
         for (let i = quoBundle.length - 1; i >= 0; i--) if (quoBundle[i].projectId === p.id) quoBundle.splice(i, 1);
         quoBundle.push(...list);
@@ -300,7 +330,16 @@ export default function FinancePage() {
           const qSnap = await (await import('firebase/firestore')).getDocs(collection(db, 'customerProfiles', cid, 'quotesDrafts'));
           qSnap.forEach(qd => {
             const q = qd.data() || {};
-            if (!q.projectId) drafts.push({
+            if (q.projectId) return;
+            const itemsArr = Array.isArray(q.items) ? q.items : [];
+            const subtotalCalc = itemsArr.reduce((a, it) => a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
+            const coerce = (v, fb) => (v === undefined || v === null || v === '') ? fb : Number(v || 0);
+            const taxRate = coerce(q.taxRate, 0);
+            const subtotal = coerce(q.subtotal, subtotalCalc);
+            const taxAmount = coerce(q.taxAmount, subtotal * (taxRate/100));
+            const discount = coerce(q.discount, 0);
+            const total = coerce(q.total, subtotal + taxAmount - discount);
+            drafts.push({
               id: qd.id,
               type: 'quote_draft',
               projectId: '',
@@ -308,14 +347,18 @@ export default function FinancePage() {
               client: q.client || '',
               validUntil: q.validUntil || '',
               status: 'draft',
-              total: Number(q.total || 0),
-              items: Array.isArray(q.items) ? q.items : [],
+              total,
+              items: itemsArr,
               customerId: cid,
               // include tax/discount for printing
-              taxRate: Number(q.taxRate || 0),
-              discount: Number(q.discount || 0),
-              taxAmount: Number(q.taxAmount || 0),
-              subtotal: Number(q.subtotal || 0)
+              taxRate,
+              discount,
+              taxAmount,
+              subtotal,
+              // currency + fx fields for dual display
+              currency: q.currency || '',
+              fxBase: q.fxBase || '',
+              fxRate: Number(q.fxRate || 0)
             });
           });
         }
@@ -452,6 +495,26 @@ export default function FinancePage() {
     const rate = fxRates?.rates?.[c];
     return Number(rate || 1);
   };
+
+  // Auto fetch FX rates using exchangerate.host with provided API key
+  const EXR_API_KEY = 'eb803299bef64dc80de605049727ccf4';
+  const fetchFxRates = async (base) => {
+    try {
+      const b = (base || fxRates.base || 'USD').toUpperCase();
+      const resp = await fetch(`https://api.exchangerate.host/latest?base=${encodeURIComponent(b)}&api_key=${encodeURIComponent(EXR_API_KEY)}`);
+      const data = await resp.json();
+      if (data && data.rates) {
+        setFxRates({ base: b, rates: data.rates });
+        // Persist subset to user settings if logged in
+        if (currentUser?.uid) {
+          const subset = {};
+          const pick = ['USD','EUR','GBP','MYR','SGD','AUD','CAD','JPY','CNY','INR'];
+          pick.forEach(k => { if (data.rates[k] != null) subset[k] = Number(data.rates[k]); });
+          try { await setDoc(doc(db, 'users', currentUser.uid, 'settings', 'financeDefaults'), { fxRates: { base: b, rates: subset } }, { merge: true }); } catch {}
+        }
+      }
+    } catch {}
+  };
   const invTotal = filteredInvoices.reduce((a,b) => a + (b.total||0), 0);
   const invUnpaid = filteredInvoices.filter(r => r.status !== 'paid').reduce((a,b) => a + (b.total||0), 0);
   const invTotalBase = filteredInvoices.reduce((a,b) => a + (Number(b.total||0) * getFxRate(b.currency)), 0);
@@ -521,7 +584,7 @@ export default function FinancePage() {
     } catch {}
   };
 
-  const [newQuote, setNewQuote] = useState({ projectId: '', client: '', total: '', validUntil: '' });
+  const [newQuote, setNewQuote] = useState({ projectId: '', client: '', total: '', validUntil: '', currency: '' });
   const saveNewQuote = async () => {
     try {
       if (!newQuote.projectId || !newQuote.client) return;
@@ -531,6 +594,14 @@ export default function FinancePage() {
       const discount = Number(newQuote.discount || 0);
       const taxAmount = subtotal * (taxRate/100);
       const total = (newQuote.total !== undefined && newQuote.total !== '') ? Number(newQuote.total || 0) : (subtotal + taxAmount - discount);
+      const currency = (newQuote.currency || financeDefaults.currency || 'USD');
+      const fxBase = (fxRates.base || financeDefaults.currency || 'USD');
+      const fxRate = getFxRate(currency);
+      const curCode = (currency || 'USD').toUpperCase();
+      const baseCode = (fxBase || 'USD').toUpperCase();
+      const rate = Number(fxRate || 1);
+      const isSame = curCode === baseCode;
+      const toBase = (n) => isSame ? Number(n||0) : Number(n||0) / (rate || 1);
       await addDoc(collection(db, 'projects', newQuote.projectId, 'quotes'), {
         client: newQuote.client,
         validUntil: newQuote.validUntil || '',
@@ -540,11 +611,18 @@ export default function FinancePage() {
         discount,
         taxAmount,
         total: Number(total || 0),
+        currency,
+        fxBase,
+        fxRate,
+        subtotalBase: toBase(subtotal),
+        taxAmountBase: toBase(taxAmount),
+        discountBase: toBase(discount),
+        totalBase: toBase(total),
         status: 'draft',
         createdAt: serverTimestamp()
       });
       setShowQuoteModal(false);
-      setNewQuote({ projectId: '', client: '', validUntil: '', items: [], taxRate: 0, discount: 0, total: '' });
+      setNewQuote({ projectId: '', client: '', validUntil: '', items: [], taxRate: 0, discount: 0, total: '', currency: '' });
     } catch {}
   };
 
@@ -557,15 +635,17 @@ export default function FinancePage() {
       const discount = Number(inv.discount || 0);
       const taxAmount = hasItems ? (subtotal * (taxRate/100)) : Number(inv.taxAmount || 0);
       const total = Number((inv.total ?? (hasItems ? (subtotal + taxAmount - discount) : 0)) || 0);
+      const cur = (inv.currency || financeDefaults.currency || 'USD').toUpperCase();
+      const fmt = (n) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur }).format(Number(n||0)); } catch { return `${cur} ${Number(n||0).toFixed(2)}`; } };
       const rows = hasItems
-        ? items.map(it => `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td style="text-align:right">${Number(it.qty||0)}</td><td style="text-align:right">${Number(it.unitPrice||0).toFixed(2)}</td><td style="text-align:right">${(Number(it.qty||0)*Number(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('')
-        : `<tr><td>Invoice Total</td><td style="text-align:right">${total.toFixed(2)}</td></tr>`;
+        ? items.map(it => `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td style="text-align:right">${Number(it.qty||0)}</td><td style="text-align:right">${fmt(Number(it.unitPrice||0))}</td><td style="text-align:right">${fmt(Number(it.qty||0)*Number(it.unitPrice||0))}</td></tr>`).join('')
+        : `<tr><td>Invoice Total</td><td style="text-align:right">${fmt(total)}</td></tr>`;
       const totalsRow = hasItems
-        ? `<tr><td colspan="3" class="total">Subtotal</td><td class="total" style="text-align:right">${subtotal.toFixed(2)}</td></tr>`
-          + `<tr><td colspan="3" class="total">Tax (${taxRate.toFixed(2)}%)</td><td class="total" style="text-align:right">${taxAmount.toFixed(2)}</td></tr>`
-          + `<tr><td colspan="3" class="total">Discount</td><td class="total" style="text-align:right">${discount.toFixed(2)}</td></tr>`
-          + `<tr><td colspan="3" class="total">Total</td><td class="total" style="text-align:right">${total.toFixed(2)}</td></tr>`
-        : `<tr><td class="total">Total</td><td class="total" style="text-align:right">${total.toFixed(2)}</td></tr>`;
+        ? `<tr><td colspan="3" class="total">Subtotal</td><td class="total" style="text-align:right">${fmt(subtotal)}</td></tr>`
+          + `<tr><td colspan="3" class="total">Tax (${taxRate.toFixed(2)}%)</td><td class="total" style="text-align:right">${fmt(taxAmount)}</td></tr>`
+          + `<tr><td colspan="3" class="total">Discount</td><td class="total" style="text-align:right">${fmt(discount)}</td></tr>`
+          + `<tr><td colspan="3" class="total">Total</td><td class="total" style="text-align:right">${fmt(total)}</td></tr>`
+        : `<tr><td class="total">Total</td><td class="total" style="text-align:right">${fmt(total)}</td></tr>`;
       const table = hasItems
         ? `<table><thead><tr><th>Description</th><th style="width:100px;text-align:right">Qty</th><th style="width:140px;text-align:right">Unit Price</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`
         : `<table><thead><tr><th>Description</th><th style="width:140px;text-align:right">Amount</th></tr></thead><tbody>${rows}${totalsRow}</tbody></table>`;
@@ -629,8 +709,12 @@ export default function FinancePage() {
     try {
       const items = Array.isArray(q.items) ? q.items : [];
       const rows = items.length > 0
-        ? items.map(it => `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td style="text-align:right">${Number(it.qty||0)}</td><td style="text-align:right">${Number(it.unitPrice||0).toFixed(2)}</td><td style="text-align:right">${(Number(it.qty||0)*Number(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('')
-        : `<tr><td>Quoted Total</td><td></td><td></td><td style="text-align:right">${Number(q.total||0).toFixed(2)}</td></tr>`;
+        ? items.map(it => {
+            const cur=(q.currency||financeDefaults.currency||'USD').toUpperCase();
+            const fmt=(n)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:cur}).format(Number(n||0));}catch{return `${cur} ${Number(n||0).toFixed(2)}`;} };
+            return `<tr><td>${(it.description||'').replace(/</g,'&lt;')}</td><td style="text-align:right">${Number(it.qty||0)}</td><td style="text-align:right">${fmt(Number(it.unitPrice||0))}</td><td style="text-align:right">${fmt(Number(it.qty||0)*Number(it.unitPrice||0))}</td></tr>`;
+          }).join('')
+        : (()=>{ const cur=(q.currency||financeDefaults.currency||'USD').toUpperCase(); const fmt=(n)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:cur}).format(Number(n||0));}catch{return `${cur} ${Number(n||0).toFixed(2)}`;} }; return `<tr><td>Quoted Total</td><td></td><td></td><td style="text-align:right">${fmt(Number(q.total||0))}</td></tr>`; })();
       const table = `
         <table style="width:100%;border-collapse:collapse;margin-top:12px">
           <thead><tr><th style="text-align:left;border:1px solid #e5e7eb;padding:8px">Description</th><th style="width:100px;text-align:right;border:1px solid #e5e7eb;padding:8px">Qty</th><th style="width:140px;text-align:right;border:1px solid #e5e7eb;padding:8px">Unit Price</th><th style="width:140px;text-align:right;border:1px solid #e5e7eb;padding:8px">Amount</th></tr></thead>
@@ -964,7 +1048,16 @@ export default function FinancePage() {
                 }}
               >{t}</button>
             ))}
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+              {/* Global Finance Settings and Base Currency */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setShowFinanceDefaults(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Finance Settings</button>
+                <button onClick={() => setShowRecurring(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Recurring</button>
+              </div>
+              <label style={{ fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary }}>
+                Base Currency
+                <CurrencySelect value={fxRates.base || financeDefaults.currency || 'USD'} onChange={(code) => { try { setFxRates(r => ({ ...r, base: code })); } catch {}; try { setFinanceDefaults(s => ({ ...s, currency: code })); } catch {}; fetchFxRates(code); }} />
+              </label>
               <Stat label={`Expenses (${baseCurrency})`} value={expTotal} />
               <Stat label={`Invoiced (${baseCurrency})`} value={invTotalBase} />
               <Stat label={`Unpaid (${baseCurrency})`} value={invUnpaidBase} />
@@ -1001,7 +1094,7 @@ export default function FinancePage() {
                       <button onClick={() => setShowNewInvoice(true)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>+ New Invoice</button>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 100px 100px 120px 200px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 100px 220px 220px 200px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
                     <div onClick={() => toggleInvoiceSort('projectName')} style={{ cursor: 'pointer', userSelect: 'none' }}>
                       Project {invoiceSort.key === 'projectName' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
                     </div>
@@ -1012,9 +1105,9 @@ export default function FinancePage() {
                       Due {invoiceSort.key === 'dueDate' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
                     </div>
                     <div>Tax %</div>
-                    <div>Discount</div>
+                    <div>Discount (Cust/Base)</div>
                     <div onClick={() => toggleInvoiceSort('total')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                      Amount {invoiceSort.key === 'total' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
+                      Amount (Cust/Base) {invoiceSort.key === 'total' ? (invoiceSort.dir === 'asc' ? '↑' : '↓') : ''}
                     </div>
                     <div>Actions</div>
                   </div>
@@ -1023,13 +1116,37 @@ export default function FinancePage() {
                       <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No invoices</div>
                     ) : (
                       sortedInvoices.map((r, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 100px 100px 120px 200px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 100px 220px 220px 200px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.projectName}</div>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.client || 'Client'}</div>
                           <div>{r.dueDate || '-'}</div>
                           <div>{Number(r.taxRate || 0).toFixed(2)}</div>
-                          <div>{Number(r.discount || 0).toFixed(2)}</div>
-                          <div>{r.total.toFixed(2)} {r.currency || financeDefaults.currency || 'USD'}</div>
+                          <div>{(() => { const cur=(r.currency||financeDefaults.currency||'USD').toUpperCase(); const base=(fxRates.base||financeDefaults.currency||'USD').toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const disc=Number(r.discount||0); const rate = (cur===base)?1:(fxRates.rates?.[cur] ? (1/Number(fxRates.rates[cur])) : 1); const discBase = disc * rate; return `${fmt(disc,cur)}  •  ${fmt(discBase,base)}`; })()}</div>
+                          <div>{(() => {
+                            const cur = (r.currency || '').toUpperCase() || (financeDefaults.currency || 'USD').toUpperCase();
+                            const base = (fxRates.base || financeDefaults.currency || 'USD').toUpperCase();
+                            const fmt = (n, c) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } };
+                            const tot = Number(r.total || 0);
+                            // Prefer stored base if present and matches current base
+                            let totBase = (typeof r.totalBase === 'number' && r.totalBase >= 0 && (r.fxBase||'').toUpperCase() === base)
+                              ? Number(r.totalBase)
+                              : NaN;
+                            // Fallback: use saved fxRate if base matches
+                            if (!Number.isFinite(totBase)) {
+                              const savedRate = Number(r.fxRate || 0);
+                              if (savedRate > 0 && (r.fxBase||'').toUpperCase() === base && cur !== base) {
+                                totBase = tot / savedRate;
+                              }
+                            }
+                            // Last resort: use global fxRates table
+                            if (!Number.isFinite(totBase)) {
+                              if (cur === base) totBase = tot; else {
+                                const tableRate = Number(fxRates.rates?.[cur] || 0);
+                                totBase = tableRate > 0 ? (tot / tableRate) : tot; // if missing, show same
+                              }
+                            }
+                            return `${fmt(tot, cur)}  •  ${fmt(totBase, base)}`;
+                          })()}</div>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             <button onClick={() => { setEditInvoice(r); setShowInvoiceModal(true); }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Edit</button>
                             <select value={r.status} onChange={(e) => updateInvoiceStatus(r, e.target.value)} style={{ padding: '4px 6px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
@@ -1068,11 +1185,11 @@ export default function FinancePage() {
                       <button onClick={() => setShowImportExpenses(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Import CSV</button>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 120px 160px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 220px 160px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
                     <div onClick={() => toggleExpenseSort('projectName')} style={{ cursor: 'pointer', userSelect: 'none' }}>Project {expenseSort.key === 'projectName' ? (expenseSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
                     <div onClick={() => toggleExpenseSort('category')} style={{ cursor: 'pointer', userSelect: 'none' }}>Category {expenseSort.key === 'category' ? (expenseSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
                     <div onClick={() => toggleExpenseSort('date')} style={{ cursor: 'pointer', userSelect: 'none' }}>Date {expenseSort.key === 'date' ? (expenseSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
-                    <div onClick={() => toggleExpenseSort('amount')} style={{ cursor: 'pointer', userSelect: 'none' }}>Amount {expenseSort.key === 'amount' ? (expenseSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
+                    <div onClick={() => toggleExpenseSort('amount')} style={{ cursor: 'pointer', userSelect: 'none' }}>Amount (Cust/Base) {expenseSort.key === 'amount' ? (expenseSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
                     <div>Receipt</div>
                   </div>
                   <div style={{ marginTop: 6 }}>
@@ -1080,11 +1197,32 @@ export default function FinancePage() {
                       <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No expenses</div>
                     ) : (
                       sortedExpenses.map((r, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 120px 160px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 220px 160px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.projectName}</div>
                           <div>{r.category || '-'}</div>
                           <div>{r.date || '-'}</div>
-                          <div>{r.amount.toFixed(2)}</div>
+                          <div>{(() => {
+                            const cur = (r.currency || '').toUpperCase() || (financeDefaults.currency || 'USD').toUpperCase();
+                            const base = (fxRates.base || financeDefaults.currency || 'USD').toUpperCase();
+                            const fmt = (n, c) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } };
+                            const amt = Number(r.amount || 0);
+                            let amtBase = (typeof r.amountBase === 'number' && r.amountBase >= 0 && (r.fxBase||'').toUpperCase() === base)
+                              ? Number(r.amountBase)
+                              : NaN;
+                            if (!Number.isFinite(amtBase)) {
+                              const savedRate = Number(r.fxRate || 0);
+                              if (savedRate > 0 && (r.fxBase||'').toUpperCase() === base && cur !== base) {
+                                amtBase = amt / savedRate;
+                              }
+                            }
+                            if (!Number.isFinite(amtBase)) {
+                              if (cur === base) amtBase = amt; else {
+                                const tableRate = Number(fxRates.rates?.[cur] || 0);
+                                amtBase = tableRate > 0 ? (amt / tableRate) : amt;
+                              }
+                            }
+                            return `${fmt(amt, cur)}  •  ${fmt(amtBase, base)}`;
+                          })()}</div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             {r.receiptUrl ? (
                               <a href={r.receiptUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>View</a>
@@ -1118,22 +1256,18 @@ export default function FinancePage() {
                 <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.lg, fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold, marginBottom: 8 }}>Quotes</div>
                 <div style={{ marginTop: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => setShowFinanceDefaults(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Finance Settings</button>
-                      <button onClick={() => setShowRecurring(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Recurring</button>
-                      <button onClick={() => setShowReminders(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Send Reminders</button>
-                    </div>
+                    <div style={{ display: 'flex', gap: 8 }} />
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => exportQuotesCsv(quoteRows)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Export CSV</button>
                       <button onClick={() => setShowQuoteTemplates(true)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Templates</button>
                       <button onClick={() => { setNewQuote({ customerId: '', isNewCustomer: false, newCustomer: { name: '', email: '', phone: '', company: '' }, client: '', validUntil: '', items: [], taxRate: financeDefaults.taxRate || 0, discount: financeDefaults.discount || 0, currency: financeDefaults.currency || 'USD' }); setShowQuoteModal(true); }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>+ New Quote</button>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 160px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 220px 160px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600, background: '#f9fafb', padding: '6px 8px', borderRadius: 8 }}>
                     <div onClick={() => toggleQuoteSort('client')} style={{ cursor: 'pointer', userSelect: 'none' }}>Client {quoteSort.key === 'client' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
                     <div onClick={() => toggleQuoteSort('projectName')} style={{ cursor: 'pointer', userSelect: 'none' }}>Project {quoteSort.key === 'projectName' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
                     <div onClick={() => toggleQuoteSort('validUntil')} style={{ cursor: 'pointer', userSelect: 'none' }}>Valid Until {quoteSort.key === 'validUntil' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
-                    <div onClick={() => toggleQuoteSort('total')} style={{ cursor: 'pointer', userSelect: 'none' }}>Amount {quoteSort.key === 'total' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
+                    <div onClick={() => toggleQuoteSort('total')} style={{ cursor: 'pointer', userSelect: 'none' }}>Amount (Cust/Base) {quoteSort.key === 'total' ? (quoteSort.dir === 'asc' ? '↑' : '↓') : ''}</div>
                     <div>Actions</div>
                   </div>
                   <div style={{ marginTop: 6 }}>
@@ -1141,11 +1275,32 @@ export default function FinancePage() {
                       <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No quotes</div>
                     ) : (
                       sortedQuotes.map((r, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 120px 160px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 220px 160px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.client || 'Client'}</div>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.projectName}</div>
                           <div>{r.validUntil || '-'}</div>
-                          <div>{r.total.toFixed(2)} {r.currency || financeDefaults.currency || 'USD'}</div>
+                          <div>{(() => {
+                            const cur = (r.currency || '').toUpperCase() || (financeDefaults.currency || 'USD').toUpperCase();
+                            const base = (fxRates.base || financeDefaults.currency || 'USD').toUpperCase();
+                            const fmt = (n, c) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } };
+                            const disc = Number(r.discount || 0);
+                            let discBase = (typeof r.discountBase === 'number' && r.discountBase >= 0 && (r.fxBase||'').toUpperCase() === base)
+                              ? Number(r.discountBase)
+                              : NaN;
+                            if (!Number.isFinite(discBase)) {
+                              const savedRate = Number(r.fxRate || 0);
+                              if (savedRate > 0 && (r.fxBase||'').toUpperCase() === base && cur !== base) {
+                                discBase = disc / savedRate;
+                              }
+                            }
+                            if (!Number.isFinite(discBase)) {
+                              if (cur === base) discBase = disc; else {
+                                const tableRate = Number(fxRates.rates?.[cur] || 0);
+                                discBase = tableRate > 0 ? (disc / tableRate) : disc;
+                              }
+                            }
+                            return `${fmt(disc, cur)}  •  ${fmt(discBase, base)}`;
+                          })()}</div>
                           <div style={{ display: 'flex', gap: 8 }}>
                             <button disabled={r.status === 'converted' || r.type === 'quote_draft'} onClick={() => convertQuoteToInvoice(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: (r.status === 'converted' || r.type === 'quote_draft') ? 'not-allowed' : 'pointer', opacity: (r.status === 'converted' || r.type === 'quote_draft') ? 0.6 : 1, fontSize: 12 }}>{r.type === 'quote_draft' ? 'Draft (convert via project)' : (r.status === 'converted' ? 'Converted' : 'Convert to Invoice')}</button>
                             <button onClick={() => printQuote(r)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: DESIGN_SYSTEM.colors.background.primary, cursor: 'pointer', fontSize: 12 }}>Print</button>
@@ -1303,7 +1458,21 @@ export default function FinancePage() {
             <textarea value={fxRatesEditText} onChange={(e) => setFxRatesEditText(e.target.value)} style={{ width: '100%', minHeight: 120, boxSizing: 'border-box' }} />
           </Field>
           <div style={{ fontSize: 12, color: '#6b7280' }}>Example: {`{"EUR":0.93,"GBP":0.80}`}</div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+            <button onClick={async () => {
+              // Auto-fetch FX rates from exchangerate.host using API key
+              try {
+                const base = fxRatesEditBase || 'USD';
+                const resp = await fetch(`https://api.exchangerate.host/latest?base=${encodeURIComponent(base)}&api_key=${encodeURIComponent(EXR_API_KEY)}`);
+                const data = await resp.json();
+                if (data && data.rates) {
+                  const pick = ['USD','EUR','GBP','MYR','SGD','AUD','CAD','JPY','CNY','INR'];
+                  const subset = {};
+                  pick.forEach(k => { if (data.rates[k] != null) subset[k] = Number(data.rates[k]); });
+                  setFxRatesEditText(JSON.stringify(subset, null, 2));
+                }
+              } catch {}
+            }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Auto‑Fetch Rates</button>
             <button onClick={() => { try { const rates = JSON.parse(fxRatesEditText || '{}'); setFxRates({ base: fxRatesEditBase || 'USD', rates }); } catch {} }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Preview Rates</button>
           </div>
         </Modal>
@@ -1547,7 +1716,7 @@ export default function FinancePage() {
       {showNewInvoice && (
         <Modal title="Create Invoice" onClose={() => setShowNewInvoice(false)} onSave={async () => {
           try {
-            if (!newInvoice.projectId || !newInvoice.client) { setShowNewInvoice(false); return; }
+            if (!newInvoice.projectId) { setShowNewInvoice(false); return; }
             const seq = Number(financeDefaults.nextInvoiceNumber || 1);
             const prefix = financeDefaults.invoiceNumberPrefix || 'INV-';
             const number = `${prefix}${String(seq).padStart(4, '0')}`;
@@ -1557,9 +1726,18 @@ export default function FinancePage() {
             const taxAmount = subtotal * (taxRate/100);
             const discount = Number(newInvoice.discount || financeDefaults.discount || 0);
             const total = subtotal + taxAmount - discount;
+            // Derive client from project's attached customer if any
+            let derivedClient = '';
+            try {
+              const pref = doc(db, 'projects', newInvoice.projectId);
+              const psnap = await getDoc(pref);
+              const pdata = psnap.exists() ? psnap.data() : {};
+              if (pdata.customerName) derivedClient = pdata.customerName;
+              else if (pdata.client) derivedClient = pdata.client;
+            } catch {}
             await addDoc(collection(db, 'projects', newInvoice.projectId, 'invoices'), {
               number,
-              client: newInvoice.client,
+              client: derivedClient,
               dueDate: newInvoice.dueDate || '',
               items,
               subtotal,
@@ -1568,8 +1746,8 @@ export default function FinancePage() {
               discount,
               total,
               currency: (newInvoice.currency || financeDefaults.currency || 'USD'),
-              fxBase: (fxRates.base || financeDefaults.currency || 'USD'),
-              fxRate: getFxRate(newInvoice.currency || financeDefaults.currency || 'USD'),
+              fxBase: (newInvoice.fxBase || fxRates.base || financeDefaults.currency || 'USD'),
+              fxRate: Number(newInvoice.fxRate || getFxRate(newInvoice.currency || financeDefaults.currency || 'USD')),
               status: 'unpaid',
               createdAt: serverTimestamp()
             });
@@ -1579,7 +1757,7 @@ export default function FinancePage() {
               }, { merge: true });
             }
             setShowNewInvoice(false);
-            setNewInvoice({ projectId: '', client: '', dueDate: '', items: [], taxRate: 0, discount: 0, currency: '' });
+            setNewInvoice({ projectId: '', client: '', dueDate: '', items: [], taxRate: 0, discount: 0, currency: '', fxBase: 'USD', fxRate: 1 });
           } catch { setShowNewInvoice(false); }
         }}>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -1589,24 +1767,23 @@ export default function FinancePage() {
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}
               </select>
             </Field>
-            <Field label="Client">
-              <select value={newInvoice.client} onChange={(e) => {
-                const name = e.target.value;
-                setNewInvoice(v => {
-                  const cust = customersBook.find(c => c.name === name);
-                  return { ...v, client: name, currency: cust?.currency || v.currency, taxRate: cust?.taxRate ?? v.taxRate };
-                });
-              }} style={{ width: '100%' }}>
-                <option value="">Select or type</option>
-                {customersBook.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Currency (ISO)"><input value={newInvoice.currency} onChange={(e) => setNewInvoice(v => ({ ...v, currency: e.target.value }))} /></Field>
+            <Field label="Currency (ISO)"><CurrencySelect value={newInvoice.currency} onChange={(code) => setNewInvoice(v => ({ ...v, currency: code }))} /></Field>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <Field label="Due Date"><input type="date" value={newInvoice.dueDate || ''} onChange={(e) => setNewInvoice(v => ({ ...v, dueDate: e.target.value }))} /></Field>
             <Field label="Tax Rate %"><input type="number" step="0.01" value={newInvoice.taxRate ?? financeDefaults.taxRate} onChange={(e) => setNewInvoice(v => ({ ...v, taxRate: Number(e.target.value||0) }))} /></Field>
             <Field label="Discount"><input type="number" step="0.01" value={newInvoice.discount ?? financeDefaults.discount} onChange={(e) => setNewInvoice(v => ({ ...v, discount: Number(e.target.value||0) }))} /></Field>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Field label="FX Rate (to base)"><div style={{ display: 'flex', gap: 8 }}><input type="number" step="0.0001" value={newInvoice.fxRate} onChange={(e) => setNewInvoice(v => ({ ...v, fxRate: Number(e.target.value||1) }))} /><button onClick={async () => {
+              try {
+                const base = (fxRates.base || financeDefaults.currency || 'USD').toUpperCase();
+                const cur = (newInvoice.currency || financeDefaults.currency || 'USD').toUpperCase();
+                const resp = await fetch(`https://api.exchangerate.host/latest?base=${encodeURIComponent(base)}&api_key=${encodeURIComponent(EXR_API_KEY)}`);
+                const data = await resp.json();
+                if (data && data.rates && data.rates[cur] != null) setNewInvoice(v => ({ ...v, fxRate: Number(data.rates[cur]) }));
+              } catch {}
+            }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Fetch Rate</button></div></Field>
           </div>
           <div>
             <div style={{ fontWeight: 600, margin: '8px 0' }}>Items</div>
@@ -1638,12 +1815,14 @@ export default function FinancePage() {
                 const tax = subtotal * (Number(taxRateEff)/100);
                 const discount = Number(discountEff);
                 const total = subtotal + tax - discount;
+                const cur = (newInvoice.currency || financeDefaults.currency || 'USD').toUpperCase();
+                const fmt = (n) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur }).format(Number(n||0)); } catch { return `${cur} ${Number(n||0).toFixed(2)}`; } };
                 return (
                   <>
-                    <div>Subtotal: {subtotal.toFixed(2)}</div>
-                    <div>Tax: {tax.toFixed(2)}</div>
-                    <div>Discount: {discount.toFixed(2)}</div>
-                    <div style={{ fontWeight: 700 }}>Total: {total.toFixed(2)}</div>
+                    <div>Subtotal: {fmt(subtotal)}</div>
+                    <div>Tax: {fmt(tax)}</div>
+                    <div>Discount: {fmt(discount)}</div>
+                    <div style={{ fontWeight: 700 }}>Total: {fmt(total)}</div>
                   </>
                 );
               })()}

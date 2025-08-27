@@ -8,7 +8,7 @@ import CustomerReminders from './Reminders';
 import StatusPanel from './StatusPanel';
 import TaskManager from './TaskManager';
 import { db } from '../../firebase';
-import { collection, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
 export default function ProjectWorkspacePanel({
   selectedProjectId,
@@ -140,8 +140,11 @@ export default function ProjectWorkspacePanel({
                 <TaskManager 
                   stage={stage}
                   stageData={currentStageData}
-                  setStageData={setCurrentStageData}
-                  readOnly={true}
+                  setStageData={(next) => {
+                    try { setCurrentStageData(next); } catch {}
+                    try { if (customerId) updateDoc(doc(db, 'customerProfiles', customerId), { stageData: next }); } catch {}
+                  }}
+                  readOnly={false}
                 />
               )}
             />

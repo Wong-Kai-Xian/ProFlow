@@ -379,7 +379,7 @@ export default function TeamPage() {
                 e.target.style.boxShadow = "0 12px 30px rgba(102, 126, 234, 0.4)";
               }}
             >
-              <FaUserPlus /> Invite New Member
+              <FaUserPlus /> Invite Member
             </button>
 
             <button

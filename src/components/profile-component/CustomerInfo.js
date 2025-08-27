@@ -4,6 +4,7 @@ import Card from "./Card";
 import { BUTTON_STYLES, INPUT_STYLES } from "./constants"; // Import BUTTON_STYLES and INPUT_STYLES
 import { COLORS } from "./constants"; // Import COLORS
 import GmailAIReplyModal from "./GmailAIReplyModal";
+import { MdEmail } from 'react-icons/md';
 
 export default function CustomerInfo({ data, setCustomerProfile, onSave }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -100,10 +101,19 @@ export default function CustomerInfo({ data, setCustomerProfile, onSave }) {
               <strong>Email:</strong> {data.email}
               {data?.email ? (
                 <button
+                  title="Email"
+                  aria-label="Email"
                   onClick={() => setGmailAiOpen(true)}
-                  style={{ ...BUTTON_STYLES.secondary, marginLeft: "8px" }}
+                  style={{
+                    ...BUTTON_STYLES.secondary,
+                    marginLeft: "8px",
+                    padding: "6px 10px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
                 >
-                  Email
+                  <MdEmail style={{ fontSize: 16 }} />
                 </button>
               ) : null}
             </p>
@@ -116,6 +126,18 @@ export default function CustomerInfo({ data, setCustomerProfile, onSave }) {
         onClose={() => setGmailAiOpen(false)}
         toEmail={data?.email || ''}
         toName={data?.name || ''}
+        onAddCustomerTasks={(items) => {
+          try {
+            const evt = new CustomEvent('proflow-add-customer-tasks', { detail: { items } });
+            window.dispatchEvent(evt);
+          } catch {}
+        }}
+        onAddCustomerNotes={(items) => {
+          try {
+            const evt = new CustomEvent('proflow-add-customer-notes', { detail: { items } });
+            window.dispatchEvent(evt);
+          } catch {}
+        }}
       />
     </Card>
   );

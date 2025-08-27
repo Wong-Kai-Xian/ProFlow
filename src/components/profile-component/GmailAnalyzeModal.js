@@ -53,23 +53,29 @@ export default function GmailAnalyzeModal({ isOpen, onClose, toEmail = '', toNam
   useEffect(() => { if (!isOpen) { setMessages([]); setSummary(''); setActions([]); setSentiment(''); setError(''); } }, [isOpen]);
 
   const ensureToken = async () => {
-    if (!clientId) throw new Error('Missing google_oauth_client_id in localStorage');
-    await loadScriptOnce('https://accounts.google.com/gsi/client');
-    return await new Promise((resolve, reject) => {
-      const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: GMAIL_SCOPES,
-        prompt: '',
-        callback: (resp) => resp?.access_token ? resolve(resp.access_token) : reject(new Error('Failed to get access token'))
+    try {
+      if (!clientId) return null;
+      await loadScriptOnce('https://accounts.google.com/gsi/client');
+      return await new Promise((resolve) => {
+        try {
+          const tokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: GMAIL_SCOPES,
+            prompt: 'none',
+            callback: (resp) => resolve(resp?.access_token || null)
+          });
+          tokenClient.requestAccessToken({ prompt: 'none' });
+        } catch { resolve(null); }
       });
-      tokenClient.requestAccessToken();
-    });
+    } catch { return null; }
   };
 
   const fetchLatest = async () => {
     try {
       setLoading(true); setError('');
-      const at = token || await ensureToken(); if (!token) setToken(at);
+      const at = token || await ensureToken();
+      if (!at) { setLoading(false); return; }
+      if (!token) setToken(at);
       const q = `from:${toEmail} OR to:${toEmail}`;
       const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=3`, { headers: { Authorization: `Bearer ${at}` } });
       if (!res.ok) throw new Error(`List error ${res.status}`);

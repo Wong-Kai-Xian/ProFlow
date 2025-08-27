@@ -28,6 +28,8 @@ try {
   if (!localStorage.getItem('news_api_key')) localStorage.setItem('news_api_key', '7c735c9ec34b40909ba52317409fe094');
   // Set Google OAuth Client ID for Gmail API usage
   localStorage.setItem('google_oauth_client_id', '278194395988-j80gutsoppmqg3jt4cf4tleoma60kc6h.apps.googleusercontent.com');
+  // Opt-in Gmail poller by default (can be toggled off by removing this key in console)
+  if (!localStorage.getItem('gmail_poll_enabled')) localStorage.setItem('gmail_poll_enabled', '1');
 } catch {}
 
 const root = ReactDOM.createRoot(document.getElementById("root"));

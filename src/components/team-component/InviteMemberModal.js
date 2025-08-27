@@ -5,46 +5,27 @@ import { db } from "../../firebase"; // Import db
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import ShareInviteLinkModal from './ShareInviteLinkModal';
-import { getAcceptedTeamMembers } from '../../services/teamService';
+// Removed accepted team member add-existing flow from Team modal
 
 export default function InviteMemberModal({ isOpen, onClose, onInvite, currentUser }) {
   const [activeTab, setActiveTab] = useState('invite'); // 'invite' or 'add'
   const [email, setEmail] = useState('');
-  const [selectedMember, setSelectedMember] = useState('');
+  // removed selectedMember for add-existing flow
   const [showShareModal, setShowShareModal] = useState(false);
   const [signupLink, setSignupLink] = useState('');
   const [foundUserEmail, setFoundUserEmail] = useState(''); // To store the email of the found user if invited
   const [isLoading, setIsLoading] = useState(false); // Add loading state
-  const [acceptedMembers, setAcceptedMembers] = useState([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
+  // removed acceptedMembers state
   const auth = getAuth();
 
-  // Fetch accepted members when modal opens
-  useEffect(() => {
-    const fetchAcceptedMembers = async () => {
-      if (!isOpen || !currentUser) return;
-      
-      setLoadingMembers(true);
-      try {
-        const members = await getAcceptedTeamMembers(currentUser);
-        setAcceptedMembers(members);
-      } catch (error) {
-        console.error("Error fetching accepted team members:", error);
-        setAcceptedMembers([]);
-      } finally {
-        setLoadingMembers(false);
-      }
-    };
-
-    fetchAcceptedMembers();
-  }, [isOpen, currentUser]);
+  // removed fetching accepted members
 
   // Reset states when modal closes
   useEffect(() => {
     if (!isOpen) {
       setActiveTab('invite');
       setEmail('');
-      setSelectedMember('');
+      // removed selectedMember reset
       setIsLoading(false);
       setShowShareModal(false);
       setSignupLink('');
@@ -52,32 +33,7 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite, currentUs
     }
   }, [isOpen]);
 
-  const handleAddExistingMember = async (e) => {
-    e.preventDefault();
-    
-    if (isLoading || !selectedMember) return;
-    
-    setIsLoading(true);
-    try {
-      const member = acceptedMembers.find(m => m.id === selectedMember);
-      if (member) {
-        onInvite(member.email, true, null, { 
-          id: 'existing-' + member.id, 
-          fromUserId: auth.currentUser.uid, 
-          toUserId: member.id, 
-          toUserEmail: member.email, 
-          status: "accepted", 
-          timestamp: new Date() 
-        });
-        onClose();
-      }
-    } catch (error) {
-      console.error("Error adding member: ", error);
-      alert("Error adding member. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // removed handleAddExistingMember
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -140,7 +96,7 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite, currentUs
       <div style={modalContentStyle}>
         <h2 style={{ color: COLORS.text, marginBottom: '20px' }}>Team Member Management</h2>
         
-        {/* Tabs */}
+        {/* Invite only */}
         <div style={{ display: 'flex', borderBottom: '1px solid #e0e0e0', marginBottom: '20px' }}>
           <button
             onClick={() => setActiveTab('invite')}
@@ -156,21 +112,6 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite, currentUs
             }}
           >
             Invite New Member
-          </button>
-          <button
-            onClick={() => setActiveTab('add')}
-            style={{
-              ...BUTTON_STYLES.secondary,
-              borderRadius: '0',
-              border: 'none',
-              borderBottom: activeTab === 'add' ? '2px solid ' + COLORS.primary : '2px solid transparent',
-              backgroundColor: 'transparent',
-              color: activeTab === 'add' ? COLORS.primary : COLORS.lightText,
-              padding: '10px 20px',
-              fontWeight: activeTab === 'add' ? '600' : '400'
-            }}
-          >
-            Add Existing Member
           </button>
         </div>
 
@@ -188,7 +129,16 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite, currentUs
               style={{ ...INPUT_STYLES.base, marginBottom: '15px' }}
               required
             />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+              <button type="button" onClick={() => {
+                try {
+                  const signupUrl = `${window.location.origin}/signup`;
+                  const text = `Join me on ProFlow to collaborate: ${signupUrl}`;
+                  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                } catch {}
+              }} style={BUTTON_STYLES.secondary}>
+                Share via WhatsApp
+              </button>
               <button type="button" onClick={onClose} style={BUTTON_STYLES.secondary}>
                 Cancel
               </button>
@@ -206,55 +156,7 @@ export default function InviteMemberModal({ isOpen, onClose, onInvite, currentUs
             </div>
           </form>
         )}
-
-        {/* Add Existing Member Tab */}
-        {activeTab === 'add' && (
-          <form onSubmit={handleAddExistingMember}>
-            <p style={{ color: COLORS.lightText, marginBottom: '15px', fontSize: '14px' }}>
-              Add someone from your accepted team members list.
-            </p>
-            {loadingMembers ? (
-              <p style={{ color: COLORS.lightText, fontSize: '14px' }}>Loading team members...</p>
-            ) : (
-              <select
-                value={selectedMember}
-                onChange={(e) => setSelectedMember(e.target.value)}
-                style={{ ...INPUT_STYLES.base, marginBottom: '15px' }}
-                required
-              >
-                <option value="">-- Select from accepted team --</option>
-                {acceptedMembers.map(member => (
-                  <option key={member.id} value={member.id}>
-                    {member.name} ({member.email})
-                  </option>
-                ))}
-              </select>
-            )}
-            
-            {acceptedMembers.length === 0 && !loadingMembers && (
-              <p style={{ color: COLORS.lightText, fontSize: '12px', marginBottom: '15px' }}>
-                No accepted team members available. Send invitations first.
-              </p>
-            )}
-            
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button type="button" onClick={onClose} style={BUTTON_STYLES.secondary}>
-                Cancel
-              </button>
-              <button 
-                type="submit" 
-                disabled={isLoading || !selectedMember}
-                style={{
-                  ...BUTTON_STYLES.primary,
-                  opacity: (isLoading || !selectedMember) ? 0.6 : 1,
-                  cursor: (isLoading || !selectedMember) ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {isLoading ? 'Adding...' : 'Add Member'}
-              </button>
-            </div>
-          </form>
-        )}
+        {/* removed Add Existing Member Tab */}
       </div>
       <ShareInviteLinkModal 
         isOpen={showShareModal} 

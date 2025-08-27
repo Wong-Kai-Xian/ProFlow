@@ -43,6 +43,9 @@ export default function ProjectQuotesPanel({ projectId, hideConvert = false }) {
         taxAmount,
         discount,
         total: Number((q.total ?? total) || 0),
+        currency: q.currency || undefined,
+        fxBase: q.fxBase || undefined,
+        fxRate: q.fxRate || undefined,
         status: 'unpaid',
         notes: 'Created from quote',
         createdAt: serverTimestamp()
@@ -90,7 +93,7 @@ export default function ProjectQuotesPanel({ projectId, hideConvert = false }) {
                 <div>{q.validUntil || '-'}</div>
                 <div>{Number(q.taxRate || 0).toFixed(2)}</div>
                 <div>{Number(q.discount || 0).toFixed(2)}</div>
-                <div>{Number(q.total||0).toFixed(2)}</div>
+                <div>{(() => { const cur=(q.currency||'USD').toUpperCase(); try { return new Intl.NumberFormat(undefined,{style:'currency',currency:cur}).format(Number(q.total||0)); } catch { return `${cur} ${Number(q.total||0).toFixed(2)}`; } })()}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button onClick={() => printQuote(q)} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>Print</button>
                   {!hideConvert && (

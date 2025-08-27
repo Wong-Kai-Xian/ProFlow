@@ -108,7 +108,7 @@ function collectAttachmentsFromPayload(payload, list = []) {
   return list;
 }
 
-export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toName = '' }) {
+export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toName = '', onAddCustomerTasks, onAddCustomerNotes }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [token, setToken] = useState('');
@@ -156,8 +156,7 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
     setSubject('');
     setBody('');
     setSelected(null);
-    // Mark that user authorized Gmail at least once
-    try { localStorage.setItem('gmail_authorized', '1'); } catch {}
+    // Do not trigger any auth UI when just opening modal
   }, [isOpen]);
 
   // Auto-load latest threads when modal opens for reply/analyze
@@ -175,17 +174,19 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
     try {
       if (!clientId) { throw new Error('Missing google_oauth_client_id in localStorage'); }
       await loadScriptOnce('https://accounts.google.com/gsi/client');
-      return await new Promise((resolve, reject) => {
-        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: GMAIL_SCOPES,
-          prompt: 'none',
-          callback: (resp) => {
-            if (resp?.access_token) { resolve(resp.access_token); }
-            else { reject(new Error('Failed to get access token')); }
-          },
-        });
-        tokenClient.requestAccessToken({ prompt: 'none' });
+      return await new Promise((resolve) => {
+        try {
+          const tokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: GMAIL_SCOPES,
+            prompt: 'none',
+            callback: (resp) => {
+              if (resp?.access_token) { resolve(resp.access_token); }
+              else { resolve(null); }
+            },
+          });
+          tokenClient.requestAccessToken({ prompt: 'none' });
+        } catch { resolve(null); }
       });
     } catch (e) {
       throw e;
@@ -437,6 +438,8 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
   const [summary, setSummary] = useState('');
   const [sentiment, setSentiment] = useState('');
   const [actions, setActions] = useState([]);
+  const [pickActionsOpen, setPickActionsOpen] = useState(false);
+  const [selectedActions, setSelectedActions] = useState({});
 
   const analyze = async () => {
     try {
@@ -685,6 +688,9 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {actions.length === 0 ? <li style={{ color: '#6b7280' }}>None</li> : actions.map((a, idx) => <li key={idx}>{a}</li>)}
                   </ul>
+                  <div style={{ marginTop: 10 }}>
+                    <button onClick={() => setPickActionsOpen(true)} style={{ ...BUTTON_STYLES.secondary }}>Use Selected Actions…</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -726,6 +732,55 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
         {/* Toast container */}
         <div id="gmail-ai-toast-root" style={{ position: 'fixed', top: 16, right: 16, zIndex: 2147483647 }} />
       </div>
+      {pickActionsOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2147483647 }}>
+          <div style={{ background: '#fff', borderRadius: 10, width: 560, maxWidth: '95vw', padding: 16, boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontWeight: 700 }}>Select Action Items</div>
+              <button onClick={() => setPickActionsOpen(false)} style={{ ...BUTTON_STYLES.secondary }}>Close</button>
+            </div>
+            <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+              {actions.length === 0 ? (
+                <div style={{ color: '#6b7280' }}>No actions available.</div>
+              ) : actions.map((a, idx) => (
+                <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 6 }}>
+                  <input type="checkbox" checked={!!selectedActions[idx]} onChange={(e) => setSelectedActions(prev => ({ ...prev, [idx]: e.target.checked }))} />
+                  <span>{a}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 12 }}>
+              <button onClick={() => setSelectedActions({})} style={{ ...BUTTON_STYLES.secondary }}>Clear</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={async () => {
+                  try {
+                    const picked = actions.filter((_, i) => selectedActions[i]);
+                    if (picked.length === 0) { setPickActionsOpen(false); return; }
+                    setBody(prev => {
+                      const more = `\n\nNotes from analysis:\n- ${picked.join('\n- ')}`;
+                      return (prev || '') + more;
+                    });
+                    try { if (typeof onAddCustomerNotes === 'function') onAddCustomerNotes(picked); } catch {}
+                    setPickActionsOpen(false);
+                  } catch {}
+                }} style={{ ...BUTTON_STYLES.secondary }}>Add to Notes</button>
+                <button onClick={async () => {
+                  try {
+                    const picked = actions.filter((_, i) => selectedActions[i]);
+                    if (picked.length === 0) { setPickActionsOpen(false); return; }
+                    setBody(prev => {
+                      const more = `\n\nAction checklist:\n${picked.map(t => `[] ${t}`).join('\n')}`;
+                      return (prev || '') + more;
+                    });
+                    try { if (typeof onAddCustomerTasks === 'function') onAddCustomerTasks(picked); } catch {}
+                    setPickActionsOpen(false);
+                  } catch {}
+                }} style={{ ...BUTTON_STYLES.primary }}>Add as Tasks</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body
   );

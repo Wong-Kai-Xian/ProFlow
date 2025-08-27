@@ -36,16 +36,28 @@ export default function NotificationAgent() {
     const unsubs = [];
     // Lightweight Gmail new mail poller -> notify center
     const startGmailPoll = async () => {
-      if (gmailStartedRef.current) return;
+      if (gmailStartedRef.current || window.__proflow_gmail_poll_started) return;
+      // Cooldown to prevent repeated token requests on route changes if not authorized
+      try {
+        const until = Number(window.__proflow_gmail_fail_until || 0);
+        if (until && Date.now() < until) return;
+      } catch {}
       // Only start if user previously authorized and opted-in to Gmail polling
       const isAuthorized = localStorage.getItem('gmail_authorized') === '1';
       const isOptIn = localStorage.getItem('gmail_poll_enabled') === '1';
       if (!isAuthorized || !isOptIn) return;
       try {
         let accessToken = await ensureGmailToken();
-        if (!accessToken) return;
+        if (!accessToken) {
+          try { window.__proflow_gmail_fail_until = Date.now() + 10 * 60 * 1000; } catch {}
+          return;
+        }
         gmailStartedRef.current = true;
-        let lastIds = new Set(JSON.parse(localStorage.getItem(`proflow_gmail_seen_${currentUser.uid}`) || '[]'));
+        window.__proflow_gmail_poll_started = true;
+        const seenKey = `proflow_gmail_seen_${currentUser.uid}`;
+        const initKey = `proflow_gmail_seen_init_${currentUser.uid}`;
+        let lastIds = new Set(JSON.parse(localStorage.getItem(seenKey) || '[]'));
+        let initialized = (localStorage.getItem(initKey) === '1');
         const poll = async () => {
           try {
             // refresh token silently each poll to avoid expiry issues
@@ -55,6 +67,14 @@ export default function NotificationAgent() {
             const json = await res.json();
             const msgs = Array.isArray(json.messages) ? json.messages : [];
             const nowSeen = new Set(msgs.map(m => m.id));
+            // Initialize baseline without notifying existing emails
+            if (!initialized) {
+              localStorage.setItem(seenKey, JSON.stringify(Array.from(nowSeen)));
+              localStorage.setItem(initKey, '1');
+              initialized = true;
+              lastIds = nowSeen;
+              return;
+            }
             for (const m of msgs) {
               if (!lastIds.has(m.id)) {
                 try {
@@ -70,15 +90,68 @@ export default function NotificationAgent() {
                 } catch {}
               }
             }
-            localStorage.setItem(`proflow_gmail_seen_${currentUser.uid}`, JSON.stringify(Array.from(nowSeen)));
+            localStorage.setItem(seenKey, JSON.stringify(Array.from(nowSeen)));
             lastIds = nowSeen;
           } catch {}
         };
-        await poll();
+        // Delay initial poll slightly to avoid doing it immediately on route change mounts
+        const start = () => { try { poll(); } catch {} };
         gmailIntervalRef.current = setInterval(poll, 60000); // 1 minute
+        setTimeout(start, 5000);
       } catch {}
     };
     startGmailPoll();
+
+    // Toast only for new gmail notifications; suppress first snapshot
+    try {
+      const notifCol = collection(db, 'users', currentUser.uid, 'notifications');
+      let seededToasts = false;
+      const seenToastIds = new Set();
+      const unsubToasts = onSnapshot(notifCol, (snap) => {
+        try {
+          if (!seededToasts) {
+            snap.docs.forEach(d => seenToastIds.add(d.id));
+            seededToasts = true;
+            return;
+          }
+          const added = snap.docChanges().filter(ch => ch.type === 'added');
+          if (added.length === 0) return;
+          added.forEach(ch => {
+            const id = ch.doc.id;
+            const last = ch.doc.data();
+            if (seenToastIds.has(id)) return;
+            seenToastIds.add(id);
+            if (last.origin !== 'gmail') return; // only toast gmail arrivals
+            const rootId = 'global-toast-root';
+            let root = document.getElementById(rootId);
+            if (!root) {
+              root = document.createElement('div');
+              root.id = rootId;
+              root.style.position = 'fixed';
+              root.style.top = '16px';
+              root.style.right = '16px';
+              root.style.zIndex = 2147483647;
+              document.body.appendChild(root);
+            }
+            const el = document.createElement('div');
+            el.style.marginTop = '8px';
+            el.style.background = '#111827';
+            el.style.color = '#fff';
+            el.style.padding = '10px 12px';
+            el.style.borderRadius = '10px';
+            el.style.boxShadow = '0 10px 30px rgba(0,0,0,0.25)';
+            el.style.display = 'flex';
+            el.style.alignItems = 'center';
+            el.style.gap = '8px';
+            el.innerHTML = `<span>📬</span><div><div style="font-weight:700;font-size:13px;">${(last.title||'New email')}</div><div style=\"font-size:12px;opacity:0.85;\">${(last.message||'')}</div></div>`;
+            root.appendChild(el);
+            setTimeout(() => { try { el.style.opacity = '0'; el.style.transform = 'translateY(-6px)'; } catch {} }, 2000);
+            setTimeout(() => { try { root.removeChild(el); } catch {} }, 2400);
+          });
+        } catch {}
+      });
+      unsubs.push(unsubToasts);
+    } catch {}
 
     // Incoming customer shares → notify receiver
     try {

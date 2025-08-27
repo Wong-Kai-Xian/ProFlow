@@ -130,6 +130,42 @@ export default function CustomerProfile() {
     return () => window.removeEventListener('proflow-ai-actions', handler);
   }, []);
 
+  // Listen to add tasks/notes events from Email modal
+  useEffect(() => {
+    const onAddTasks = (e) => {
+      try {
+        const items = e?.detail?.items || [];
+        if (!Array.isArray(items) || items.length === 0) return;
+        const current = currentStage || STAGES[0];
+        const prevStage = JSON.parse(JSON.stringify(stageData || {}));
+        const prevTasks = (prevStage[current]?.tasks || []);
+        const merged = [...prevTasks, ...items.map(t => ({ name: String(t), done: false }))];
+        const next = { ...prevStage, [current]: { ...(prevStage[current] || {}), tasks: merged } };
+        setStageData(next);
+        if (id) { try { updateDoc(doc(db, 'customerProfiles', id), { stageData: next }); } catch {} }
+      } catch {}
+    };
+    const onAddNotes = (e) => {
+      try {
+        const items = e?.detail?.items || [];
+        if (!Array.isArray(items) || items.length === 0) return;
+        const current = currentStage || STAGES[0];
+        const prevStage = JSON.parse(JSON.stringify(stageData || {}));
+        const prevNotes = (prevStage[current]?.notes || []);
+        const merged = [...prevNotes, ...items.map(t => String(t))];
+        const next = { ...prevStage, [current]: { ...(prevStage[current] || {}), notes: merged } };
+        setStageData(next);
+        if (id) { try { updateDoc(doc(db, 'customerProfiles', id), { stageData: next }); } catch {} }
+      } catch {}
+    };
+    window.addEventListener('proflow-add-customer-tasks', onAddTasks);
+    window.addEventListener('proflow-add-customer-notes', onAddNotes);
+    return () => {
+      window.removeEventListener('proflow-add-customer-tasks', onAddTasks);
+      window.removeEventListener('proflow-add-customer-notes', onAddNotes);
+    };
+  }, [currentStage, stageData, id]);
+
   // Helper to check if a stage is completed
   const isStageCompleted = (stageName) => stageData[stageName]?.completed;
 
@@ -893,6 +929,9 @@ export default function CustomerProfile() {
                   discount,
                   taxAmount,
                   total,
+                  currency: q.currency || undefined,
+                  fxBase: q.fxBase || undefined,
+                  fxRate: q.fxRate || undefined,
                   status: q.status || 'draft',
                   createdAt: serverTimestamp(),
                   movedFromCustomerId: id,
@@ -1286,8 +1325,26 @@ export default function CustomerProfile() {
                 </h2>
               </div>
               <div style={{ padding: DESIGN_SYSTEM.spacing.base, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, position: 'relative' }}>
                   <input value={shareEmail} onChange={(e) => setShareEmail(e.target.value)} placeholder="Share with email" style={{ flex: 1, padding: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8 }} />
+                  {(() => {
+                    try {
+                      const q = (shareEmail || '').toLowerCase().trim();
+                      if (!q) return null;
+                      const matches = (customerTeamMembersDetails || []).filter(m => (m.email || '').toLowerCase().includes(q)).slice(0,5);
+                      if (matches.length === 0) return null;
+                      return (
+                        <div style={{ position: 'absolute', top: 40, left: 0, right: 120, background: '#fff', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8, zIndex: 20, maxHeight: 220, overflowY: 'auto' }}>
+                          {matches.map(m => (
+                            <div key={m.uid} onMouseDown={(ev) => { ev.preventDefault(); setShareEmail(m.email || ''); }} style={{ padding: 8, cursor: 'pointer', borderBottom: '1px solid #f3f4f6' }}>
+                              <div style={{ fontWeight: 600, fontSize: 13 }}>{m.name || m.email}</div>
+                              <div style={{ fontSize: 12, color: '#6b7280' }}>{m.email}</div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    } catch { return null; }
+                  })()}
                   <button
                     onClick={async () => {
                       if (!id || !currentUser || !shareEmail.trim()) return;

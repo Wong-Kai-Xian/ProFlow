@@ -11,7 +11,7 @@ export default function InviteMemberModal({ isOpen, onClose, forumId, forumName,
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState('');
-  const [activeTab, setActiveTab] = useState('shareId'); // 'shareId' or 'addExisting'
+  const [activeTab, setActiveTab] = useState('shareId'); // Only shareId tab kept
   const [acceptedMembers, setAcceptedMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [selectedMember, setSelectedMember] = useState('');
@@ -179,7 +179,7 @@ export default function InviteMemberModal({ isOpen, onClose, forumId, forumName,
               fontWeight: activeTab === 'addExisting' ? '600' : '400'
             }}
           >
-            Add Team Member
+            Add Existing Member
           </button>
         </div>
 
@@ -228,10 +228,24 @@ export default function InviteMemberModal({ isOpen, onClose, forumId, forumName,
                 </button>
               </div>
             </div>
+            <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => {
+                  try {
+                    const text = `Join our forum ${forumName || ''}. Forum ID: ${forumId}`.trim();
+                    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+                    window.open(url, '_blank');
+                  } catch {}
+                }}
+                style={{ ...BUTTON_STYLES.primary }}
+              >
+                Share via WhatsApp
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Add Team Member Tab */}
+        {/* Add Existing Team Member Tab */}
         {activeTab === 'addExisting' && (
           <div>
             <p style={{ color: COLORS.lightText, marginBottom: '15px', fontSize: '14px' }}>

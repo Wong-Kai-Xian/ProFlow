@@ -3,11 +3,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { db } from '../../firebase';
 import { collection, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { DESIGN_SYSTEM, getCardStyle } from '../../styles/designSystem';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function CustomerQuotesPanel({ customerId, projects = [], customerProfile = {}, readOnly = false }) {
+  const { currentUser } = useAuth();
   const [quotes, setQuotes] = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ client: '', validUntil: '', taxRate: 0, discount: 0, items: [] });
+  const [form, setForm] = useState({ client: '', validUntil: '', taxRate: 0, discount: 0, items: [], currency: '', fxBase: 'USD', fxRate: 1 });
+  const [globalFxBase, setGlobalFxBase] = useState('USD');
   
 
   useEffect(() => {
@@ -22,11 +25,27 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
     return () => unsub();
   }, [customerId]);
 
+  useEffect(() => {
+    const loadBase = async () => {
+      try {
+        if (!currentUser?.uid) return;
+        const ref = doc(db, 'users', currentUser.uid, 'settings', 'financeDefaults');
+        const snap = await (await import('firebase/firestore')).getDoc(ref);
+        if (snap.exists()) {
+          const d = snap.data() || {};
+          const b = (d.fxRates?.base || d.currency || 'USD');
+          setGlobalFxBase((b || 'USD').toUpperCase());
+        }
+      } catch {}
+    };
+    loadBase();
+  }, [currentUser?.uid]);
+
   const subtotal = useMemo(() => (form.items || []).reduce((a,it)=> a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0), [form.items]);
 
   const openNew = () => {
     const defaultTax = (customerProfile?.financeDefaults?.taxRate ?? customerProfile?.taxRate ?? 0);
-    setForm({ client: customerProfile?.name || customerProfile?.email || '', validUntil: '', taxRate: defaultTax, discount: 0, items: [{ description: '', qty: 1, unitPrice: 0 }] });
+    setForm({ client: customerProfile?.name || customerProfile?.email || '', validUntil: '', taxRate: defaultTax, discount: 0, items: [{ description: '', qty: 1, unitPrice: 0 }], currency: (customerProfile?.financeDefaults?.currency || customerProfile?.currency || ''), fxBase: (customerProfile?.financeDefaults?.currency || 'USD'), fxRate: 1 });
     setShowModal(true);
   };
 
@@ -40,7 +59,12 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
       const discount = Number(form.discount || 0);
       const taxAmount = subtotal * (taxRate / 100);
       const total = subtotal + taxAmount - discount;
-      await addDoc(col, { client: form.client || '', validUntil: form.validUntil || '', taxRate, discount, items, subtotal, taxAmount, total, status: 'draft', createdAt: serverTimestamp() });
+      const cur = (form.currency || 'USD').toUpperCase();
+      const base = (globalFxBase || 'USD').toUpperCase();
+      const rate = Number(form.fxRate || 1);
+      const isSame = cur === base;
+      const toBase = (n) => isSame ? Number(n||0) : Number(n||0) / (rate || 1);
+      await addDoc(col, { client: form.client || '', validUntil: form.validUntil || '', taxRate, discount, items, subtotal, taxAmount, total, currency: (form.currency || undefined), fxBase: (globalFxBase || undefined), fxRate: Number(form.fxRate || 1), subtotalBase: toBase(subtotal), taxAmountBase: toBase(taxAmount), discountBase: toBase(discount), totalBase: toBase(total), status: 'draft', createdAt: serverTimestamp() });
       setShowModal(false);
     } catch {}
   };
@@ -72,12 +96,12 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
         </div>
       </div>
       <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 100px 240px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 220px 220px 240px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
           <div>Client</div>
           <div>Valid Until</div>
           <div>Tax %</div>
-          <div>Discount</div>
-          <div>Total</div>
+          <div>Discount (Cust/Base)</div>
+          <div>Total (Cust/Base)</div>
           <div>Actions</div>
         </div>
         <div style={{ marginTop: 6 }}>
@@ -85,12 +109,12 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
             <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No draft quotes</div>
           ) : (
             quotes.map((q) => (
-              <div key={q.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 100px 240px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+              <div key={q.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 100px 220px 240px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.client || 'Client'}</div>
                 <div>{q.validUntil || '-'}</div>
                 <div>{Number(q.taxRate || 0).toFixed(2)}</div>
-                <div>{Number(q.discount || 0).toFixed(2)}</div>
-                <div>{Number(q.total||0).toFixed(2)}</div>
+                <div>{(() => { const cur=(q.currency||'USD').toUpperCase(); const base=(globalFxBase||'USD').toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const disc=Number(q.discount||0); let discBase=(typeof q.discountBase==='number' && (q.fxBase||'').toUpperCase()===base)?Number(q.discountBase):NaN; if(!Number.isFinite(discBase)){ const savedRate=Number(q.fxRate||0); if(savedRate>0 && (q.fxBase||'').toUpperCase()===base && cur!==base){ discBase=disc/savedRate; } } if(!Number.isFinite(discBase)){ if(cur===base) discBase=disc; else discBase=disc; } return `${fmt(disc,cur)}  •  ${fmt(discBase,base)}`; })()}</div>
+                <div>{(() => { const cur=(q.currency||'USD').toUpperCase(); const base=(globalFxBase||'USD').toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const tot=Number(q.total||0); let totBase=(typeof q.totalBase==='number' && (q.fxBase||'').toUpperCase()===base)?Number(q.totalBase):NaN; if(!Number.isFinite(totBase)){ const savedRate=Number(q.fxRate||0); if(savedRate>0 && (q.fxBase||'').toUpperCase()===base && cur!==base){ totBase=tot/savedRate; } } if(!Number.isFinite(totBase)){ if(cur===base) totBase=tot; else totBase=tot; } return `${fmt(tot,cur)}  •  ${fmt(totBase,base)}`; })()}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button onClick={() => printDraft(q)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Print</button>
                   {!readOnly && (
@@ -131,6 +155,39 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
                 <input type="number" step="0.01" value={form.discount} onChange={(e)=> setForm(f=>({ ...f, discount: e.target.value }))} />
               </label>
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                <span style={{ marginBottom: 4 }}>Currency (ISO)</span>
+                <input list="proflow-currencies" value={form.currency} onChange={(e)=> setForm(f=>({ ...f, currency: (e.target.value||'').toUpperCase() }))} placeholder="e.g., USD" />
+                <datalist id="proflow-currencies">
+                  <option value="USD" />
+                  <option value="EUR" />
+                  <option value="GBP" />
+                  <option value="MYR" />
+                  <option value="SGD" />
+                  <option value="AUD" />
+                  <option value="CAD" />
+                  <option value="JPY" />
+                  <option value="CNY" />
+                  <option value="INR" />
+                </datalist>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                <span style={{ marginBottom: 4 }}>FX Rate (to base)</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input type="number" step="0.0001" value={form.fxRate} onChange={(e)=> setForm(f=>({ ...f, fxRate: e.target.value }))} placeholder="1.0" />
+                  <button onClick={async () => {
+                    try {
+                      const base = (globalFxBase || 'USD').toUpperCase();
+                      const cur = (form.currency || 'USD').toUpperCase();
+                      const resp = await fetch(`https://api.exchangerate.host/latest?base=${encodeURIComponent(base)}&api_key=eb803299bef64dc80de605049727ccf4`);
+                      const data = await resp.json();
+                      if (data && data.rates && data.rates[cur] != null) setForm(f => ({ ...f, fxRate: Number(data.rates[cur]) }));
+                    } catch {}
+                  }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Fetch Rate</button>
+                </div>
+              </label>
+            </div>
             <div style={{ fontWeight: 600, margin: '8px 0' }}>Items</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 140px 80px', gap: 8, fontSize: 12, color: '#6b7280' }}>
               <div>Description</div>
@@ -156,12 +213,18 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
                 const tax = subtotal * (Number(form.taxRate||0)/100);
                 const discount = Number(form.discount||0);
                 const total = subtotal + tax - discount;
+                const cur = (form.currency || 'USD').toUpperCase();
+                const base = (globalFxBase || 'USD').toUpperCase();
+                const rate = Number(form.fxRate || 1);
+                const isSame = cur === base;
+                const toBase = (n) => isSame ? Number(n||0) : Number(n||0) / (rate || 1);
+                const fmt = (n,c) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } };
                 return (
                   <>
-                    <div>Subtotal: {subtotal.toFixed(2)}</div>
-                    <div>Tax: {tax.toFixed(2)}</div>
-                    <div>Discount: {discount.toFixed(2)}</div>
-                    <div style={{ fontWeight: 700, color: '#111827' }}>Total: {total.toFixed(2)}</div>
+                    <div>Subtotal: {fmt(subtotal, cur)} ({fmt(toBase(subtotal), base)})</div>
+                    <div>Tax: {fmt(tax, cur)} ({fmt(toBase(tax), base)})</div>
+                    <div>Discount: {fmt(discount, cur)} ({fmt(toBase(discount), base)})</div>
+                    <div style={{ fontWeight: 700, color: '#111827' }}>Total: {fmt(total, cur)} ({fmt(toBase(total), base)})</div>
                   </>
                 );
               })()}
