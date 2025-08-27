@@ -780,7 +780,14 @@ export default function CustomerProfileList() {
                         fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
                         color: DESIGN_SYSTEM.colors.text.secondary
                       }}>
-                        {customer.lastContact !== "N/A" ? new Date(customer.lastContact).toLocaleDateString() : "N/A"}
+                        {(() => {
+                          try {
+                            const ts = customer.lastContact;
+                            if (!ts) return 'N/A';
+                            const d = ts?.toDate ? ts.toDate() : (typeof ts === 'number' ? new Date(ts) : (typeof ts === 'string' ? new Date(ts) : null));
+                            return d ? d.toLocaleDateString() : 'N/A';
+                          } catch { return 'N/A'; }
+                        })()}
                       </div>
                     </div>
                   </div>
