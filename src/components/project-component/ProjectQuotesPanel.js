@@ -33,6 +33,16 @@ export default function ProjectQuotesPanel({ projectId, hideConvert = false }) {
       const taxAmount = subtotal * (taxRate / 100);
       const discount = Number(q.discount || 0);
       const total = subtotal + taxAmount - discount;
+      // Compute USD base amounts using quote FX info; default base to USD
+      const base = 'USD';
+      const cur = (q.currency || 'USD').toUpperCase();
+      const fxBase = (q.fxBase || 'USD').toUpperCase();
+      const rate = Number(q.fxRate || 1);
+      const toUsd = (n) => (cur === base) ? Number(n || 0) : (fxBase === base && rate > 0 ? Number(n || 0) / rate : Number(n || 0));
+      const subtotalBase = (typeof q.subtotalBase === 'number') ? Number(q.subtotalBase) : toUsd(subtotal);
+      const taxAmountBase = (typeof q.taxAmountBase === 'number') ? Number(q.taxAmountBase) : toUsd(taxAmount);
+      const discountBase = (typeof q.discountBase === 'number') ? Number(q.discountBase) : toUsd(discount);
+      const totalBase = (typeof q.totalBase === 'number') ? Number(q.totalBase) : toUsd(total);
 
       const invRef = await addDoc(collection(db, 'projects', projectId, 'invoices'), {
         client: q.client || '',
@@ -44,8 +54,12 @@ export default function ProjectQuotesPanel({ projectId, hideConvert = false }) {
         discount,
         total: Number((q.total ?? total) || 0),
         currency: q.currency || undefined,
-        fxBase: q.fxBase || (q.currency || undefined),
+        fxBase: base,
         fxRate: Number(q.fxRate || 1),
+        subtotalBase,
+        taxAmountBase,
+        discountBase,
+        totalBase,
         status: 'unpaid',
         notes: 'Created from quote',
         createdAt: serverTimestamp()
