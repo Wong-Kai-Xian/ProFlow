@@ -21,6 +21,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 import { useNavigate } from 'react-router-dom';
 import ConfirmationModal from '../components/common/ConfirmationModal';
+import GoogleEmbedModal from '../components/common/GoogleEmbedModal';
+import AttachDriveFileModal from '../components/common/AttachDriveFileModal';
+import PreviewModal from '../components/common/PreviewModal';
+import DriveShareModal from '../components/common/DriveShareModal';
+import FileActionsModal from '../components/common/FileActionsModal';
 
 const DEFAULT_STAGES = ["Planning", "Development", "Testing", "Completed"];
 
@@ -114,6 +119,209 @@ export default function ProjectDetail() {
   const [isUploadingProjectFile, setIsUploadingProjectFile] = useState(false);
   const [showAddFileModal, setShowAddFileModal] = useState(false);
   const filePickerRef = useRef(null);
+  // Drive/embed state
+  const [showGoogleViewer, setShowGoogleViewer] = useState(false);
+  const [googleViewerType, setGoogleViewerType] = useState('');
+  const [googleViewerId, setGoogleViewerId] = useState('');
+  const [googleViewerTitle, setGoogleViewerTitle] = useState('');
+  const [showAttachDrive, setShowAttachDrive] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
+  const [shareFile, setShareFile] = useState(null);
+  const [driveAuthNeeded, setDriveAuthNeeded] = useState(false);
+  const [driveAuthError, setDriveAuthError] = useState('');
+  const [actionsFile, setActionsFile] = useState(null);
+
+  const loadScriptOnce = (src) => new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const s = document.createElement('script'); s.src = src; s.async = true; s.onload = resolve; s.onerror = () => reject(new Error('Failed to load ' + src)); document.head.appendChild(s);
+  });
+
+  const ensureDriveToken = async () => {
+    const clientId = localStorage.getItem('google_oauth_client_id') || '';
+    if (!clientId) return null;
+    await loadScriptOnce('https://accounts.google.com/gsi/client');
+    return await new Promise((resolve) => {
+      try {
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+          prompt: 'none',
+          callback: (resp) => resolve(resp?.access_token || null)
+        });
+        tokenClient.requestAccessToken({ prompt: 'none' });
+      } catch { resolve(null); }
+    });
+  };
+
+  // Proactively check Drive auth when the Project Files card is in view
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await ensureDriveToken();
+        setDriveAuthNeeded(!token);
+      } catch {
+        setDriveAuthNeeded(true);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  const createGoogleFile = async (kind) => {
+    try {
+      if (!projectId) return;
+      let token = await ensureDriveToken();
+      if (!token) {
+        // Try interactive consent if silent fails
+        const clientId = localStorage.getItem('google_oauth_client_id') || '';
+        if (clientId) {
+          await loadScriptOnce('https://accounts.google.com/gsi/client');
+          token = await new Promise((resolve) => {
+            try {
+              const tokenClient = window.google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+                prompt: 'consent',
+                callback: (resp) => resolve(resp?.access_token || null)
+              });
+              tokenClient.requestAccessToken({ prompt: 'consent' });
+            } catch { resolve(null); }
+          });
+        }
+      }
+      if (!token) { setDriveAuthNeeded(true); alert('Google Drive authorization required.'); return; }
+      const mimeMap = {
+        gdoc: 'application/vnd.google-apps.document',
+        gsheet: 'application/vnd.google-apps.spreadsheet',
+        gslide: 'application/vnd.google-apps.presentation'
+      };
+      const typeLabel = kind === 'gdoc' ? 'Document' : kind === 'gsheet' ? 'Spreadsheet' : 'Presentation';
+      const defaultName = `${typeLabel} - ${projectData?.name || 'Untitled'} - ${new Date().toLocaleDateString()}`;
+      const res = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink,parents&supportsAllDrives=true', {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: defaultName, mimeType: mimeMap[kind], parents: ['root'] })
+      });
+      if (!res.ok) {
+        try {
+          const err = await res.json();
+          const msg = err?.error?.message || `HTTP ${res.status}`;
+          if (res.status === 401 || res.status === 403) setDriveAuthNeeded(true);
+          alert(`Failed to create file: ${msg}`);
+        } catch { alert('Failed to create file.'); }
+        return;
+      }
+      const json = await res.json();
+      const driveId = json.id;
+      const entry = {
+        name: json.name || defaultName,
+        type: kind,
+        driveId,
+        url: kind === 'gdoc' ? `https://docs.google.com/document/d/${driveId}/edit` : kind === 'gsheet' ? `https://docs.google.com/spreadsheets/d/${driveId}/edit` : `https://docs.google.com/presentation/d/${driveId}/edit`,
+        createdAt: Date.now()
+      };
+      await updateDoc(doc(db, 'projects', projectId), { files: Array.isArray(projectData?.files) ? [...projectData.files, entry] : [entry] });
+      setGoogleViewerType(kind); setGoogleViewerId(driveId); setGoogleViewerTitle(entry.name); setShowGoogleViewer(true);
+    } catch { alert('Failed to create Google file.'); }
+  };
+
+  const copyLink = async (url) => { try { await navigator.clipboard.writeText(url || ''); } catch {} };
+
+  const renameGoogleFile = async (file, providedName) => {
+    try {
+      if (!projectId || !file?.driveId) return;
+      let nextName = providedName;
+      if (!nextName) {
+        nextName = window.prompt('Rename file to:', file.name || 'Untitled') || '';
+      }
+      if (!nextName || nextName === file.name) return;
+      let token = await ensureDriveToken();
+      if (!token) {
+        const clientId = localStorage.getItem('google_oauth_client_id') || '';
+        if (clientId) {
+          await loadScriptOnce('https://accounts.google.com/gsi/client');
+          token = await new Promise((resolve) => {
+            try {
+              const tokenClient = window.google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+                prompt: 'consent',
+                callback: (resp) => resolve(resp?.access_token || null)
+              });
+              tokenClient.requestAccessToken({ prompt: 'consent' });
+            } catch { resolve(null); }
+          });
+        }
+      }
+      if (!token) { setDriveAuthNeeded(true); alert('Authorization required to rename.'); return; }
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.driveId}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nextName }) });
+      if (!res.ok) { alert('Failed to rename on Drive'); return; }
+      const next = (Array.isArray(projectData?.files) ? projectData.files : []).map((f) => (f.driveId === file.driveId ? { ...f, name: nextName } : f));
+      await updateDoc(doc(db, 'projects', projectId), { files: next });
+      setProjectData((prev) => ({ ...(prev || {}), files: next }));
+    } catch { alert('Rename failed'); }
+  };
+
+  const deleteGoogleFile = async (file) => {
+    try {
+      if (!projectId || !file?.driveId) return;
+      const sure = window.confirm('Delete this file from Drive and remove from project?');
+      if (!sure) return;
+      let token = await ensureDriveToken();
+      if (!token) {
+        const clientId = localStorage.getItem('google_oauth_client_id') || '';
+        if (clientId) {
+          await loadScriptOnce('https://accounts.google.com/gsi/client');
+          token = await new Promise((resolve) => {
+            try {
+              const tokenClient = window.google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+                prompt: 'consent',
+                callback: (resp) => resolve(resp?.access_token || null)
+              });
+              tokenClient.requestAccessToken({ prompt: 'consent' });
+            } catch { resolve(null); }
+          });
+        }
+      }
+      if (!token) { setDriveAuthNeeded(true); alert('Authorization required to delete.'); return; }
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.driveId}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true }) });
+      if (!res.ok) { alert('Failed to delete on Drive'); return; }
+      const next = (Array.isArray(projectData?.files) ? projectData.files : []).filter((f) => f.driveId !== file.driveId);
+      await updateDoc(doc(db, 'projects', projectId), { files: next });
+      setProjectData((prev) => ({ ...(prev || {}), files: next }));
+    } catch { alert('Delete failed'); }
+  };
+
+  const shareGoogleFile = async (file) => {
+    try {
+      if (!file?.driveId) return;
+      let token = await ensureDriveToken();
+      if (!token) {
+        const clientId = localStorage.getItem('google_oauth_client_id') || '';
+        if (clientId) {
+          await loadScriptOnce('https://accounts.google.com/gsi/client');
+          token = await new Promise((resolve) => {
+            try {
+              const tokenClient = window.google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+                prompt: 'consent',
+                callback: (resp) => resolve(resp?.access_token || null)
+              });
+              tokenClient.requestAccessToken({ prompt: 'consent' });
+            } catch { resolve(null); }
+          });
+        }
+      }
+      if (!token) { setDriveAuthNeeded(true); alert('Authorization required to share.'); return; }
+      const permRes = await fetch(`https://www.googleapis.com/drive/v3/files/${file.driveId}/permissions?supportsAllDrives=true`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ role: 'reader', type: 'anyone', allowFileDiscovery: false }) });
+      if (!permRes.ok) { alert('Failed to set sharing permission'); return; }
+      const getRes = await fetch(`https://www.googleapis.com/drive/v3/files/${file.driveId}?fields=webViewLink&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${token}` } });
+      let link = file.url || '';
+      if (getRes.ok) { const j = await getRes.json(); if (j.webViewLink) link = j.webViewLink; }
+      try { await navigator.clipboard.writeText(link); alert('Share link copied'); } catch { alert('Share enabled'); }
+    } catch { alert('Share failed'); }
+  };
   
   // Confirmation modal state
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -1178,77 +1386,67 @@ export default function ProjectDetail() {
               </h3>
             </div>
             <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>Upload project files</div>
-                <button
-                  onClick={() => setShowAddFileModal(true)}
-                  style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}
-                >
-                  + Add
-                </button>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: DESIGN_SYSTEM.typography.fontSize.sm, color: DESIGN_SYSTEM.colors.text.secondary }}>Upload or create files</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button onClick={() => setShowAddFileModal(true)} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>+ Upload</button>
+                  <button onClick={() => createGoogleFile('gdoc')} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>+ Google Doc</button>
+                  <button onClick={() => createGoogleFile('gsheet')} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>+ Google Sheet</button>
+                  <button onClick={() => createGoogleFile('gslide')} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>+ Google Slides</button>
+                  <button onClick={() => setShowAttachDrive(true)} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>Attach from Drive</button>
+                </div>
               </div>
+              {driveAuthNeeded && (
+                <div style={{ marginBottom: 10, padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8, background: '#fffbe6', color: '#7c6f00', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div>
+                    <div>Authorize Google Drive to create, attach, and share files.</div>
+                    {driveAuthError && (<div style={{ color: '#b45309', fontSize: 12, marginTop: 4 }}>Error: {driveAuthError}</div>)}
+                  </div>
+                  <button onClick={async () => {
+                    const clientId = localStorage.getItem('google_oauth_client_id') || '';
+                    if (!clientId) return;
+                    await loadScriptOnce('https://accounts.google.com/gsi/client');
+                    const t = await new Promise((resolve) => {
+                      try {
+                        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+                          client_id: clientId,
+                          scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+                          prompt: 'consent',
+                          callback: (resp) => {
+                            if (resp?.access_token) { setDriveAuthError(''); resolve(resp.access_token); }
+                            else { setDriveAuthError(resp?.error || 'Authorization failed'); resolve(null); }
+                          }
+                        });
+                        tokenClient.requestAccessToken({ prompt: 'consent' });
+                      } catch { resolve(null); }
+                    });
+                    if (t) setDriveAuthNeeded(false);
+                  }} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>Authorize Google Drive</button>
+                </div>
+              )}
               {Array.isArray(projectData?.files) && projectData.files.length > 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
                   {projectData.files.map((f, i) => (
                     <div key={i} style={{ display: 'contents' }}>
-                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {(f.type === 'image' ? '🖼️' : '📄')} {f.name || 'File'}
+                      <div
+                        style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8, cursor: 'default' }}
+                        onDoubleClick={() => {
+                          if (f.type === 'gdoc' || f.type === 'gsheet' || f.type === 'gslide') {
+                            setGoogleViewerType(f.type); setGoogleViewerId(f.driveId); setGoogleViewerTitle(f.name || 'Google File'); setShowGoogleViewer(true);
+                          } else if (f.url) {
+                            setPreviewFile(f); setShowPreview(true);
+                          }
+                        }}
+                        title="Double-click to open"
+                      >
+                        {f.type === 'gdoc' && (<span style={{ padding: '2px 6px', borderRadius: 9999, background: '#1a73e8', color: '#fff', fontSize: 10, fontWeight: 600 }}>Doc</span>)}
+                        {f.type === 'gsheet' && (<span style={{ padding: '2px 6px', borderRadius: 9999, background: '#34a853', color: '#fff', fontSize: 10, fontWeight: 600 }}>Sheet</span>)}
+                        {f.type === 'gslide' && (<span style={{ padding: '2px 6px', borderRadius: 9999, background: '#fbbc05', color: '#111827', fontSize: 10, fontWeight: 700 }}>Slides</span>)}
+                        {(!f.type || (f.type !== 'gdoc' && f.type !== 'gsheet' && f.type !== 'gslide')) && (<span>{f.type === 'image' ? '🖼️' : '📄'}</span>)}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name || 'File'}</span>
                       </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {f.url && (
-                          <a href={f.url} target="_blank" rel="noreferrer" style={{ ...getButtonStyle('secondary', 'projects'), padding: '4px 8px', fontSize: 12 }}>Open</a>
-                        )}
-                        <button
-                          onClick={() => {
-                            // Step 1 modal
-                            setConfirmModalConfig({
-                              title: 'Delete File',
-                              message: `Delete "${f.name || 'this file'}" from project files?`,
-                              confirmText: 'Delete',
-                              confirmButtonType: 'danger',
-                              onConfirm: async () => {
-                                // Close first and open second modal
-                                setShowConfirmModal(false);
-                                setTimeout(() => {
-                                  setConfirmModalConfig({
-                                    title: 'Confirm Permanent Delete',
-                                    message: 'This will permanently delete the file from storage and cannot be undone.',
-                                    confirmText: 'Delete Permanently',
-                                    confirmButtonType: 'danger',
-                                    onConfirm: async () => {
-                                      try {
-                                        if (!f.url) { alert('No URL to delete'); return; }
-                                        let fileRef;
-                                        try {
-                                          const m = (f.url || '').match(/\/v0\/b\/([^/]+)\/o\/([^?]+)/);
-                                          if (m) {
-                                            const objectPath = decodeURIComponent(m[2]);
-                                            fileRef = storageRef(storage, objectPath);
-                                          }
-                                        } catch {}
-                                        if (fileRef) {
-                                          await deleteObject(fileRef);
-                                        }
-                                        const remaining = (projectData.files || []).filter((_, idx) => idx !== i);
-                                        await updateDoc(doc(db, 'projects', projectId), { files: remaining });
-                                      } catch (e) {
-                                        console.error('Failed to delete file:', e);
-                                        alert('Failed to delete file');
-                                      } finally {
-                                        setShowConfirmModal(false);
-                                      }
-                                    }
-                                  });
-                                  setShowConfirmModal(true);
-                                }, 0);
-                              }
-                            });
-                            setShowConfirmModal(true);
-                          }}
-                          style={{ ...getButtonStyle('secondary', 'projects'), padding: '4px 8px', fontSize: 12 }}
-                        >
-                          Delete
-                        </button>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button onClick={() => setActionsFile(f)} style={{ ...getButtonStyle('secondary', 'projects'), padding: '4px 8px', fontSize: 12 }}>Edit</button>
                       </div>
                     </div>
                   ))}
@@ -1582,6 +1780,70 @@ export default function ProjectDetail() {
         </div>
       </div>
       </div>
+      {/* Drive & embed modals */}
+      <GoogleEmbedModal isOpen={showGoogleViewer} onClose={() => setShowGoogleViewer(false)} fileType={googleViewerType} driveId={googleViewerId} title={googleViewerTitle} />
+      <AttachDriveFileModal isOpen={showAttachDrive} onClose={() => setShowAttachDrive(false)} onSelect={async (file) => {
+        try {
+          if (!projectId) return;
+          const next = Array.isArray(projectData?.files) ? [...projectData.files, file] : [file];
+          await updateDoc(doc(db, 'projects', projectId), { files: next });
+          setProjectData(prev => ({ ...(prev || {}), files: next }));
+          setShowAttachDrive(false);
+        } catch { alert('Failed to attach Drive file'); }
+      }} />
+      <PreviewModal isOpen={showPreview} onClose={() => setShowPreview(false)} file={previewFile} />
+      <DriveShareModal isOpen={!!shareFile} onClose={() => setShareFile(null)} file={shareFile} />
+      <FileActionsModal
+        isOpen={!!actionsFile}
+        file={actionsFile}
+        onClose={() => setActionsFile(null)}
+        onOpen={(f) => { setActionsFile(null); setGoogleViewerType(f.type); setGoogleViewerId(f.driveId); setGoogleViewerTitle(f.name || 'Google File'); setShowGoogleViewer(true); }}
+        onPreview={(f) => { setActionsFile(null); setPreviewFile(f); setShowPreview(true); }}
+        onCopyLink={() => {}}
+        onShare={(f) => { setActionsFile(null); setShareFile(f); }}
+        onRename={async (f, nextName) => { setActionsFile(null); if (!nextName || nextName === f.name) return; await renameGoogleFile(f, nextName); }}
+        onDelete={async (f) => {
+          setActionsFile(null);
+          if (f.type === 'gdoc' || f.type === 'gsheet' || f.type === 'gslide') { await deleteGoogleFile(f); }
+          else {
+            // reuse existing delete flow
+            setConfirmModalConfig({
+              title: 'Delete File',
+              message: `Delete "${f.name || 'this file'}" from project files?`,
+              confirmText: 'Delete',
+              confirmButtonType: 'danger',
+              onConfirm: async () => {
+                setShowConfirmModal(false);
+                setTimeout(() => {
+                  setConfirmModalConfig({
+                    title: 'Confirm Permanent Delete',
+                    message: 'This will permanently delete the file from storage and cannot be undone.',
+                    confirmText: 'Delete Permanently',
+                    confirmButtonType: 'danger',
+                    onConfirm: async () => {
+                      try {
+                        if (!f.url) { alert('No URL to delete'); return; }
+                        let fileRef;
+                        try {
+                          const m = (f.url || '').match(/\/v0\/b\/([^/]+)\/o\/([^?]+)/);
+                          if (m) { const objectPath = decodeURIComponent(m[2]); fileRef = storageRef(storage, objectPath); }
+                        } catch {}
+                        if (fileRef) { await deleteObject(fileRef); }
+                        const remaining = (projectData.files || []).filter((x) => x !== f);
+                        await updateDoc(doc(db, 'projects', projectId), { files: remaining });
+                        setProjectData(prev => ({ ...(prev || {}), files: remaining }));
+                      } catch (e) { alert('Failed to delete file'); }
+                      finally { setShowConfirmModal(false); }
+                    }
+                  });
+                  setShowConfirmModal(true);
+                }, 0);
+              }
+            });
+            setShowConfirmModal(true);
+          }
+        }}
+      />
       
       {/* Add File Modal */}
       {showAddFileModal && (
