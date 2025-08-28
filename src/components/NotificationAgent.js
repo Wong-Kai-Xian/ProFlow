@@ -66,6 +66,7 @@ export default function NotificationAgent() {
             if (!res.ok) return;
             const json = await res.json();
             const msgs = Array.isArray(json.messages) ? json.messages : [];
+            if (msgs.length === 0) { return; }
             const nowSeen = new Set(msgs.map(m => m.id));
             // Initialize baseline without notifying existing emails
             if (!initialized) {
@@ -75,8 +76,15 @@ export default function NotificationAgent() {
               lastIds = nowSeen;
               return;
             }
-            for (const m of msgs) {
-              if (!lastIds.has(m.id)) {
+            // Compute truly new IDs only
+            const addedIds = [];
+            nowSeen.forEach(id => { if (!lastIds.has(id)) addedIds.push(id); });
+            // If we somehow have no baseline stored but the init flag was true, re-baseline silently
+            if (initialized && lastIds.size === 0 && nowSeen.size > 0) {
+              localStorage.setItem(seenKey, JSON.stringify(Array.from(nowSeen)));
+              lastIds = nowSeen;
+            } else {
+              for (const id of addedIds) {
                 try {
                   await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
                     unread: true,
@@ -85,7 +93,7 @@ export default function NotificationAgent() {
                     title: 'New email received',
                     message: 'You have a new email in your inbox',
                     refType: 'gmail',
-                    gmailMessageId: m.id,
+                    gmailMessageId: id,
                   });
                 } catch {}
               }
