@@ -7,6 +7,8 @@ import ProjectReminders from '../project-component/Reminders';
 import CustomerReminders from './Reminders';
 import StatusPanel from './StatusPanel';
 import TaskManager from './TaskManager';
+import { logLeadEvent, recomputeAndSaveForCustomer } from '../../services/leadScoreService';
+import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../firebase';
 import { collection, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import GoogleEmbedModal from '../common/GoogleEmbedModal';
@@ -25,6 +27,7 @@ export default function ProjectWorkspacePanel({
   onFileRename,
   customerId,
   customerProfile,
+  companyProfile,
   onConvertToProject,
   // Stages (customer pipeline)
   stages,
@@ -45,6 +48,7 @@ export default function ProjectWorkspacePanel({
   onCustomerReminderRemove,
   customerTranscripts = []
 }) {
+  const { currentUser } = useAuth();
   // Editable when no project is selected; read-only when a project is selected
   const readOnlyCustomer = Boolean(selectedProjectId);
   const [activeTab, setActiveTab] = useState('Stages'); // default to Stages per request
@@ -341,6 +345,7 @@ export default function ProjectWorkspacePanel({
               onRequestApproval={onRequestApproval}
               customerId={customerId}
               customerName={customerName}
+              companyProfile={companyProfile}
               renderStageContent={(stage, currentStageData, setCurrentStageData) => (
                 <TaskManager 
                   stage={stage}
@@ -350,6 +355,15 @@ export default function ProjectWorkspacePanel({
                     try { if (customerId) updateDoc(doc(db, 'customerProfiles', customerId), { stageData: next }); } catch {}
                   }}
                   readOnly={false}
+                  onTaskToggle={async ({ stage: st, taskName }) => {
+                    try {
+                      if (!customerId) return;
+                      await logLeadEvent(customerId, 'taskCompleted', { stage: st, taskName });
+                      // Recompute only for No Project (we are on No Project tab here)
+                      const res = await recomputeAndSaveForCustomer({ userId: currentUser?.uid, customerId, companyProfile: (companyProfile || {}) });
+                      try { const ev = new CustomEvent('proflow-leadscore-updated', { detail: { customerId, result: res } }); window.dispatchEvent(ev); } catch {}
+                    } catch {}
+                  }}
                 />
               )}
             />
@@ -373,6 +387,7 @@ export default function ProjectWorkspacePanel({
                   readOnly={true}
                   customerId={customerId}
                   customerName={customerName}
+                  companyProfile={companyProfile}
                   renderStageContent={(stage, currentStageData) => (
                     <TaskManager 
                       stage={stage}

@@ -4,6 +4,7 @@ import { db } from '../../firebase';
 import { collection, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { DESIGN_SYSTEM, getCardStyle } from '../../styles/designSystem';
 import { useAuth } from '../../contexts/AuthContext';
+import { logLeadEvent, recomputeAndSaveForCustomer } from '../../services/leadScoreService';
 
 export default function CustomerQuotesPanel({ customerId, projects = [], customerProfile = {}, readOnly = false }) {
   const { currentUser } = useAuth();
@@ -80,6 +81,10 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
         } catch {}
       } else {
         await addDoc(col, { ...payload, status: 'draft', createdAt: serverTimestamp() });
+        try {
+          await logLeadEvent(customerId, 'quoteCreated', { totalBase, currency: (form.currency || 'USD').toUpperCase() });
+          await recomputeAndSaveForCustomer({ userId: currentUser?.uid, customerId, companyProfile: {} });
+        } catch {}
       }
       setShowModal(false);
       setEditingId(null);

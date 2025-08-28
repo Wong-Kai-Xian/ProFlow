@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { COLORS, BUTTON_STYLES, LAYOUT } from "./constants"; // Import LAYOUT
 
-export default function TaskManager({ stage, stageData, setStageData, readOnly = false }) {
+export default function TaskManager({ stage, stageData, setStageData, readOnly = false, onTaskToggle = () => {} }) {
   const tasks = stageData[stage]?.tasks || [];
   const [showAddModal, setShowAddModal] = useState(false);
   const [newTaskName, setNewTaskName] = useState("");
@@ -26,6 +26,7 @@ export default function TaskManager({ stage, stageData, setStageData, readOnly =
   const toggleTask = (taskIndex) => {
     if (readOnly) return;
     const newTasks = [...tasks];
+    const prevDone = Boolean(newTasks[taskIndex].done);
     newTasks[taskIndex].done = !newTasks[taskIndex].done;
     setStageData({ 
       ...stageData, 
@@ -34,6 +35,13 @@ export default function TaskManager({ stage, stageData, setStageData, readOnly =
         tasks: newTasks 
       } 
     });
+    try {
+      const nowDone = Boolean(newTasks[taskIndex].done);
+      if (!prevDone && nowDone) {
+        const name = String(newTasks[taskIndex]?.name || 'Task');
+        onTaskToggle({ stage, taskName: name, done: true });
+      }
+    } catch {}
   };
 
   const removeTask = (taskIndex) => {

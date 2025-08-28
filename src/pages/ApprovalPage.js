@@ -906,17 +906,37 @@ export default function ApprovalPage() {
             team: [selectedRequest.requestedBy]
           };
           const projRef = await addDoc(collection(db, 'projects'), projectPayload);
+          // Freeze current no-project lead score into project and reset customer no-project score
+          try {
+            const custSnap = await getDoc(doc(db, 'customerProfiles', selectedRequest.customerId));
+            const custData = custSnap.exists() ? (custSnap.data() || {}) : {};
+            const frozen = custData.leadScores?.noProject || null;
+            if (frozen) {
+              await updateDoc(doc(db, 'projects', projRef.id), { leadScore: frozen });
+            } else {
+              await updateDoc(doc(db, 'projects', projRef.id), { leadScore: null });
+            }
+            // Reset 'No Project' score and set reset marker
+            await updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId), { leadScores: { noProject: null, noProjectResetAt: Date.now() } });
+          } catch {}
           // Link project to customer profile for dropdown and snapshot stages if present
           try {
             const custSnap = await getDoc(doc(db, 'customerProfiles', selectedRequest.customerId));
             const custData = custSnap.exists() ? custSnap.data() : {};
             const stages = custData.stages || ['Working','Qualified','Converted'];
-            const stageData = custData.stageData || { Working:{notes:[],tasks:[],completed:false}, Qualified:{notes:[],tasks:[],completed:false}, Converted:{notes:[],tasks:[],completed:false} };
-            const currentStage = custData.currentStage || stages[0];
-            const snapshot = { stages, stageData, currentStage, reminders: custData.reminders || [], files: custData.files || [], activities: custData.activities || [] };
+            // Reset stage tasks/notes for No Project after conversion per request
+            const cleanedStageData = Object.fromEntries((stages || []).map(s => [s, { notes: [], tasks: [], completed: false }]));
+            const currentStage = stages[0];
+            const snapshot = { stages, stageData: (custData.stageData || cleanedStageData), currentStage: (custData.currentStage || stages[0]), reminders: custData.reminders || [], files: custData.files || [], activities: custData.activities || [] };
             await updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId), {
               projects: arrayUnion(projRef.id),
-              projectSnapshots: { ...(custData.projectSnapshots || {}), [projRef.id]: snapshot }
+              projectSnapshots: { ...(custData.projectSnapshots || {}), [projRef.id]: snapshot },
+              // and clear after snapshot
+              stageData: cleanedStageData,
+              currentStage,
+              activities: [],
+              reminders: [],
+              files: []
             });
           } catch {
             await updateDoc(doc(db, 'customerProfiles', selectedRequest.customerId), {

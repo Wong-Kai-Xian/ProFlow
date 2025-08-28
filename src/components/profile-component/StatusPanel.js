@@ -4,7 +4,8 @@ import { COLORS, INPUT_STYLES, BUTTON_STYLES } from "./constants";
 import IncompleteStageModal from "./IncompleteStageModal"; // Import the new modal
 import { db } from "../../firebase";
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
-import { useAuth } from "../../contexts/AuthContext";
+import { logLeadEvent, recomputeAndSaveForCustomer } from '../../services/leadScoreService';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Define the stages for progress tracking
 
@@ -23,7 +24,8 @@ export default function StatusPanel({
   onRequestApproval, // New prop to request approval for stage advancement
   customerId, // Customer ID for approval requests
   customerName, // Customer name for approval requests
-  readOnly = false
+  readOnly = false,
+  companyProfile = {}
 }) {
   const { currentUser } = useAuth();
   // Mention helpers
@@ -197,7 +199,7 @@ export default function StatusPanel({
     });
   };
 
-  const handleMarkComplete = () => {
+  const handleMarkComplete = async () => {
     if (readOnly) return;
     const baseCurrentStage = stageData[currentStage] || { notes: [], tasks: [], completed: false };
     const updatedStageData = {
@@ -215,6 +217,16 @@ export default function StatusPanel({
       const nextStage = stages[currentIndex + 1];
       setCurrentStage(nextStage);
       onStagesUpdate(stages, updatedStageData, nextStage); // Pass updated stages, stageData, and the new currentStage
+      try {
+        if (customerId) {
+          try { await logLeadEvent(customerId, 'stageAdvanced', { from: currentStage, to: nextStage }); } catch {}
+          // Only recompute for No Project when not already converted (no selectedProjectId context here).
+          try {
+            const res = await recomputeAndSaveForCustomer({ userId: currentUser?.uid, customerId, companyProfile });
+            try { const ev = new CustomEvent('proflow-leadscore-updated', { detail: { customerId, result: res } }); window.dispatchEvent(ev); } catch {}
+          } catch {}
+        }
+      } catch {}
     } else {
       // If it's the last stage or no next stage, just update stageData
       onStagesUpdate(stages, updatedStageData, currentStage); // Ensure currentStage is passed for the last stage as well

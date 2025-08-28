@@ -22,6 +22,7 @@ import { doc, getDoc, updateDoc, collection, serverTimestamp, addDoc, query, whe
 import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getPageHeaderStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 import ConfirmationModal from '../components/common/ConfirmationModal';
+import { recomputeAndSaveForCustomer, logLeadEvent } from '../services/leadScoreService';
 
 const STAGES = ["Working", "Qualified", "Converted"];
 
@@ -63,6 +64,7 @@ export default function CustomerProfile() {
 
   // Confirmation modal state (mirrors ProjectDetail)
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  // (moved below)
   const [confirmModalConfig, setConfirmModalConfig] = useState({
     title: '',
     message: '',
@@ -217,6 +219,7 @@ export default function CustomerProfile() {
     } catch (e) {
       console.log('Approval sent');
     }
+    // Do NOT reset here; wait until approval is accepted and project is created
   };
 
   // Disabled auto-create on approval to prevent auto-linking customer to project
@@ -263,6 +266,13 @@ export default function CustomerProfile() {
     } catch (e) {
       console.log('Approval sent');
     }
+    // Lead score: approval requested
+    try {
+      if (id) {
+        logLeadEvent(id, 'approvalRequested', { stage: currentStage });
+        recomputeAndSaveForCustomer({ userId: currentUser?.uid, customerId: id, companyProfile });
+      }
+    } catch {}
   };
 
   useEffect(() => {
@@ -285,6 +295,7 @@ export default function CustomerProfile() {
           setProjects(data.projects || []);
           setProjectSnapshots(data.projectSnapshots || {});
           setLastContact(data.lastContact || "N/A");
+          setLeadScoreData(data.leadScores?.noProject || null);
           // Load access list details
           try {
             const access = Array.isArray(data.access) ? data.access : (data.userId ? [data.userId] : []);
@@ -331,6 +342,13 @@ export default function CustomerProfile() {
     fetchCustomer();
   }, [id, navigate, setStages, setStageData]); // Depend on 'id', 'navigate', 'setStages', and 'setStageData'
 
+  // Note: Do not auto-recompute on load; recompute occurs on relevant events only.
+
+  // Lead scoring states
+  const [leadScoreData, setLeadScoreData] = useState(null); // No Project score
+  const [projectLeadScore, setProjectLeadScore] = useState(null); // Frozen project score
+  const [showLeadBreakdown, setShowLeadBreakdown] = useState(false);
+
   // Keep session id in ref
   useEffect(() => { meetingSessionIdRef.current = meetingSessionId; }, [meetingSessionId]);
 
@@ -341,12 +359,23 @@ export default function CustomerProfile() {
     const unsub = onSnapshot(customerRef, snap => {
       const data = snap.data();
       setMeetingParticipants(data?.meetingParticipants || []);
+      try { setLeadScoreData(data?.leadScores?.noProject || null); } catch {}
       if ((data?.meetingParticipants || []).length > 0 && !showMeeting && !suppressMeetingBar) {
         setMeetingMinimized(true);
       }
     });
     return () => unsub();
   }, [id, showMeeting, suppressMeetingBar]);
+
+  // Watch frozen score when a project is selected
+  useEffect(() => {
+    if (!selectedProjectId) { setProjectLeadScore(null); return; }
+    const unsub = onSnapshot(doc(db, 'projects', selectedProjectId), snap => {
+      const data = snap.data() || {};
+      setProjectLeadScore(data.leadScore || null);
+    });
+    return () => unsub();
+  }, [selectedProjectId]);
 
   // Watch saved transcripts list under customer
   useEffect(() => {
@@ -995,6 +1024,18 @@ export default function CustomerProfile() {
       const resetStageData = Object.fromEntries((stages || []).map(s => [s, { notes: [], tasks: [], completed: false }]));
       setStageData(resetStageData);
       try { await updateDoc(doc(db, 'customerProfiles', id), { activities: [], reminders: [], files: [], stageData: resetStageData }); } catch {}
+      // Freeze current lead score into project snapshot and reset "No Project" lead score
+      try {
+        const snap = await getDoc(doc(db, 'customerProfiles', id));
+        const data = snap.exists() ? (snap.data() || {}) : {};
+        const frozen = data.leadScores?.noProject || null;
+        if (frozen) {
+          await updateDoc(doc(db, 'projects', newProjectRef.id), { leadScore: frozen });
+        }
+        // Reset customer-level noProject score for new cycle
+        await updateDoc(doc(db, 'customerProfiles', id), { leadScores: { noProject: null, noProjectResetAt: Date.now() } });
+        setLeadScoreData(null);
+      } catch {}
     } catch {}
 
     setShowCreateProjectModal(false);
@@ -1196,6 +1237,25 @@ export default function CustomerProfile() {
                     <option key={pid} value={pid}>{projectNames[pid] || pid}</option>
                   ))}
                 </select>
+                <div style={{ width: 8 }} />
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.15)', borderRadius: 9999, padding: '4px 8px' }}>
+                  <span style={{ fontSize: 12, opacity: 0.9 }}>Lead Score:</span>
+                  <button
+                    onClick={() => { setShowLeadBreakdown(true); }}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 9999,
+                      border: '1px solid rgba(255,255,255,0.4)',
+                      background: '#fff',
+                      color: '#111827',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                    title={(selectedProjectId ? (projectLeadScore?.band || '') : (leadScoreData?.band || '')) || 'Score'}
+                  >
+                    {selectedProjectId ? (projectLeadScore ? `${projectLeadScore.score} (${projectLeadScore.band})` : '—') : (leadScoreData ? `${leadScoreData.score} (${leadScoreData.band})` : '—')}
+                  </button>
+                </div>
                 <div style={{ flex: 1 }} />
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
@@ -1242,6 +1302,7 @@ export default function CustomerProfile() {
                 onFileRename={handleFileRename}
                 customerId={id}
                 customerProfile={customerProfile}
+                companyProfile={companyProfile}
                 onConvertToProject={handleConvertToProject}
                 stages={stages}
                 currentStage={currentStage}
@@ -1614,6 +1675,32 @@ export default function CustomerProfile() {
         confirmButtonType={confirmModalConfig.confirmButtonType}
         hideCancel={true}
       />
+
+      {showLeadBreakdown && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1600 }} onClick={() => setShowLeadBreakdown(false)}>
+          <div onClick={(e)=>e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: 520, maxWidth: '92vw', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ fontWeight: 700 }}>Lead Score Breakdown</div>
+              <button onClick={() => setShowLeadBreakdown(false)} style={{ ...getButtonStyle('secondary', 'customers') }}>Close</button>
+            </div>
+            {(() => {
+              const cur = selectedProjectId ? projectLeadScore : leadScoreData;
+              if (!cur) return (<div style={{ color: DESIGN_SYSTEM.colors.text.secondary }}>No score yet.</div>);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div><strong>Score:</strong> {cur.score} <span style={{ color: '#6b7280' }}>({cur.band})</span></div>
+                  <div style={{ fontWeight: 600, marginTop: 6 }}>Contributors</div>
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    {(cur.breakdown || []).map((b, idx) => (
+                      <li key={idx} style={{ fontSize: 13, color: '#374151' }}>{b}</li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

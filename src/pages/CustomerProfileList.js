@@ -5,6 +5,7 @@ import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getContentContainer
 // import customerDataArray from "../components/profile-component/customerData.js"; // Remove mock data import
 import { db } from "../firebase"; // Import db
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, serverTimestamp, arrayRemove, getDoc } from "firebase/firestore"; // Import Firestore functions
+import { getLeadScoringSettings, saveLeadScoringSettings } from '../services/leadScoreService';
 import IncomingCustomerSharesModal from "../components/profile-component/IncomingCustomerSharesModal";
 import AddProfileModal from "../components/profile-component/AddProfileModal"; // Import AddProfileModal
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
@@ -71,6 +72,8 @@ export default function CustomerProfileList() {
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
   const [showIncomingShares, setShowIncomingShares] = useState(false);
   const [pendingSharesCount, setPendingSharesCount] = useState(0);
+  const [showLeadSettings, setShowLeadSettings] = useState(false);
+  const [leadSettings, setLeadSettings] = useState(null);
 
   useEffect(() => {
     if (!currentUser) {
@@ -118,6 +121,17 @@ export default function CustomerProfileList() {
     return () => { unsubLegacy(); unsubShared(); };
   }, [currentUser]);
 
+  // Load lead score settings at list page
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!currentUser?.uid) { setLeadSettings(null); return; }
+        const s = await getLeadScoringSettings(currentUser.uid);
+        setLeadSettings(s);
+      } catch { setLeadSettings(null); }
+    })();
+  }, [currentUser?.uid]);
+
   // Live pending shares count (to highlight button)
   useEffect(() => {
     if (!currentUser) { setPendingSharesCount(0); return; }
@@ -161,6 +175,8 @@ export default function CustomerProfileList() {
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
 
+  const [sortMode, setSortMode] = useState('alpha'); // 'alpha' | 'score_desc' | 'score_asc'
+
   const filteredCustomers = customers.filter((customer) => {
     const name = customer?.customerProfile?.name || '';
     const company = customer?.companyProfile?.company || '';
@@ -171,6 +187,23 @@ export default function CustomerProfileList() {
       company.toLowerCase().includes(term) ||
       email.toLowerCase().includes(term)
     );
+  });
+
+  const sortedCustomers = [...filteredCustomers].sort((a, b) => {
+    if (sortMode === 'score_desc') {
+      const sa = a?.leadScores?.noProject?.score ?? a?.leadScore?.score ?? -1;
+      const sb = b?.leadScores?.noProject?.score ?? b?.leadScore?.score ?? -1;
+      return (sb - sa);
+    }
+    if (sortMode === 'score_asc') {
+      const sa = a?.leadScores?.noProject?.score ?? a?.leadScore?.score ?? -1;
+      const sb = b?.leadScores?.noProject?.score ?? b?.leadScore?.score ?? -1;
+      return (sa - sb);
+    }
+    // alpha by name / company
+    const aName = (a?.customerProfile?.name || a?.companyProfile?.company || '').toLowerCase();
+    const bName = (b?.customerProfile?.name || b?.companyProfile?.company || '').toLowerCase();
+    return aName.localeCompare(bName);
   });
 
   const getStatusColor = (currentStage) => {
@@ -486,6 +519,18 @@ export default function CustomerProfileList() {
                   }}>{pendingSharesCount}</span>
                 )}
               </button>
+              <button
+                onClick={() => setShowLeadSettings(true)}
+                style={{
+                  ...getButtonStyle('secondary', 'customers'),
+                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
+                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
+                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                  borderRadius: DESIGN_SYSTEM.borderRadius.lg
+                }}
+              >
+                Lead Score Settings
+              </button>
             </div>
           )}
         </div>
@@ -524,30 +569,25 @@ export default function CustomerProfileList() {
               }}
             />
 
-            {/* Status Filter - REMOVED */}
-            {/*
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{
-                ...INPUT_STYLES.base,
-                padding: "12px 16px",
-                fontSize: "16px",
-                borderRadius: "8px",
-                border: `2px solid ${COLORS.border}`,
-                minWidth: "150px"
-              }}
-            >
-              <option value="All">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-            */}
+            {/* Sort control */}
+            <div>
+              <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} style={{
+                padding: '10px 12px',
+                border: `2px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                background: DESIGN_SYSTEM.colors.background.primary,
+                color: DESIGN_SYSTEM.colors.text.primary
+              }}>
+                <option value="alpha">Sort: Alphabetical</option>
+                <option value="score_desc">Sort: Score High → Low</option>
+                <option value="score_asc">Sort: Score Low → High</option>
+              </select>
+            </div>
           </div>
         )}
 
         {/* Customer Grid */}
-        {filteredCustomers.length === 0 && currentUser ? (
+        {sortedCustomers.length === 0 && currentUser ? (
           <div style={{
             textAlign: "center",
             padding: "60px 20px",
@@ -556,7 +596,7 @@ export default function CustomerProfileList() {
           }}>
             {searchTerm ? `No customers found matching "${searchTerm}"` : "No customers yet. Add your first customer!"}
           </div>
-        ) : filteredCustomers.length === 0 && !currentUser ? (
+        ) : sortedCustomers.length === 0 && !currentUser ? (
           <div style={{
             textAlign: "center",
             padding: "60px 20px",
@@ -573,7 +613,7 @@ export default function CustomerProfileList() {
             marginBottom: DESIGN_SYSTEM.spacing.xl,
             padding: `0 ${DESIGN_SYSTEM.spacing.base}`
           }}>
-            {filteredCustomers.map((customer) => {
+            {sortedCustomers.map((customer) => {
               const nameForColor = customer?.customerProfile?.name || customer?.companyProfile?.company || 'Customer';
               const bgColor = stringToColor(nameForColor);
               const progress = getProgress(customer);
@@ -704,6 +744,19 @@ export default function CustomerProfileList() {
                     }}>
                       {customer.companyProfile.company || customer.customerProfile.email || customer.companyProfile.industry}
                     </p>
+                    <div style={{ marginTop: 6 }}>
+                      <span style={{
+                        padding: '4px 10px',
+                        borderRadius: 9999,
+                        border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
+                        background: '#fff',
+                        color: '#111827',
+                        fontSize: 12,
+                        fontWeight: 700
+                      }} title={(customer?.leadScores?.noProject?.band || customer?.leadScore?.band) ? (customer?.leadScores?.noProject?.band || customer.leadScore.band) : 'No score yet'}>
+                        {typeof (customer?.leadScores?.noProject?.score ?? customer?.leadScore?.score) === 'number' ? `${(customer.leadScores?.noProject?.score ?? customer.leadScore.score)} (${(customer.leadScores?.noProject?.band ?? customer.leadScore.band) || ''})` : 'Score —'}
+                      </span>
+                    </div>
                     <div style={{
                       margin: "4px 0 0 0",
                       color: DESIGN_SYSTEM.colors.text.secondary,
@@ -816,6 +869,37 @@ export default function CustomerProfileList() {
         isOpen={showIncomingShares}
         onClose={() => setShowIncomingShares(false)}
       />
+      {showLeadSettings && leadSettings && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }} onClick={() => setShowLeadSettings(false)}>
+          <div onClick={(e)=>e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: 680, maxWidth: '92vw', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ fontWeight: 700 }}>Lead Score Settings</div>
+              <button onClick={() => setShowLeadSettings(false)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Close</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Target industries (comma)<input value={(leadSettings.fit.targetIndustries||[]).join(', ')} onChange={(e)=> setLeadSettings(s => ({ ...s, fit: { ...s.fit, targetIndustries: e.target.value.split(',').map(x=>x.trim()).filter(Boolean) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Target countries (ISO comma)<input value={(leadSettings.fit.targetCountries||[]).join(', ')} onChange={(e)=> setLeadSettings(s => ({ ...s, fit: { ...s.fit, targetCountries: e.target.value.split(',').map(x=>x.trim().toUpperCase()).filter(Boolean) } }))} /></label>
+              <label style={{ gridColumn: '1 / span 2', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151' }}><input type="checkbox" checked={!!leadSettings.fit.worldwide} onChange={(e)=> setLeadSettings(s => ({ ...s, fit: { ...s.fit, worldwide: e.target.checked } }))} /> Worldwide</label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Fit %<input type="number" value={leadSettings.distribution.fitPercent} onChange={(e)=> setLeadSettings(s => ({ ...s, distribution: { ...s.distribution, fitPercent: Number(e.target.value||0), intentPercent: Math.max(0, 100 - Number(e.target.value||0)) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Intent %<input type="number" value={leadSettings.distribution.intentPercent} onChange={(e)=> setLeadSettings(s => ({ ...s, distribution: { ...s.distribution, intentPercent: Number(e.target.value||0), fitPercent: Math.max(0, 100 - Number(e.target.value||0)) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Stage advanced +<input type="number" value={leadSettings.intent.stageAdvancedPoints} onChange={(e)=> setLeadSettings(s => ({ ...s, intent: { ...s.intent, stageAdvancedPoints: Number(e.target.value||0) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Stage cap/day<input type="number" value={leadSettings.intent.stageAdvanceCapPerDay} onChange={(e)=> setLeadSettings(s => ({ ...s, intent: { ...s.intent, stageAdvanceCapPerDay: Number(e.target.value||0) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Task points<input type="number" value={leadSettings.intent.taskCompletedPoints} onChange={(e)=> setLeadSettings(s => ({ ...s, intent: { ...s.intent, taskCompletedPoints: Number(e.target.value||0) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Task cap /14d<input type="number" value={leadSettings.intent.taskCapPer14d} onChange={(e)=> setLeadSettings(s => ({ ...s, intent: { ...s.intent, taskCapPer14d: Number(e.target.value||0) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Quote first +<input type="number" value={leadSettings.intent.quoteCreatedPoints} onChange={(e)=> setLeadSettings(s => ({ ...s, intent: { ...s.intent, quoteCreatedPoints: Number(e.target.value||0) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>No reply 7d penalty<input type="number" value={leadSettings.penalties.noReply7d} onChange={(e)=> setLeadSettings(s => ({ ...s, penalties: { ...s.penalties, noReply7d: Number(e.target.value||0) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Stuck penalty<input type="number" value={leadSettings.penalties.stuckPenalty} onChange={(e)=> setLeadSettings(s => ({ ...s, penalties: { ...s.penalties, stuckPenalty: Number(e.target.value||0) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Inactivity penalty<input type="number" value={leadSettings.penalties.inactivityPenalty} onChange={(e)=> setLeadSettings(s => ({ ...s, penalties: { ...s.penalties, inactivityPenalty: Number(e.target.value||0) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Email reply window (h)<input type="number" value={leadSettings.thresholds.emailReplyWindowHours} onChange={(e)=> setLeadSettings(s => ({ ...s, thresholds: { ...s.thresholds, emailReplyWindowHours: Number(e.target.value||0) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Stuck days<input type="number" value={leadSettings.thresholds.stuckDays} onChange={(e)=> setLeadSettings(s => ({ ...s, thresholds: { ...s.thresholds, stuckDays: Number(e.target.value||0) } }))} /></label>
+              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Quote window days<input type="number" value={leadSettings.thresholds.quoteWindowDays} onChange={(e)=> setLeadSettings(s => ({ ...s, thresholds: { ...s.thresholds, quoteWindowDays: Number(e.target.value||0) } }))} /></label>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button onClick={async () => { try { if (!currentUser?.uid) return; const saved = await saveLeadScoringSettings(currentUser.uid, leadSettings); setLeadSettings(saved); setShowLeadSettings(false); } catch {} }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
