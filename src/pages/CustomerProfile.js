@@ -816,7 +816,6 @@ export default function CustomerProfile() {
         // Don't fail the whole operation if organization update fails
       }
       
-      navigate('/customer-profiles'); // Navigate back to the list after saving
     } catch (error) {
       console.error("Error saving customer: ", error);
     } finally {
