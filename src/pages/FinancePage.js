@@ -540,17 +540,16 @@ export default function FinancePage() {
   const toUsdInvoice = (inv) => {
     const base = 'USD';
     const cur = (inv.currency || base).toUpperCase();
-    // Prefer stored base when available and base is USD
-    if (typeof inv.totalBase === 'number' && (inv.fxBase || '').toUpperCase() === base) {
-      return Number(inv.totalBase || 0);
-    }
-    // Prefer saved fxRate when base is USD
+    const fxBase = (inv.fxBase || base).toUpperCase();
+    const total = Number(inv.total || 0);
+    const totalBase = Number(inv.totalBase);
     const savedRate = Number(inv.fxRate || 0);
-    if ((inv.fxBase || '').toUpperCase() === base && savedRate > 0) {
-      return cur === base ? Number(inv.total || 0) : (Number(inv.total || 0) / savedRate);
-    }
-    // Fallback to table rate normalization
-    return Number(inv.total || 0) * getFxRate(cur);
+    // 1) Use stored base only if it is a finite number and base is USD
+    if (fxBase === base && Number.isFinite(totalBase)) return totalBase;
+    // 2) Use saved FX rate if base is USD and rate is valid
+    if (fxBase === base && savedRate > 0) return cur === base ? total : (total / savedRate);
+    // 3) Fallback to FX table (normalized to USD)
+    return total * getFxRate(cur);
   };
   const invTotalBase = filteredInvoices.reduce((sum, inv) => sum + toUsdInvoice(inv), 0);
   const invUnpaidBase = filteredInvoices.filter(r => r.status !== 'paid').reduce((sum, inv) => sum + toUsdInvoice(inv), 0);
