@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDoc, setDoc, where, getDocs, limit as qlimit } from 'firebase/firestore';
 import { DESIGN_SYSTEM } from '../styles/designSystem';
 
 export default function NotificationCenter({ userId, isOpen, onClose }) {
@@ -73,11 +73,55 @@ export default function NotificationCenter({ userId, isOpen, onClose }) {
 
   // Removed calendar export quick action per requirements
 
-  const handleNavigate = (n) => {
+  const handleNavigate = async (n) => {
     try {
       if (!n) return;
       if (n.unread) { markAsRead(n.id); }
-      if (n.refType === 'upcomingEvent') {
+      if (n.refType === 'gmail' && (n.customerId || n.customerEmail || n.gmailMessageId)) {
+        // Prefer in-app modal: dispatch event with customer email if available
+        try {
+          if (n.customerId) {
+            navigate(`/customer/${n.customerId}`);
+            // Delay event until page mounts
+            setTimeout(() => {
+              try {
+                const ev = new CustomEvent('proflow-open-email-for-customer', { detail: { toEmail: n.customerEmail || '', customerId: n.customerId } });
+                window.dispatchEvent(ev);
+              } catch {}
+            }, 600);
+            onClose && onClose();
+            return;
+          } else if (n.customerEmail) {
+            // Try to resolve a customer by email, then navigate
+            try {
+              const cq = query(collection(db, 'customerProfiles'), where('email', '==', n.customerEmail), qlimit(1));
+              const cs = await getDocs(cq);
+              if (!cs.empty) {
+                const cid = cs.docs[0].id;
+                navigate(`/customer/${cid}`);
+                setTimeout(() => {
+                  try {
+                    const ev = new CustomEvent('proflow-open-email-for-customer', { detail: { toEmail: n.customerEmail, customerId: cid } });
+                    window.dispatchEvent(ev);
+                  } catch {}
+                }, 600);
+                onClose && onClose();
+                return;
+              }
+            } catch {}
+            // Fallback: try to open modal on current page
+            const ev = new CustomEvent('proflow-open-email-for-customer', { detail: { toEmail: n.customerEmail } });
+            window.dispatchEvent(ev);
+            onClose && onClose();
+            return;
+          }
+        } catch {}
+        // Fallback: open in Gmail if only messageId is present
+        if (n.gmailMessageId) {
+          try { window.open(`https://mail.google.com/mail/u/0/#all/${n.gmailMessageId}`, '_blank'); } catch {}
+          return;
+        }
+      } else if (n.refType === 'upcomingEvent') {
         if (n.origin === 'project' && n.sourceId) navigate(`/project/${n.sourceId}`);
         else if (n.origin === 'customer' && n.sourceId) navigate(`/customer/${n.sourceId}`);
         else if (n.origin === 'forum' && n.sourceId) navigate(`/forum/${n.sourceId}`);

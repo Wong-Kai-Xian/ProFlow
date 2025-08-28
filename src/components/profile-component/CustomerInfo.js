@@ -12,6 +12,23 @@ export default function CustomerInfo({ data, setCustomerProfile, onSave }) {
   const [gmailAiOpen, setGmailAiOpen] = useState(false);
   
   useEffect(() => {
+    const handler = (e) => {
+      try {
+        const detail = e?.detail || {};
+        const targetEmail = String(detail.toEmail || '').toLowerCase();
+        const myEmail = String(data?.email || '').toLowerCase();
+        const targetId = String(detail.customerId || '');
+        const myId = String(data?.id || data?.uid || data?.customerId || '');
+        const matchByEmail = targetEmail && myEmail && targetEmail === myEmail;
+        const matchById = targetId && myId && targetId === myId;
+        if (matchByEmail || matchById) setGmailAiOpen(true);
+      } catch {}
+    };
+    window.addEventListener('proflow-open-email-for-customer', handler);
+    return () => window.removeEventListener('proflow-open-email-for-customer', handler);
+  }, [data?.email, data?.id, data?.uid, data?.customerId]);
+  
+  useEffect(() => {
     setEditedData(data || {});
   }, [data]);
 

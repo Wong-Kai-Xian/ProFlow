@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, limit as qlimit } from 'firebase/firestore';
 
 // Invisible agent that triggers approval reminders/escalations via notifications
 export default function NotificationAgent() {
@@ -42,16 +42,18 @@ export default function NotificationAgent() {
         const until = Number(window.__proflow_gmail_fail_until || 0);
         if (until && Date.now() < until) return;
       } catch {}
-      // Only start if user previously authorized and opted-in to Gmail polling
-      const isAuthorized = localStorage.getItem('gmail_authorized') === '1';
-      const isOptIn = localStorage.getItem('gmail_poll_enabled') === '1';
-      if (!isAuthorized || !isOptIn) return;
+      // Only start if opted-in (default opt-in). If not authorized yet, attempt silent auth.
+      let isOptIn = localStorage.getItem('gmail_poll_enabled');
+      if (isOptIn !== '1') { try { localStorage.setItem('gmail_poll_enabled', '1'); } catch {} }
+      const isAuthorizedFlag = localStorage.getItem('gmail_authorized') === '1';
+      // Try silent token regardless of flag; if success, mark authorized
+      let accessToken = await ensureGmailToken();
+      if (accessToken) { try { localStorage.setItem('gmail_authorized', '1'); } catch {} }
+      if (!accessToken) {
+        try { window.__proflow_gmail_fail_until = Date.now() + 10 * 60 * 1000; } catch {}
+        return;
+      }
       try {
-        let accessToken = await ensureGmailToken();
-        if (!accessToken) {
-          try { window.__proflow_gmail_fail_until = Date.now() + 10 * 60 * 1000; } catch {}
-          return;
-        }
         gmailStartedRef.current = true;
         window.__proflow_gmail_poll_started = true;
         const seenKey = `proflow_gmail_seen_${currentUser.uid}`;
@@ -86,6 +88,44 @@ export default function NotificationAgent() {
             } else {
               for (const id of addedIds) {
                 try {
+                  // Dedupe: skip if a notification for this gmailMessageId already exists
+                  const dupQ = query(
+                    collection(db, 'users', currentUser.uid, 'notifications'),
+                    where('origin', '==', 'gmail'),
+                    where('gmailMessageId', '==', id),
+                    qlimit(1)
+                  );
+                  const dup = await getDocs(dupQ);
+                  if (!dup.empty) { continue; }
+                  // Fetch minimal headers to determine counterpart email (From/To)
+                  let customerEmail = '';
+                  try {
+                    const det = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To`, { headers: { Authorization: `Bearer ${accessToken}` } });
+                    if (det.ok) {
+                      const dj = await det.json();
+                      const headers = dj?.payload?.headers || [];
+                      const from = (headers.find(h => (h.name||'').toLowerCase()==='from')?.value || '').toLowerCase();
+                      const to = (headers.find(h => (h.name||'').toLowerCase()==='to')?.value || '').toLowerCase();
+                      const extract = (s) => {
+                        const m = s.match(/[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}/);
+                        return m ? m[0] : '';
+                      };
+                      const f = extract(from);
+                      const t = extract(to);
+                      const me = (currentUser?.email || '').toLowerCase();
+                      if (f && f !== me) customerEmail = f; else if (t && t !== me) customerEmail = t; else customerEmail = f || t || '';
+                    }
+                  } catch {}
+                  // Resolve customerId by email
+                  let customerId = '';
+                  try {
+                    if (customerEmail) {
+                      const cq = query(collection(db, 'customerProfiles'), where('email', '==', customerEmail), qlimit(1));
+                      const cs = await getDocs(cq);
+                      if (!cs.empty) customerId = cs.docs[0].id;
+                    }
+                  } catch {}
+                  // Optionally attach customer email if derivable later
                   await addDoc(collection(db, 'users', currentUser.uid, 'notifications'), {
                     unread: true,
                     createdAt: serverTimestamp(),
@@ -94,6 +134,8 @@ export default function NotificationAgent() {
                     message: 'You have a new email in your inbox',
                     refType: 'gmail',
                     gmailMessageId: id,
+                    customerEmail,
+                    customerId
                   });
                 } catch {}
               }
@@ -115,6 +157,7 @@ export default function NotificationAgent() {
       const notifCol = collection(db, 'users', currentUser.uid, 'notifications');
       let seededToasts = false;
       const seenToastIds = new Set();
+      let lastToastAt = 0;
       const unsubToasts = onSnapshot(notifCol, (snap) => {
         try {
           if (!seededToasts) {
@@ -128,8 +171,13 @@ export default function NotificationAgent() {
             const id = ch.doc.id;
             const last = ch.doc.data();
             if (seenToastIds.has(id)) return;
+            // Dedupe double-emits shortly after mount
             seenToastIds.add(id);
             if (last.origin !== 'gmail') return; // only toast gmail arrivals
+            // Rate limit toasts (avoid bursts on route change): 1 toast per 1.5s
+            const now = Date.now();
+            if (now - lastToastAt < 1500) return;
+            lastToastAt = now;
             const rootId = 'global-toast-root';
             let root = document.getElementById(rootId);
             if (!root) {
