@@ -112,6 +112,8 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [token, setToken] = useState('');
+  const [authNeeded, setAuthNeeded] = useState(false);
+  const [authError, setAuthError] = useState('');
   const [threads, setThreads] = useState([]);
   const [selected, setSelected] = useState(null);
   const [subject, setSubject] = useState('');
@@ -193,15 +195,46 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
     }
   };
 
+  const requestInteractiveToken = async () => {
+    try {
+      if (!clientId) { setAuthError('Missing google_oauth_client_id'); return null; }
+      await loadScriptOnce('https://accounts.google.com/gsi/client');
+      return await new Promise((resolve) => {
+        try {
+          const tokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: GMAIL_SCOPES,
+            prompt: 'consent',
+            callback: (resp) => {
+              if (resp?.access_token) { setAuthError(''); resolve(resp.access_token); }
+              else { setAuthError(resp?.error || 'Authorization failed'); resolve(null); }
+            },
+          });
+          tokenClient.requestAccessToken({ prompt: 'consent' });
+        } catch { resolve(null); }
+      });
+    } catch { return null; }
+  };
+
   const fetchThreads = async () => {
     try {
       setLoading(true); setError('');
-      const at = token || await ensureToken();
+      let at = token || await ensureToken();
+      if (!at) {
+        setAuthNeeded(true);
+        setError('Authorization required. Click Authorize Gmail.');
+        return;
+      }
       if (!token) setToken(at);
       const q = `from:${toEmail} OR to:${toEmail}`;
       const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=3`, {
         headers: { Authorization: `Bearer ${at}` }
       });
+      if (res.status === 401 || res.status === 403) {
+        setAuthNeeded(true);
+        setError('Authorization required. Click Authorize Gmail.');
+        return;
+      }
       if (!res.ok) throw new Error(`List error ${res.status}`);
       const json = await res.json();
       const messages = Array.isArray(json.messages) ? json.messages : [];
@@ -276,7 +309,8 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
     try {
       if (!selected) return;
       setLoading(true); setError('');
-      const at = token || await ensureToken();
+      let at = token || await ensureToken();
+      if (!at) { setAuthNeeded(true); setError('Authorization required.'); return; }
       if (!token) setToken(at);
       const replySubject = subject || (selected.subject?.startsWith('Re:') ? selected.subject : `Re: ${selected.subject || ''}`.trim());
       const origMsgId = selected.messageIdHeader || '';
@@ -364,7 +398,8 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
   const sendNew = async () => {
     try {
       setLoading(true); setError('');
-      const at = token || await ensureToken();
+      let at = token || await ensureToken();
+      if (!at) { setAuthNeeded(true); setError('Authorization required.'); return; }
       if (!token) setToken(at);
       const newSubject = subject || '(no subject)';
       const boundary = `mime_boundary_${Date.now()}`;
@@ -411,7 +446,8 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
 
   const downloadAttachment = async (meta, messageId) => {
     try {
-      const at = token || await ensureToken();
+      let at = token || await ensureToken();
+      if (!at) { setAuthNeeded(true); setError('Authorization required.'); return; }
       if (!token) setToken(at);
       const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(meta.attachmentId)}`, {
         headers: { Authorization: `Bearer ${at}` }
@@ -484,6 +520,12 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
         </div>
 
         <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 6 }}>Note: Set OAuth Client ID at top bar Settings or in console: localStorage.setItem('google_oauth_client_id','YOUR_CLIENT_ID')</div>
+        {authNeeded && (
+          <div style={{ marginBottom: 10, padding: 10, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff8e1', color: '#7c6f00', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div>{authError ? `Error: ${authError}` : 'Authorize Gmail to read and send emails.'}</div>
+            <button onClick={async () => { const t = await requestInteractiveToken(); if (t) { setToken(t); setAuthNeeded(false); setError(''); try { await fetchThreads(); } catch {} } }} style={{ ...BUTTON_STYLES.secondary }}>Authorize Gmail</button>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 16, marginBottom: 12, flex: '0 0 auto', borderBottom: '1px solid #e5e7eb', paddingBottom: 6 }}>
           <button onClick={() => setMode('reply')} style={{
             background: 'transparent',

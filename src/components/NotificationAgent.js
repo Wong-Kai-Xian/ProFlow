@@ -8,6 +8,7 @@ export default function NotificationAgent() {
   const { currentUser } = useAuth();
   const gmailIntervalRef = useRef(null);
   const gmailStartedRef = useRef(false);
+  const gmailLastRefreshRef = useRef(0);
 
   const loadScriptOnce = (src) => new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) return resolve();
@@ -62,8 +63,17 @@ export default function NotificationAgent() {
         let initialized = (localStorage.getItem(initKey) === '1');
         const poll = async () => {
           try {
-            // refresh token silently each poll to avoid expiry issues
-            try { const refreshed = await ensureGmailToken(); if (refreshed) accessToken = refreshed; } catch {}
+            // Throttle silent refresh: at most once every 45 minutes
+            try {
+              const nowTs = Date.now();
+              if ((nowTs - (gmailLastRefreshRef.current || 0)) > (45 * 60 * 1000)) {
+                const refreshed = await ensureGmailToken();
+                if (refreshed) {
+                  accessToken = refreshed;
+                  gmailLastRefreshRef.current = nowTs;
+                }
+              }
+            } catch {}
             const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5', { headers: { Authorization: `Bearer ${accessToken}` } });
             if (!res.ok) return;
             const json = await res.json();
