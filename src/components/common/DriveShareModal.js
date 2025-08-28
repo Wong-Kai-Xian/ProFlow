@@ -72,7 +72,26 @@ export default function DriveShareModal({ isOpen, onClose, file }) {
           if (j.webViewLink) link = j.webViewLink;
         }
       } catch {}
-      try { await navigator.clipboard.writeText(link); alert('Share updated. Link copied'); } catch { alert('Share updated'); }
+      try { await navigator.clipboard.writeText(link); } catch {}
+      // Toast instead of alert
+      try {
+        const toast = document.createElement('div');
+        toast.textContent = 'Share updated. Link copied';
+        toast.style.position = 'fixed';
+        toast.style.left = '50%';
+        toast.style.bottom = '28px';
+        toast.style.transform = 'translateX(-50%)';
+        toast.style.background = '#111827';
+        toast.style.color = '#fff';
+        toast.style.padding = '10px 14px';
+        toast.style.borderRadius = '10px';
+        toast.style.fontSize = '12px';
+        toast.style.boxShadow = '0 6px 18px rgba(0,0,0,0.18)';
+        toast.style.zIndex = '5000';
+        document.body.appendChild(toast);
+        setTimeout(() => { try { toast.style.opacity = '0'; toast.style.transition = 'opacity 300ms'; } catch {} }, 1400);
+        setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 1750);
+      } catch {}
       onClose && onClose();
     } catch (e) {
       setError(e.message || 'Failed to update sharing');
