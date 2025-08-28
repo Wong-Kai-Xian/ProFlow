@@ -716,7 +716,7 @@ function ComprehensiveEditProfileModal({
               border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
               borderRadius: DESIGN_SYSTEM.borderRadius.base,
               padding: DESIGN_SYSTEM.spacing.base, width: '100%' }}
-              placeholder="+60 12-345 6789"
+              placeholder="60123456789"
               disabled={loading}
             />
           </div>
