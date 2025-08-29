@@ -23,7 +23,6 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
   const createGoogleFile = async (kind) => {
     try {
       let token = await ensureDriveToken();
-      if (!token) token = await requestDriveConsent();
       if (!token) { setDriveAuthNeeded(true); setDriveAuthError('Authorization required.'); return; }
       const mimeMap = {
         gdoc: 'application/vnd.google-apps.document',
@@ -131,12 +130,13 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
   };
 
   const authorizeDrive = async () => {
+    // Open the attach modal immediately so the user can see the Authorize button there
+    setShowAttachDrive(true);
     try {
       const token = await ensureDriveToken();
       if (!token) { setDriveAuthNeeded(true); return; }
       setDriveAuthNeeded(false);
       setDriveAuthError("");
-      setShowAttachDrive(true);
     } catch {
       setDriveAuthNeeded(true);
       setDriveAuthError('Authorization failed');
