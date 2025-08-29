@@ -203,11 +203,12 @@ export default function CustomerQuotesPanel({ customerId, projects = [], custome
                   <input type="number" step="0.0001" value={form.fxRate} onChange={(e)=> setForm(f=>({ ...f, fxRate: e.target.value }))} placeholder="1.0" />
                   <button onClick={async () => {
                     try {
-                      const base = 'USD';
                       const cur = (form.currency || 'USD').toUpperCase();
-                      const resp = await fetch(`https://api.exchangerate.host/latest?base=${encodeURIComponent(base)}&api_key=eb803299bef64dc80de605049727ccf4`);
+                      if (!cur || cur === 'USD') { setForm(f => ({ ...f, fxRate: 1 })); return; }
+                      const resp = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
                       const data = await resp.json();
-                      if (data && data.rates && data.rates[cur] != null) setForm(f => ({ ...f, fxRate: Number(data.rates[cur]) }));
+                      const rate = data && data.usd ? data.usd[cur.toLowerCase()] : undefined;
+                      if (rate != null) setForm(f => ({ ...f, fxRate: Number(rate) }));
                     } catch {}
                   }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Fetch Rate</button>
                 </div>
