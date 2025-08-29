@@ -112,16 +112,20 @@ function computeIntentAndPenalties(events = [], settings, nowMs, meta = {}) {
   let penaltyPts = 0;
   const breakdown = [];
 
-  // Stage advanced: cap per day
+  // Stage advanced: cap per day (allow multiple advances per day up to cap)
   const stageEvents = events.filter(e => e.type === 'stageAdvanced');
-  const countedStageDays = new Set();
+  const stagePointsByDay = {};
   for (const e of stageEvents) {
-    const key = new Date(e.createdAtMs).toDateString();
-    if (countedStageDays.has(key)) continue;
-    countedStageDays.add(key);
-    const add = clamp(0, intentCfg.stageAdvancedPoints, intentCfg.stageAdvanceCapPerDay);
-    intentPts += add;
-    breakdown.push(`+${add} Stage advanced`);
+    const dayKey = new Date(e.createdAtMs).toDateString();
+    if (!stagePointsByDay[dayKey]) stagePointsByDay[dayKey] = 0;
+    
+    // Add points for this stage advance if we haven't hit the daily cap
+    const pointsToAdd = Math.min(intentCfg.stageAdvancedPoints, intentCfg.stageAdvanceCapPerDay - stagePointsByDay[dayKey]);
+    if (pointsToAdd > 0) {
+      stagePointsByDay[dayKey] += pointsToAdd;
+      intentPts += pointsToAdd;
+      breakdown.push(`+${pointsToAdd} Stage advanced`);
+    }
   }
 
   // Approval events (optional wiring in v1)
@@ -219,14 +223,31 @@ export function computeLeadScore({ companyProfile = {}, events = [], settings = 
   const nowMs = Date.now();
   const cfg = { ...DEFAULT_LEAD_SCORING_SETTINGS, ...(settings || {}) };
 
-  const fit = computeFit(companyProfile, cfg);
-  const intent = computeIntentAndPenalties(events, cfg, nowMs);
+  // Update maxPoints based on distribution percentages
+  const fitPercent = Number(cfg.distribution?.fitPercent || 20);
+  const intentPercent = Number(cfg.distribution?.intentPercent || 80);
+  
+  // Ensure fit and intent configs exist and update their maxPoints
+  const updatedCfg = {
+    ...cfg,
+    fit: {
+      ...cfg.fit,
+      maxPoints: fitPercent // Use percentage as maxPoints for proper scaling
+    },
+    intent: {
+      ...cfg.intent,
+      maxPoints: intentPercent // Use percentage as maxPoints for proper scaling
+    }
+  };
 
-  const fitWeight = Number(cfg.distribution?.fitPercent || 20) / 100;
-  const intentWeight = Number(cfg.distribution?.intentPercent || 80) / 100;
+  const fit = computeFit(companyProfile, updatedCfg);
+  const intent = computeIntentAndPenalties(events, updatedCfg, nowMs);
 
-  const fitNormalized = (fit.fitPoints || 0) / (cfg.fit?.maxPoints || 20);
-  const intentNormalized = (intent.intentPoints || 0) / (cfg.intent?.maxPoints || 80);
+  const fitWeight = fitPercent / 100;
+  const intentWeight = intentPercent / 100;
+
+  const fitNormalized = (fit.fitPoints || 0) / fitPercent;
+  const intentNormalized = (intent.intentPoints || 0) / intentPercent;
 
   const raw = clamp(0, (fitWeight * fitNormalized + intentWeight * intentNormalized) * 100 - (intent.penaltyPoints || 0), 100);
   const score = Math.round(raw);
