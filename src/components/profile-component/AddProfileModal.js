@@ -82,10 +82,14 @@ export default function AddProfileModal({ isOpen, onClose, onAddContact, isLoadi
           }}
         />
         <input
-          type="text"
+          type="tel"
           placeholder="Phone (Optional)"
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          onChange={(e) => {
+            // Only allow numeric input
+            const numericValue = e.target.value.replace(/\D/g, '');
+            setPhone(numericValue);
+          }}
           onFocus={() => setPhoneFocused(true)}
           onBlur={() => setPhoneFocused(false)}
           style={{

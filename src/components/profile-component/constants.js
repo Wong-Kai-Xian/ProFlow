@@ -23,16 +23,16 @@ export const COLORS = {
 
 export const BUTTON_STYLES = {
   primary: {
-    background: COLORS.primary,
+    background: "linear-gradient(90deg, #60A5FA 0%, #2563EB 100%)",
     color: "white",
-    border: "none",
+    border: "1px solid rgba(37, 99, 235, 0.6)",
     padding: "8px 16px",
     borderRadius: "8px",
     cursor: "pointer",
     fontSize: "14px",
-    fontWeight: "500",
+    fontWeight: "600",
     transition: "all 0.2s ease",
-    boxShadow: "0 2px 4px rgba(52, 152, 219, 0.2)"
+    boxShadow: "0 6px 14px rgba(37, 99, 235, 0.35), inset 0 0 0 1px rgba(255,255,255,0.15)"
   },
   secondary: {
     background: COLORS.light,

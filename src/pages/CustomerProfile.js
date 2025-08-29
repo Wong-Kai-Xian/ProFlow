@@ -1424,15 +1424,33 @@ export default function CustomerProfile() {
                           createdAt: serverTimestamp(),
                         });
                         setShareEmail('');
-                        alert('Share invitation sent');
+                        try {
+                          setConfirmModalConfig({
+                            title: 'Invitation Sent',
+                            message: 'Share invitation sent successfully.',
+                            confirmText: 'OK',
+                            confirmButtonType: 'primary',
+                            onConfirm: () => setShowConfirmModal(false)
+                          });
+                          setShowConfirmModal(true);
+                        } catch {}
                       } catch (e) {
-                        alert('Failed to send share');
+                        try {
+                          setConfirmModalConfig({
+                            title: 'Share Failed',
+                            message: 'Failed to send share. Please try again.',
+                            confirmText: 'OK',
+                            confirmButtonType: 'secondary',
+                            onConfirm: () => setShowConfirmModal(false)
+                          });
+                          setShowConfirmModal(true);
+                        } catch {}
                       } finally {
                         setSharing(false);
                       }
                     }}
                     disabled={sharing}
-                    style={{ ...getButtonStyle('primary', 'customers'), opacity: sharing ? 0.7 : 1 }}
+                    style={{ ...getButtonStyle('primary', 'customers'), opacity: sharing ? 0.7 : 1, position: 'relative' }}
                   >
                     {sharing ? 'Sending…' : 'Share'}
                   </button>
