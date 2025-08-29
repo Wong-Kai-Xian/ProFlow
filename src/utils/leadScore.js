@@ -157,6 +157,36 @@ function computeIntentAndPenalties(events = [], settings, nowMs, meta = {}) {
     breakdown.push(`+${add} Tasks completed (cap ${intentCfg.taskCapPer14d}/14d)`);
   }
 
+  // Email reply tracking
+  const replyWindowHrs = Number((settings.thresholds || {}).emailReplyWindowHours || 48);
+  const lastOutbound = events.filter(e => e.type === 'emailOutbound').sort((a,b) => b.createdAtMs - a.createdAtMs)[0];
+  const firstReplyAfterOutbound = (() => {
+    if (!lastOutbound) return null;
+    return events
+      .filter(e => e.type === 'emailReply' && e.createdAtMs >= lastOutbound.createdAtMs)
+      .sort((a,b) => a.createdAtMs - b.createdAtMs)[0] || null;
+  })();
+  if (lastOutbound && firstReplyAfterOutbound) {
+    const deltaMs = firstReplyAfterOutbound.createdAtMs - lastOutbound.createdAtMs;
+    const deltaHours = deltaMs / (1000 * 60 * 60);
+    // Award configurable positive intent when reply comes within window
+    const bonus = Number(intentCfg.emailReplyBonus || 10);
+    if (deltaHours <= replyWindowHrs && bonus > 0) {
+      intentPts += bonus;
+      breakdown.push(`+${bonus} Replied within ${replyWindowHrs}h`);
+    }
+  } else if (lastOutbound) {
+    // No reply yet; if older than 7 days (configurable via penalties.noReply7d), apply penalty
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    if ((nowMs - lastOutbound.createdAtMs) >= sevenDaysMs) {
+      const p = Math.abs(penCfg.noReply7d);
+      if (p > 0) {
+        penaltyPts += p;
+        breakdown.push(`${penCfg.noReply7d} No reply in 7d`);
+      }
+    }
+  }
+
   // Penalties: inactivity and stuck (apply only after at least some activity)
   const hasAnyEvents = events.length > 0;
   const lastActivity = hasAnyEvents ? Math.max(...events.map(e => e.createdAtMs)) : 0;

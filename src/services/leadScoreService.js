@@ -1,6 +1,6 @@
 // src/services/leadScoreService.js
 import { db } from '../firebase';
-import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs, setDoc, query, orderBy, limit } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs, setDoc, query, orderBy, limit, where } from 'firebase/firestore';
 import { DEFAULT_LEAD_SCORING_SETTINGS, computeLeadScore } from '../utils/leadScore';
 
 const SETTINGS_DOC_ID = 'leadScoring';
@@ -38,6 +38,26 @@ export async function logLeadEvent(customerId, type, meta = {}) {
       createdAtMs
     });
     return { id: docRef.id, type, meta, createdAtMs };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Convenience helper to log an event by customer email address.
+ * Looks up the first customer profile where customerProfile.email == email.
+ */
+export async function logLeadEventByEmail(email, type, meta = {}) {
+  try {
+    const e = String(email || '').toLowerCase();
+    if (!e || !type) return null;
+    const base = collection(db, 'customerProfiles');
+    // Prefer nested field path for email
+    const q1 = query(base, where('customerProfile.email', '==', e));
+    const snap = await getDocs(q1);
+    const docSnap = !snap.empty ? snap.docs[0] : null;
+    if (!docSnap) return null;
+    return await logLeadEvent(docSnap.id, type, meta);
   } catch {
     return null;
   }

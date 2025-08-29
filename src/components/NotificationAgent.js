@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, limit as qlimit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, getDoc, limit as qlimit } from 'firebase/firestore';
+import { logLeadEventByEmail, recomputeAndSaveForCustomer } from '../services/leadScoreService';
 
 // Invisible agent that triggers approval reminders/escalations via notifications
 export default function NotificationAgent() {
@@ -109,6 +110,7 @@ export default function NotificationAgent() {
                   if (!dup.empty) { continue; }
                   // Fetch minimal headers to determine counterpart email (From/To)
                   let customerEmail = '';
+                  let isInboundToMe = false;
                   try {
                     const det = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To`, { headers: { Authorization: `Bearer ${accessToken}` } });
                     if (det.ok) {
@@ -123,15 +125,19 @@ export default function NotificationAgent() {
                       const f = extract(from);
                       const t = extract(to);
                       const me = (currentUser?.email || '').toLowerCase();
-                      if (f && f !== me) customerEmail = f; else if (t && t !== me) customerEmail = t; else customerEmail = f || t || '';
+                      if (f && f !== me) { customerEmail = f; isInboundToMe = true; }
+                      else if (t && t !== me) { customerEmail = t; isInboundToMe = false; }
+                      else { customerEmail = f || t || ''; isInboundToMe = false; }
                     }
                   } catch {}
-                  // Resolve customerId by email
+                  // Resolve customerId by email (try nested path)
                   let customerId = '';
                   try {
                     if (customerEmail) {
-                      const cq = query(collection(db, 'customerProfiles'), where('email', '==', customerEmail), qlimit(1));
-                      const cs = await getDocs(cq);
+                      let cs = await getDocs(query(collection(db, 'customerProfiles'), where('customerProfile.email', '==', customerEmail), qlimit(1)));
+                      if (cs.empty) {
+                        cs = await getDocs(query(collection(db, 'customerProfiles'), where('email', '==', customerEmail), qlimit(1)));
+                      }
                       if (!cs.empty) customerId = cs.docs[0].id;
                     }
                   } catch {}
@@ -147,6 +153,36 @@ export default function NotificationAgent() {
                     customerEmail,
                     customerId
                   });
+                  // Lead scoring email events (deduped per gmail message id)
+                  try {
+                    const dedupeKey = `lead_event_logged:${id}`;
+                    if (!localStorage.getItem(dedupeKey) && customerEmail) {
+                      const emailLc = (customerEmail || '').toLowerCase();
+                      const meLc = (currentUser?.email || '').toLowerCase();
+                      if (isInboundToMe) {
+                        await logLeadEventByEmail(emailLc, 'emailReply', { gmailMessageId: id });
+                        const outKey = `proflow_last_out_${emailLc}`;
+                        const lastOut = Number(localStorage.getItem(outKey) || 0);
+                        if (lastOut > 0) {
+                          await logLeadEventByEmail(emailLc, 'emailReplyLatency', { msSinceOutbound: Date.now() - lastOut, lastOutboundAt: lastOut });
+                        }
+                      } else if (emailLc && meLc) {
+                        // outbound from me to contact
+                        await logLeadEventByEmail(emailLc, 'emailOutbound', { gmailMessageId: id });
+                        try { localStorage.setItem(`proflow_last_out_${emailLc}`, String(Date.now())); } catch {}
+                      }
+                      try { localStorage.setItem(dedupeKey, '1'); } catch {}
+                      // Trigger recompute immediately so UI reflects email-based changes
+                      try {
+                        if (customerId) {
+                          const snap = await getDoc(doc(db, 'customerProfiles', customerId));
+                          const data = snap.exists() ? (snap.data() || {}) : {};
+                          const companyProfile = data.companyProfile || {};
+                          await recomputeAndSaveForCustomer({ userId: currentUser.uid, customerId, companyProfile });
+                        }
+                      } catch {}
+                    }
+                  } catch {}
                 } catch {}
               }
             }
@@ -338,7 +374,7 @@ export default function NotificationAgent() {
     });
 
     // Invitations I received and accepted -> auto-link and notify me
-    const qInvAcceptedToMe = query(collection(db, 'invitations'), where('toUserId', '==', currentUser.uid), where('status', 'in', ['accepted']))
+    const qInvAcceptedToMe = query(collection(db, 'invitations'), where('toUserId', '==', currentUser.uid), where('status', 'in', ['accepted']));
     const unsubAcceptedToMe = onSnapshot(qInvAcceptedToMe, async (snap) => {
       for (const d of snap.docs) {
         const data = d.data();
@@ -609,5 +645,3 @@ export default function NotificationAgent() {
 
   return null;
 }
-
-

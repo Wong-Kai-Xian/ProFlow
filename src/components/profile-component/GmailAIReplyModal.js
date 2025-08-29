@@ -1,262 +1,234 @@
-// src/components/profile-component/GmailAIReplyModal.js
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { BUTTON_STYLES, INPUT_STYLES, COLORS } from "./constants";
+import { logLeadEventByEmail } from '../../services/leadScoreService';
 
-const GMAIL_SCOPES = [
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.send"
-].join(" ");
+const BUTTON_STYLES = {
+  primary: { background: '#2563eb', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontWeight: 500 },
+  secondary: { background: '#e5e7eb', color: '#374151', border: 'none', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontWeight: 500 },
+};
 
-function loadScriptOnce(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
-      resolve();
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = src;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(s);
+const INPUT_STYLES = {
+  base: { padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none', fontSize: 14 }
+};
+
+const COLORS = {
+  danger: '#dc2626'
+};
+
+const loadScript = (src) => new Promise((resolve, reject) => {
+  const script = document.createElement('script');
+  script.src = src;
+  script.async = true;
+  script.onload = resolve;
+  script.onerror = () => reject(new Error('Failed to load ' + src));
+  document.head.appendChild(script);
+});
+
+const requestToken = (clientId) => new Promise((resolve) => {
+  const tokenClient = window.google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
+    callback: (response) => resolve(response?.access_token || null),
   });
-}
+  tokenClient.requestAccessToken();
+});
 
-function decodeBase64Url(str = "") {
-  try {
-    const replaced = str.replace(/-/g, "+").replace(/_/g, "/");
-    const pad = replaced.length % 4 === 2 ? "==" : replaced.length % 4 === 3 ? "=" : "";
-    const decoded = atob(replaced + pad);
-    // Convert from binary string to UTF-8
-    const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
-    const text = new TextDecoder().decode(bytes);
-    return text;
-  } catch {
-    try { return atob(str); } catch { return str; }
-  }
-}
+const requestInteractiveToken = async () => {
+  const clientId = localStorage.getItem('google_oauth_client_id') || '';
+  if (!clientId) throw new Error('Missing OAuth Client ID. Set it via Settings.');
+  try { await loadScript('https://accounts.google.com/gsi/client'); } catch {}
+  return await requestToken(clientId);
+};
 
-function encodeBase64UrlUtf8(str = "") {
-  const utf8Bytes = new TextEncoder().encode(str);
-  let bin = "";
-  utf8Bytes.forEach(b => { bin += String.fromCharCode(b); });
-  const b64 = btoa(bin);
-  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
+const decodeBase64Url = (base64Url) => {
+  let base64 = (base64Url || '').replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4) base64 += '=';
+  return atob(base64);
+};
 
-async function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const result = reader.result; // ArrayBuffer
-        const bytes = new Uint8Array(result);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-        const b64 = btoa(binary);
-        resolve(b64);
-      } catch (e) { reject(e); }
-    };
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsArrayBuffer(file);
-  });
-}
+const fileToBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const base64 = reader.result.split(',')[1];
+    resolve(base64);
+  };
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
 
-function findHeader(headers = [], name = "") {
-  const h = headers.find(h => (h?.name || '').toLowerCase() === name.toLowerCase());
-  return h?.value || '';
-}
+const createMimeMessage = (to, subject, body, attachments = []) => [
+  `From: me`,
+  `To: ${to}`,
+  `Subject: ${subject}`,
+  `MIME-Version: 1.0`,
+  ...(attachments.length === 0 ? [
+    `Content-Type: text/plain; charset=utf-8`,
+    ``,
+    body
+  ] : [
+    `Content-Type: multipart/mixed; boundary="boundary123"`,
+    ``,
+    `--boundary123`,
+    `Content-Type: text/plain; charset=utf-8`,
+    ``,
+    body,
+    ...attachments.flatMap(a => [
+      ``,
+      `--boundary123`,
+      `Content-Type: ${a.contentType}`,
+      `Content-Disposition: attachment; filename="${a.name}"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      a.base64 || ''
+    ]),
+    ``,
+    `--boundary123--`
+  ])
+].join('\r\n');
 
-function extractPlainText(payload) {
-  if (!payload) return '';
-  if (payload.mimeType === 'text/plain' && payload.body?.data) {
-    return decodeBase64Url(payload.body.data);
-  }
-  const queue = [payload];
-  while (queue.length) {
-    const part = queue.shift();
-    if (!part) continue;
-    if (part.parts) queue.push(...part.parts);
-    if (part.mimeType === 'text/plain' && part.body?.data) {
-      return decodeBase64Url(part.body.data);
-    }
-  }
-  // Fallback to snippet-like text
-  if (payload?.body?.data) return decodeBase64Url(payload.body.data);
-  return '';
-}
+const createReplyMessage = (to, subject, body, originalMessageId, attachments = []) => [
+  `From: me`,
+  `To: ${to}`,
+  `Subject: ${subject}`,
+  `In-Reply-To: ${originalMessageId}`,
+  `References: ${originalMessageId}`,
+  `MIME-Version: 1.0`,
+  ...(attachments.length === 0 ? [
+    `Content-Type: text/plain; charset=utf-8`,
+    ``,
+    body
+  ] : [
+    `Content-Type: multipart/mixed; boundary="boundary123"`,
+    ``,
+    `--boundary123`,
+    `Content-Type: text/plain; charset=utf-8`,
+    ``,
+    body,
+    ...attachments.flatMap(a => [
+      ``,
+      `--boundary123`,
+      `Content-Type: ${a.contentType}`,
+      `Content-Disposition: attachment; filename="${a.name}"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      a.base64 || ''
+    ]),
+    ``,
+    `--boundary123--`
+  ])
+].join('\r\n');
 
-function collectAttachmentsFromPayload(payload, list = []) {
-  if (!payload) return list;
-  const stack = [payload];
-  while (stack.length) {
-    const p = stack.pop();
-    if (!p) continue;
-    if (Array.isArray(p.parts)) stack.push(...p.parts);
-    const hasFilename = (p.filename || '').trim().length > 0;
-    const attachmentId = p?.body?.attachmentId;
-    if (hasFilename && attachmentId) {
-      list.push({
-        filename: p.filename,
-        mimeType: p.mimeType || 'application/octet-stream',
-        attachmentId,
-        partId: p.partId || ''
-      });
-    }
-  }
-  return list;
-}
-
-export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toName = '', onAddCustomerTasks, onAddCustomerNotes }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+export default function GmailAIReplyModal({ isOpen, onClose, customerEmail, customerName, onAddCustomerNotes, onAddCustomerTasks }) {
+  const [mode, setMode] = useState('reply');
   const [token, setToken] = useState('');
   const [authNeeded, setAuthNeeded] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [threads, setThreads] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [prompt, setPrompt] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [mode, setMode] = useState('reply'); // 'reply' | 'new' | 'analyze'
-  const [attachments, setAttachments] = useState([]); // { name, contentType, base64 }
-  const [confirmStep, setConfirmStep] = useState(0); // 0 none, 1 first, 2 second
-  const [confirmType, setConfirmType] = useState(''); // 'reply' | 'new'
-  const showToast = (message) => {
-    try {
-      const root = document.getElementById('gmail-ai-toast-root') || document.body;
-      const id = `toast_${Date.now()}`;
-      const el = document.createElement('div');
-      el.id = id;
-      el.style.position = 'fixed';
-      el.style.top = '16px';
-      el.style.right = '16px';
-      el.style.zIndex = 2147483647;
-      el.style.transition = 'all 0.3s ease';
-      el.innerHTML = `
-        <div style="background:#10b981;color:#fff;padding:12px 14px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.2);display:flex;align-items:center;gap:8px;">
-          <span style="font-size:18px">✅</span>
-          <span style="font-weight:600">${message}</span>
-        </div>
-      `;
-      root.appendChild(el);
-      setTimeout(() => {
-        try { el.style.opacity = '0'; el.style.transform = 'translateY(-6px)'; } catch {}
-      }, 1800);
-      setTimeout(() => {
-        try { root.removeChild(el); } catch {}
-      }, 2300);
-    } catch {}
-  };
+  const [attachments, setAttachments] = useState([]);
+  const [confirmStep, setConfirmStep] = useState(0);
+  const [confirmType, setConfirmType] = useState('');
+  const [summary, setSummary] = useState('');
+  const [sentiment, setSentiment] = useState('');
+  const [actions, setActions] = useState([]);
+  const [pickActionsOpen, setPickActionsOpen] = useState(false);
+  const [selectedActions, setSelectedActions] = useState({});
 
-  const clientId = useMemo(() => localStorage.getItem('google_oauth_client_id') || '', []);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    setError('');
-    setSubject('');
-    setBody('');
-    setSelected(null);
-    // Do not trigger any auth UI when just opening modal
-  }, [isOpen]);
-
-  // Auto-load latest threads when modal opens for reply/analyze
-  const autoLoadedRef = useRef(false);
-  useEffect(() => {
-    if (!isOpen) { autoLoadedRef.current = false; return; }
-    if ((mode === 'reply' || mode === 'analyze') && !autoLoadedRef.current) {
-      (async () => {
-        try { await fetchThreads(); autoLoadedRef.current = true; } catch {}
-      })();
-    }
-  }, [isOpen, mode]);
+  const toEmail = customerEmail || '';
+  const toName = customerName || '';
 
   const ensureToken = async () => {
-    try {
-      if (!clientId) { throw new Error('Missing google_oauth_client_id in localStorage'); }
-      await loadScriptOnce('https://accounts.google.com/gsi/client');
-      return await new Promise((resolve) => {
-        try {
-          const tokenClient = window.google.accounts.oauth2.initTokenClient({
-            client_id: clientId,
-            scope: GMAIL_SCOPES,
-            prompt: 'none',
-            callback: (resp) => {
-              if (resp?.access_token) { resolve(resp.access_token); }
-              else { resolve(null); }
-            },
-          });
-          tokenClient.requestAccessToken({ prompt: 'none' });
-        } catch { resolve(null); }
-      });
-    } catch (e) {
-      throw e;
-    }
-  };
-
-  const requestInteractiveToken = async () => {
-    try {
-      if (!clientId) { setAuthError('Missing google_oauth_client_id'); return null; }
-      await loadScriptOnce('https://accounts.google.com/gsi/client');
-      return await new Promise((resolve) => {
-        try {
-          const tokenClient = window.google.accounts.oauth2.initTokenClient({
-            client_id: clientId,
-            scope: GMAIL_SCOPES,
-            prompt: 'consent',
-            callback: (resp) => {
-              if (resp?.access_token) { setAuthError(''); resolve(resp.access_token); }
-              else { setAuthError(resp?.error || 'Authorization failed'); resolve(null); }
-            },
-          });
-          tokenClient.requestAccessToken({ prompt: 'consent' });
-        } catch { resolve(null); }
-      });
-    } catch { return null; }
+    const clientId = localStorage.getItem('google_oauth_client_id') || '';
+    if (!clientId) return null;
+    try { await loadScript('https://accounts.google.com/gsi/client'); } catch {}
+    return await new Promise((resolve) => {
+      try {
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
+          prompt: 'none',
+          callback: (resp) => resolve(resp?.access_token || null)
+        });
+        tokenClient.requestAccessToken({ prompt: 'none' });
+      } catch { resolve(null); }
+    });
   };
 
   const fetchThreads = async () => {
     try {
       setLoading(true); setError('');
       let at = token || await ensureToken();
-      if (!at) {
-        setAuthNeeded(true);
-        setError('Authorization required. Click Authorize Gmail.');
-        return;
-      }
+      if (!at) { setAuthNeeded(true); setError('Authorization required.'); return; }
       if (!token) setToken(at);
-      const q = `from:${toEmail} OR to:${toEmail}`;
-      const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=3`, {
-        headers: { Authorization: `Bearer ${at}` }
-      });
-      if (res.status === 401 || res.status === 403) {
-        setAuthNeeded(true);
-        setError('Authorization required. Click Authorize Gmail.');
-        return;
-      }
-      if (!res.ok) throw new Error(`List error ${res.status}`);
+      const query = encodeURIComponent(`from:${toEmail} OR to:${toEmail}`);
+      const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=3`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${at}` } });
+      if (!res.ok) throw new Error(`Gmail API error ${res.status}`);
       const json = await res.json();
-      const messages = Array.isArray(json.messages) ? json.messages : [];
+      const messages = json.messages || [];
       const detailed = [];
-      for (const m of messages) {
-        const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`, {
-          headers: { Authorization: `Bearer ${at}` }
-        });
-        if (!r.ok) continue;
-        const mj = await r.json();
-        const headers = mj?.payload?.headers || [];
-        const subj = findHeader(headers, 'Subject');
-        const from = findHeader(headers, 'From');
-        const date = findHeader(headers, 'Date');
-        const msgId = findHeader(headers, 'Message-Id');
-        const text = extractPlainText(mj?.payload);
-        const attachmentsMeta = collectAttachmentsFromPayload(mj?.payload, []);
-        detailed.push({ id: mj.id, threadId: mj.threadId, subject: subj, from, date, messageIdHeader: msgId, snippet: mj.snippet || '', text, attachmentsMeta });
+      for (const msg of messages) {
+        try {
+          const detailRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}`, { headers: { Authorization: `Bearer ${at}` } });
+          if (!detailRes.ok) continue;
+          const detail = await detailRes.json();
+          const headers = detail?.payload?.headers || [];
+          const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
+          const from = headers.find(h => h.name.toLowerCase() === 'from')?.value || '';
+          const date = headers.find(h => h.name.toLowerCase() === 'date')?.value || '';
+          const internalDate = detail.internalDate || '0';
+          let text = '';
+          const extractText = (part) => {
+            if (part.mimeType === 'text/plain' && part.body?.data) {
+              return decodeBase64Url(part.body.data);
+            }
+            if (part.parts) {
+              for (const subPart of part.parts) {
+                const subText = extractText(subPart);
+                if (subText) return subText;
+              }
+            }
+            return '';
+          };
+          text = extractText(detail.payload) || detail.snippet || '';
+          const attachmentsMeta = [];
+          const extractAttachments = (part) => {
+            if (part.filename && part.body?.attachmentId) {
+              attachmentsMeta.push({
+                filename: part.filename,
+                mimeType: part.mimeType,
+                attachmentId: part.body.attachmentId
+              });
+            }
+            if (part.parts) {
+              part.parts.forEach(extractAttachments);
+            }
+          };
+          extractAttachments(detail.payload);
+          detailed.push({
+            id: msg.id,
+            threadId: detail.threadId,
+            subject,
+            from,
+            date,
+            text,
+            snippet: detail.snippet || '',
+            timestamp: parseInt(internalDate),
+            attachmentsMeta
+          });
+        } catch {}
       }
+      detailed.sort((a, b) => b.timestamp - a.timestamp);
       setThreads(detailed);
+      if (detailed.length > 0 && !selected) setSelected(detailed[0]);
     } catch (e) {
-      setError(e?.message || 'Failed to fetch');
+      setError(e?.message || 'Failed to fetch emails');
+      if (e.message?.includes('401') || e.message?.includes('403')) setAuthNeeded(true);
     } finally {
       setLoading(false);
     }
@@ -264,95 +236,31 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
 
   const generateReply = async () => {
     try {
-      if (!selected) return;
       setLoading(true); setError('');
       const apiKey = localStorage.getItem('gemini_api_key');
-      if (!apiKey) { throw new Error('Missing gemini_api_key in localStorage'); }
-      const instruction = (prompt || '').trim() || 'a concise, professional reply';
-      const sys = `You draft professional, concise email replies. Output plain text only. Start with a single line 'Subject: ...' then a blank line and the body.`;
-      const context = `Original Subject: ${selected.subject}\nFrom: ${selected.from}\nDate: ${selected.date}\n\nMessage:\n${selected.text}`;
-      const user = `Write ${instruction} to ${toName || toEmail}.`;
+      if (!apiKey) throw new Error('Missing gemini_api_key in localStorage');
+      if (!selected) throw new Error('No email selected');
+      const context = `Original email:\nSubject: ${selected.subject}\nFrom: ${selected.from}\nDate: ${selected.date}\n\nBody:\n${selected.text}`;
+      const userPrompt = prompt || 'Reply professionally and appropriately to this email.';
+      const fullPrompt = `${context}\n\nUser wants to: ${userPrompt}\n\nWrite a professional email reply. Output JSON with keys: subject (string), body (string).`;
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${encodeURIComponent(apiKey)}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-          contents: [ { role: 'user', parts: [{ text: `${sys}\n\n${context}\n\n${user}` }] } ]
-        })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [ { role: 'user', parts: [{ text: fullPrompt }] } ] })
       });
       if (!res.ok) throw new Error(`AI error ${res.status}`);
       const json = await res.json();
       const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      // parse subject and body
-      const lines = text.split(/\r?\n/);
-      let subj = '';
-      let bodyLines = [];
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (!subj && /^\s*subject\s*:/i.test(line)) {
-          subj = line.replace(/^\s*subject\s*:\s*/i, '').trim();
-          bodyLines = lines.slice(i + 1);
-          break;
-        }
+      let parsed = null;
+      try { parsed = JSON.parse(text); } catch {
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
       }
-      if (!subj) {
-        subj = selected.subject?.startsWith('Re:') ? selected.subject : `Re: ${selected.subject || ''}`.trim();
-        bodyLines = lines;
-      }
-      setSubject(subj);
-      setBody(bodyLines.join('\n').trim());
+      if (!parsed) throw new Error('Failed to parse AI response');
+      const origSubject = selected.subject || '';
+      const replySubject = origSubject.toLowerCase().startsWith('re:') ? origSubject : `Re: ${origSubject}`;
+      setSubject(parsed.subject || replySubject);
+      setBody(parsed.body || '');
     } catch (e) {
-      setError(e?.message || 'Failed to generate');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const sendReply = async () => {
-    try {
-      if (!selected) return;
-      setLoading(true); setError('');
-      let at = token || await ensureToken();
-      if (!at) { setAuthNeeded(true); setError('Authorization required.'); return; }
-      if (!token) setToken(at);
-      const replySubject = subject || (selected.subject?.startsWith('Re:') ? selected.subject : `Re: ${selected.subject || ''}`.trim());
-      const origMsgId = selected.messageIdHeader || '';
-      const boundary = `mime_boundary_${Date.now()}`;
-      let mimeParts = [];
-      mimeParts.push([
-        `Content-Type: text/plain; charset=UTF-8`,
-        `Content-Transfer-Encoding: 7bit`,
-        '',
-        body || ''
-      ].join('\r\n'));
-      for (const a of attachments) {
-        mimeParts.push([
-          `Content-Type: ${a.contentType || 'application/octet-stream'}; name="${a.name}"`,
-          `Content-Disposition: attachment; filename="${a.name}"`,
-          `Content-Transfer-Encoding: base64`,
-          '',
-          a.base64 || ''
-        ].join('\r\n'));
-      }
-      const mixedBody = mimeParts.map(p => `--${boundary}\r\n${p}`).join('\r\n') + `\r\n--${boundary}--`;
-      const mime = [
-        `To: ${toEmail}`,
-        `Subject: ${replySubject}`,
-        origMsgId ? `In-Reply-To: ${origMsgId}` : '',
-        origMsgId ? `References: ${origMsgId}` : '',
-        'MIME-Version: 1.0',
-        `Content-Type: multipart/mixed; boundary="${boundary}"`,
-        '',
-        mixedBody
-      ].filter(Boolean).join('\r\n');
-      const raw = encodeBase64UrlUtf8(mime);
-      const sendRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${at}` },
-        body: JSON.stringify({ raw, threadId: selected.threadId })
-      });
-      if (!sendRes.ok) throw new Error(`Send error ${sendRes.status}`);
-      showToast('Reply sent successfully');
-      onClose && onClose();
-    } catch (e) {
-      setError(e?.message || 'Failed to send');
+      setError(e?.message || 'Failed to generate reply');
     } finally {
       setLoading(false);
     }
@@ -362,34 +270,60 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
     try {
       setLoading(true); setError('');
       const apiKey = localStorage.getItem('gemini_api_key');
-      if (!apiKey) { throw new Error('Missing gemini_api_key in localStorage'); }
-      const instruction = (prompt || '').trim() || 'a concise, professional outreach email';
-      const sys = `You draft professional, concise emails. Output plain text only. Start with 'Subject: ...' then a blank line and the body.`;
-      const user = `Write ${instruction} to ${toName || toEmail}.`;
+      if (!apiKey) throw new Error('Missing gemini_api_key in localStorage');
+      const userPrompt = prompt || 'Write a professional email.';
+      const fullPrompt = `Customer: ${toName || toEmail}\n\nUser wants to: ${userPrompt}\n\nWrite a professional email. Output JSON with keys: subject (string), body (string).`;
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${encodeURIComponent(apiKey)}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-          contents: [ { role: 'user', parts: [{ text: `${sys}\n\n${user}` }] } ]
-        })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [ { role: 'user', parts: [{ text: fullPrompt }] } ] })
       });
       if (!res.ok) throw new Error(`AI error ${res.status}`);
       const json = await res.json();
       const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const lines = text.split(/\r?\n/);
-      let subj = '';
-      let bodyLines = [];
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (!subj && /^\s*subject\s*:/i.test(line)) {
-          subj = line.replace(/^\s*subject\s*:\s*/i, '').trim();
-          bodyLines = lines.slice(i + 1);
-          break;
-        }
+      let parsed = null;
+      try { parsed = JSON.parse(text); } catch {
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
       }
-      if (!subj) { subj = ''; bodyLines = lines; }
-      setSubject(subj);
-      setBody(bodyLines.join('\n').trim());
+      if (!parsed) throw new Error('Failed to parse AI response');
+      setSubject(parsed.subject || '');
+      setBody(parsed.body || '');
     } catch (e) {
-      setError(e?.message || 'Failed to generate');
+      setError(e?.message || 'Failed to generate email');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendReply = async () => {
+    try {
+      setLoading(true); setError('');
+      let at = token || await ensureToken();
+      if (!at) { setAuthNeeded(true); setError('Authorization required.'); return; }
+      if (!token) setToken(at);
+      if (!selected) throw new Error('No email selected');
+      const raw = createReplyMessage(toEmail, subject, body, selected.id, attachments);
+      const encodedMessage = btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST', headers: { Authorization: `Bearer ${at}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw: encodedMessage })
+      });
+      if (!res.ok) throw new Error(`Send failed ${res.status}`);
+      
+      // Log lead event after successful send
+      if (toEmail) {
+        await logLeadEventByEmail(toEmail, 'emailOutbound', { messageId: (await res.json())?.id });
+        try { localStorage.setItem(`proflow_last_out_${toEmail.toLowerCase()}`, String(Date.now())); } catch {}
+      }
+
+      // Toast notification
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;top:16px;right:16px;background:#059669;color:#fff;padding:12px 16px;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.2);z-index:2147483647;font-size:14px;font-weight:500;';
+      toast.textContent = 'Reply sent successfully!';
+      document.body.appendChild(toast);
+      setTimeout(() => document.body.removeChild(toast), 3000);
+      setSubject(''); setBody(''); setAttachments([]);
+      onClose && onClose();
+    } catch (e) {
+      setError(e?.message || 'Failed to send');
     } finally {
       setLoading(false);
     }
@@ -401,41 +335,26 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
       let at = token || await ensureToken();
       if (!at) { setAuthNeeded(true); setError('Authorization required.'); return; }
       if (!token) setToken(at);
-      const newSubject = subject || '(no subject)';
-      const boundary = `mime_boundary_${Date.now()}`;
-      let mimeParts = [];
-      mimeParts.push([
-        `Content-Type: text/plain; charset=UTF-8`,
-        `Content-Transfer-Encoding: 7bit`,
-        '',
-        body || ''
-      ].join('\r\n'));
-      for (const a of attachments) {
-        mimeParts.push([
-          `Content-Type: ${a.contentType || 'application/octet-stream'}; name="${a.name}"`,
-          `Content-Disposition: attachment; filename="${a.name}"`,
-          `Content-Transfer-Encoding: base64`,
-          '',
-          a.base64 || ''
-        ].join('\r\n'));
-      }
-      const mixedBody = mimeParts.map(p => `--${boundary}\r\n${p}`).join('\r\n') + `\r\n--${boundary}--`;
-      const mime = [
-        `To: ${toEmail}`,
-        `Subject: ${newSubject}`,
-        'MIME-Version: 1.0',
-        `Content-Type: multipart/mixed; boundary="${boundary}"`,
-        '',
-        mixedBody
-      ].join('\r\n');
-      const raw = encodeBase64UrlUtf8(mime);
-      const sendRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${at}` },
-        body: JSON.stringify({ raw })
+      const raw = createMimeMessage(toEmail, subject, body, attachments);
+      const encodedMessage = btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST', headers: { Authorization: `Bearer ${at}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw: encodedMessage })
       });
-      if (!sendRes.ok) throw new Error(`Send error ${sendRes.status}`);
-      showToast('Email sent successfully');
+      if (!res.ok) throw new Error(`Send failed ${res.status}`);
+      
+      // Log lead event after successful send
+      if (toEmail) {
+        await logLeadEventByEmail(toEmail, 'emailOutbound', { messageId: (await res.json())?.id });
+        try { localStorage.setItem(`proflow_last_out_${toEmail.toLowerCase()}`, String(Date.now())); } catch {}
+      }
+
+      // Toast notification
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;top:16px;right:16px;background:#059669;color:#fff;padding:12px 16px;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.2);z-index:2147483647;font-size:14px;font-weight:500;';
+      toast.textContent = 'Email sent successfully!';
+      document.body.appendChild(toast);
+      setTimeout(() => document.body.removeChild(toast), 3000);
+      setSubject(''); setBody(''); setAttachments([]);
       onClose && onClose();
     } catch (e) {
       setError(e?.message || 'Failed to send');
@@ -470,12 +389,6 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
       setError(e?.message || 'Failed to download attachment');
     }
   };
-
-  const [summary, setSummary] = useState('');
-  const [sentiment, setSentiment] = useState('');
-  const [actions, setActions] = useState([]);
-  const [pickActionsOpen, setPickActionsOpen] = useState(false);
-  const [selectedActions, setSelectedActions] = useState({});
 
   const analyze = async () => {
     try {
@@ -739,8 +652,6 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
           </div>
         ) : null}
 
-        
-
         {confirmStep > 0 ? (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2147483647 }}>
             <div style={{ background: '#ffffff', width: 520, maxWidth: '92%', borderRadius: 12, boxShadow: '0 20px 40px rgba(0,0,0,0.25)', padding: 20 }}>
@@ -771,61 +682,61 @@ export default function GmailAIReplyModal({ isOpen, onClose, toEmail = '', toNam
             </div>
           </div>
         ) : null}
-        {/* Toast container */}
-        <div id="gmail-ai-toast-root" style={{ position: 'fixed', top: 16, right: 16, zIndex: 2147483647 }} />
-      </div>
-      {pickActionsOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2147483647 }}>
-          <div style={{ background: '#fff', borderRadius: 10, width: 560, maxWidth: '95vw', padding: 16, boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontWeight: 700 }}>Select Action Items</div>
-              <button onClick={() => setPickActionsOpen(false)} style={{ ...BUTTON_STYLES.secondary }}>Close</button>
-            </div>
-            <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
-              {actions.length === 0 ? (
-                <div style={{ color: '#6b7280' }}>No actions available.</div>
-              ) : actions.map((a, idx) => (
-                <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 6 }}>
-                  <input type="checkbox" checked={!!selectedActions[idx]} onChange={(e) => setSelectedActions(prev => ({ ...prev, [idx]: e.target.checked }))} />
-                  <span>{a}</span>
-                </label>
-              ))}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 12 }}>
-              <button onClick={() => setSelectedActions({})} style={{ ...BUTTON_STYLES.secondary }}>Clear</button>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={async () => {
-                  try {
-                    const picked = actions.filter((_, i) => selectedActions[i]);
-                    if (picked.length === 0) { setPickActionsOpen(false); return; }
-                    setBody(prev => {
-                      const more = `\n\nNotes from analysis:\n- ${picked.join('\n- ')}`;
-                      return (prev || '') + more;
-                    });
-                    try { if (typeof onAddCustomerNotes === 'function') onAddCustomerNotes(picked); } catch {}
-                    setPickActionsOpen(false);
-                  } catch {}
-                }} style={{ ...BUTTON_STYLES.secondary }}>Add to Notes</button>
-                <button onClick={async () => {
-                  try {
-                    const picked = actions.filter((_, i) => selectedActions[i]);
-                    if (picked.length === 0) { setPickActionsOpen(false); return; }
-                    setBody(prev => {
-                      const more = `\n\nAction checklist:\n${picked.map(t => `[] ${t}`).join('\n')}`;
-                      return (prev || '') + more;
-                    });
-                    try { if (typeof onAddCustomerTasks === 'function') onAddCustomerTasks(picked); } catch {}
-                    setPickActionsOpen(false);
-                  } catch {}
-                }} style={{ ...BUTTON_STYLES.primary }}>Add as Tasks</button>
+
+        {pickActionsOpen && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2147483647 }}>
+            <div style={{ background: '#fff', borderRadius: 10, width: 560, maxWidth: '95vw', padding: 16, boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontWeight: 700 }}>Select Action Items</div>
+                <button onClick={() => setPickActionsOpen(false)} style={{ ...BUTTON_STYLES.secondary }}>Close</button>
+              </div>
+              <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+                {actions.length === 0 ? (
+                  <div style={{ color: '#6b7280' }}>No actions available.</div>
+                ) : actions.map((a, idx) => (
+                  <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 6 }}>
+                    <input type="checkbox" checked={!!selectedActions[idx]} onChange={(e) => setSelectedActions(prev => ({ ...prev, [idx]: e.target.checked }))} />
+                    <span>{a}</span>
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 12 }}>
+                <button onClick={() => setSelectedActions({})} style={{ ...BUTTON_STYLES.secondary }}>Clear</button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={async () => {
+                    try {
+                      const picked = actions.filter((_, i) => selectedActions[i]);
+                      if (picked.length === 0) { setPickActionsOpen(false); return; }
+                      setBody(prev => {
+                        const more = `\n\nNotes from analysis:\n- ${picked.join('\n- ')}`;
+                        return (prev || '') + more;
+                      });
+                      try { if (typeof onAddCustomerNotes === 'function') onAddCustomerNotes(picked); } catch {}
+                      setPickActionsOpen(false);
+                    } catch {}
+                  }} style={{ ...BUTTON_STYLES.secondary }}>Add to Notes</button>
+                  <button onClick={async () => {
+                    try {
+                      const picked = actions.filter((_, i) => selectedActions[i]);
+                      if (picked.length === 0) { setPickActionsOpen(false); return; }
+                      setBody(prev => {
+                        const more = `\n\nAction checklist:\n${picked.map(t => `[] ${t}`).join('\n')}`;
+                        return (prev || '') + more;
+                      });
+                      try { if (typeof onAddCustomerTasks === 'function') onAddCustomerTasks(picked); } catch {}
+                      setPickActionsOpen(false);
+                    } catch {}
+                  }} style={{ ...BUTTON_STYLES.primary }}>Add as Tasks</button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Toast container */}
+        <div id="gmail-ai-toast-root" style={{ position: 'fixed', top: 16, right: 16, zIndex: 2147483647 }} />
+      </div>
     </div>,
     document.body
   );
 }
-
-

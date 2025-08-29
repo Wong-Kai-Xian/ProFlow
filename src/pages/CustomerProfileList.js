@@ -74,6 +74,29 @@ export default function CustomerProfileList() {
   const [pendingSharesCount, setPendingSharesCount] = useState(0);
   const [showLeadSettings, setShowLeadSettings] = useState(false);
   const [leadSettings, setLeadSettings] = useState(null);
+  const [industryOpen, setIndustryOpen] = useState(false);
+  const [countryOpen, setCountryOpen] = useState(false);
+  const INDUSTRY_OPTIONS = [
+    'Construction','Manufacturing','Technology','Healthcare','Retail','Real Estate','Education','Finance','Logistics','Hospitality','Energy','Consulting'
+  ];
+  const COUNTRY_OPTIONS = [
+    { code: 'MY', name: 'Malaysia' },
+    { code: 'SG', name: 'Singapore' },
+    { code: 'ID', name: 'Indonesia' },
+    { code: 'TH', name: 'Thailand' },
+    { code: 'VN', name: 'Vietnam' },
+    { code: 'PH', name: 'Philippines' },
+    { code: 'CN', name: 'China' },
+    { code: 'HK', name: 'Hong Kong' },
+    { code: 'TW', name: 'Taiwan' },
+    { code: 'JP', name: 'Japan' },
+    { code: 'KR', name: 'South Korea' },
+    { code: 'IN', name: 'India' },
+    { code: 'AU', name: 'Australia' },
+    { code: 'NZ', name: 'New Zealand' },
+    { code: 'US', name: 'United States' },
+    { code: 'GB', name: 'United Kingdom' }
+  ];
 
   useEffect(() => {
     if (!currentUser) {
@@ -519,18 +542,7 @@ export default function CustomerProfileList() {
                   }}>{pendingSharesCount}</span>
                 )}
               </button>
-              <button
-                onClick={() => setShowLeadSettings(true)}
-                style={{
-                  ...getButtonStyle('secondary', 'customers'),
-                  padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.lg}`,
-                  fontSize: DESIGN_SYSTEM.typography.fontSize.base,
-                  fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
-                  borderRadius: DESIGN_SYSTEM.borderRadius.lg
-                }}
-              >
-                Lead Score Settings
-              </button>
+              {/* Removed settings button from hero panel as requested */}
             </div>
           )}
         </div>
@@ -539,9 +551,10 @@ export default function CustomerProfileList() {
         {currentUser && (
           <div style={{ 
             display: "flex", 
-            gap: "20px", 
-            marginBottom: "30px",
-            alignItems: "center"
+            gap: "12px", 
+            marginBottom: "20px",
+            alignItems: "center",
+            justifyContent: 'flex-start'
           }}>
             {/* Search Bar */}
             <input
@@ -552,7 +565,7 @@ export default function CustomerProfileList() {
               style={{
                 fontFamily: DESIGN_SYSTEM.typography.fontFamily.primary,
                 width: "100%",
-                maxWidth: "400px",
+                maxWidth: "420px",
                 padding: `${DESIGN_SYSTEM.spacing.base} ${DESIGN_SYSTEM.spacing.base}`,
                 fontSize: DESIGN_SYSTEM.typography.fontSize.base,
                 borderRadius: DESIGN_SYSTEM.borderRadius.base,
@@ -572,17 +585,31 @@ export default function CustomerProfileList() {
             {/* Sort control */}
             <div>
               <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} style={{
-                padding: '10px 12px',
+                padding: '8px 10px',
                 border: `2px solid ${DESIGN_SYSTEM.colors.secondary[300]}`,
                 borderRadius: DESIGN_SYSTEM.borderRadius.base,
                 background: DESIGN_SYSTEM.colors.background.primary,
-                color: DESIGN_SYSTEM.colors.text.primary
+                color: DESIGN_SYSTEM.colors.text.primary,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.sm
               }}>
-                <option value="alpha">Sort: Alphabetical</option>
-                <option value="score_desc">Sort: Score High → Low</option>
-                <option value="score_asc">Sort: Score Low → High</option>
+                <option value="alpha">Alphabetical</option>
+                <option value="score_desc">Score High → Low</option>
+                <option value="score_asc">Score Low → High</option>
               </select>
             </div>
+            <button
+              onClick={() => setShowLeadSettings(true)}
+              style={{
+                ...getButtonStyle('secondary', 'customers'),
+                padding: '6px 10px',
+                fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
+                borderRadius: DESIGN_SYSTEM.borderRadius.base,
+                marginLeft: 'auto'
+              }}
+            >
+              Lead Score Settings
+            </button>
           </div>
         )}
 
@@ -871,14 +898,85 @@ export default function CustomerProfileList() {
       />
       {showLeadSettings && leadSettings && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }} onClick={() => setShowLeadSettings(false)}>
-          <div onClick={(e)=>e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: 680, maxWidth: '92vw', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 16 }}>
+          <div onClick={(e)=>e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: 720, maxWidth: '92vw', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <div style={{ fontWeight: 700 }}>Lead Score Settings</div>
               <button onClick={() => setShowLeadSettings(false)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Close</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Target industries (comma)<input value={(leadSettings.fit.targetIndustries||[]).join(', ')} onChange={(e)=> setLeadSettings(s => ({ ...s, fit: { ...s.fit, targetIndustries: e.target.value.split(',').map(x=>x.trim()).filter(Boolean) } }))} /></label>
-              <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Target countries (ISO comma)<input value={(leadSettings.fit.targetCountries||[]).join(', ')} onChange={(e)=> setLeadSettings(s => ({ ...s, fit: { ...s.fit, targetCountries: e.target.value.split(',').map(x=>x.trim().toUpperCase()).filter(Boolean) } }))} /></label>
+              {/* Industries dropdown */}
+              <div style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151', position: 'relative' }}>
+                <label style={{ marginBottom: 4 }}>Target industries</label>
+                <div onClick={() => setIndustryOpen(v => !v)} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 8, cursor: 'pointer', background: '#fff' }}>
+                  {(leadSettings.fit.targetIndustries || []).length === 0 ? (
+                    <div style={{ color: '#9ca3af' }}>Select industries…</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {(leadSettings.fit.targetIndustries || []).map(val => (
+                        <span key={val} style={{ background: '#eef2ff', color: '#1f2937', padding: '2px 6px', borderRadius: 9999, fontSize: 11 }}>{val}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {industryOpen && (
+                  <div style={{ position: 'absolute', zIndex: 10, top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, marginTop: 4, maxHeight: 220, overflow: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
+                    {['Construction','Manufacturing','Technology','Healthcare','Retail','Real Estate','Education','Finance','Logistics','Hospitality','Energy','Consulting'].map(opt => {
+                      const checked = (leadSettings.fit.targetIndustries || []).includes(opt);
+                      return (
+                        <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={checked} onChange={(e) => {
+                            setLeadSettings(s => {
+                              const cur = new Set(s.fit.targetIndustries || []);
+                              if (e.target.checked) cur.add(opt); else cur.delete(opt);
+                              return { ...s, fit: { ...s.fit, targetIndustries: Array.from(cur) } };
+                            });
+                          }} />
+                          <span>{opt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Countries dropdown (full name) */}
+              <div style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151', position: 'relative' }}>
+                <label style={{ marginBottom: 4 }}>Target countries</label>
+                <div onClick={() => { if (!leadSettings.fit.worldwide) setCountryOpen(v => !v); }} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 8, cursor: leadSettings.fit.worldwide ? 'not-allowed' : 'pointer', background: leadSettings.fit.worldwide ? '#f3f4f6' : '#fff' }}>
+                  {(leadSettings.fit.targetCountries || []).length === 0 ? (
+                    <div style={{ color: '#9ca3af' }}>{leadSettings.fit.worldwide ? 'Worldwide enabled' : 'Select countries…'}</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {[
+                        { code: 'MY', name: 'Malaysia' },{ code: 'SG', name: 'Singapore' },{ code: 'ID', name: 'Indonesia' },{ code: 'TH', name: 'Thailand' },{ code: 'VN', name: 'Vietnam' },{ code: 'PH', name: 'Philippines' },{ code: 'CN', name: 'China' },{ code: 'HK', name: 'Hong Kong' },{ code: 'TW', name: 'Taiwan' },{ code: 'JP', name: 'Japan' },{ code: 'KR', name: 'South Korea' },{ code: 'IN', name: 'India' },{ code: 'AU', name: 'Australia' },{ code: 'NZ', name: 'New Zealand' },{ code: 'US', name: 'United States' },{ code: 'GB', name: 'United Kingdom' }
+                      ].filter(c => (leadSettings.fit.targetCountries || []).includes(c.code)).map(item => (
+                        <span key={item.code} style={{ background: '#eef2ff', color: '#1f2937', padding: '2px 6px', borderRadius: 9999, fontSize: 11 }}>{item.name}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {countryOpen && !leadSettings.fit.worldwide && (
+                  <div style={{ position: 'absolute', zIndex: 10, top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, marginTop: 4, maxHeight: 240, overflow: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
+                    {[
+                      { code: 'MY', name: 'Malaysia' },{ code: 'SG', name: 'Singapore' },{ code: 'ID', name: 'Indonesia' },{ code: 'TH', name: 'Thailand' },{ code: 'VN', name: 'Vietnam' },{ code: 'PH', name: 'Philippines' },{ code: 'CN', name: 'China' },{ code: 'HK', name: 'Hong Kong' },{ code: 'TW', name: 'Taiwan' },{ code: 'JP', name: 'Japan' },{ code: 'KR', name: 'South Korea' },{ code: 'IN', name: 'India' },{ code: 'AU', name: 'Australia' },{ code: 'NZ', name: 'New Zealand' },{ code: 'US', name: 'United States' },{ code: 'GB', name: 'United Kingdom' }
+                    ].map(opt => {
+                      const checked = (leadSettings.fit.targetCountries || []).includes(opt.code);
+                      return (
+                        <label key={opt.code} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={checked} onChange={(e) => {
+                            setLeadSettings(s => {
+                              const cur = new Set(s.fit.targetCountries || []);
+                              if (e.target.checked) cur.add(opt.code); else cur.delete(opt.code);
+                              return { ...s, fit: { ...s.fit, targetCountries: Array.from(cur) } };
+                            });
+                          }} />
+                          <span>{opt.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               <label style={{ gridColumn: '1 / span 2', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151' }}><input type="checkbox" checked={!!leadSettings.fit.worldwide} onChange={(e)=> setLeadSettings(s => ({ ...s, fit: { ...s.fit, worldwide: e.target.checked } }))} /> Worldwide</label>
               <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Fit %<input type="number" value={leadSettings.distribution.fitPercent} onChange={(e)=> setLeadSettings(s => ({ ...s, distribution: { ...s.distribution, fitPercent: Number(e.target.value||0), intentPercent: Math.max(0, 100 - Number(e.target.value||0)) } }))} /></label>
               <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#374151' }}>Intent %<input type="number" value={leadSettings.distribution.intentPercent} onChange={(e)=> setLeadSettings(s => ({ ...s, distribution: { ...s.distribution, intentPercent: Number(e.target.value||0), fitPercent: Math.max(0, 100 - Number(e.target.value||0)) } }))} /></label>

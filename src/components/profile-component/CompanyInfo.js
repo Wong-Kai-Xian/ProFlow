@@ -12,13 +12,20 @@ export default function CompanyInfo({ data, setCompanyProfile, onSave }) {
   const [companySuggestions, setCompanySuggestions] = useState([]);
   const [locationSuggestions, setLocationSuggestions] = useState([]);
   const [showMap, setShowMap] = useState(false);
+  const [industryOpen, setIndustryOpen] = useState(false);
   const debounceRef = useRef(0);
   const companyInputRef = useRef(null);
   const locationInputRef = useRef(null);
+  const industryDropdownRef = useRef(null);
   const [companyMenuPos, setCompanyMenuPos] = useState({ top: 0, left: 0, width: 0 });
   const [locationMenuPos, setLocationMenuPos] = useState({ top: 0, left: 0, width: 0 });
   const companyMenuRef = useRef(null);
   const locationMenuRef = useRef(null);
+
+  // Industry options from lead score settings
+  const INDUSTRY_OPTIONS = [
+    'Construction','Manufacturing','Technology','Healthcare','Retail','Real Estate','Education','Finance','Logistics','Hospitality','Energy','Consulting'
+  ];
 
   useEffect(() => { setEditedData(data || {}); }, [data]);
 
@@ -77,6 +84,14 @@ export default function CompanyInfo({ data, setCompanyProfile, onSave }) {
     }
   };
 
+  const handleIndustrySelect = (industry) => {
+    setEditedData(prevData => ({
+      ...prevData,
+      industry: industry
+    }));
+    setIndustryOpen(false);
+  };
+
   useEffect(() => {
     const onScrollOrResize = () => {
       try {
@@ -105,8 +120,10 @@ export default function CompanyInfo({ data, setCompanyProfile, onSave }) {
       if (locationInputRef.current && locationInputRef.current.contains(t)) return;
       if (companyMenuRef.current && companyMenuRef.current.contains(t)) return;
       if (locationMenuRef.current && locationMenuRef.current.contains(t)) return;
+      if (industryDropdownRef.current && industryDropdownRef.current.contains(t)) return;
       setCompanySuggestions([]);
       setLocationSuggestions([]);
+      setIndustryOpen(false);
     };
     document.addEventListener('mousedown', onDocMouseDown, true);
     return () => document.removeEventListener('mousedown', onDocMouseDown, true);
@@ -153,7 +170,23 @@ export default function CompanyInfo({ data, setCompanyProfile, onSave }) {
                 </div>, document.body
               )}
             </p>
-            <p><strong>Industry:</strong> <input type="text" name="industry" value={editedData.industry} onChange={handleChange} style={{ ...INPUT_STYLES.base, width: "calc(100% - 70px)" }} /></p>
+            <p style={{ position: 'relative' }}>
+              <strong>Industry:</strong>
+              <div ref={industryDropdownRef} style={{ display: 'inline-block', position: 'relative' }}>
+                <div onClick={() => setIndustryOpen(v => !v)} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', background: '#fff', width: 'calc(100% - 70px)', display: 'inline-block' }}>
+                  {editedData.industry || 'Select industry...'}
+                </div>
+                {industryOpen && (
+                  <div style={{ position: 'absolute', zIndex: 10, top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, marginTop: 4, maxHeight: 220, overflow: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
+                    {INDUSTRY_OPTIONS.map(opt => (
+                      <div key={opt} onClick={() => handleIndustrySelect(opt)} style={{ padding: 8, cursor: 'pointer', borderBottom: '1px solid #f3f4f6', color: editedData.industry === opt ? '#2563eb' : '#374151' }}>
+                        {opt}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </p>
             <p style={{ position: 'relative' }}>
               <strong>Location:</strong>
               <input ref={locationInputRef} type="text" name="location" value={editedData.location} onChange={handleChange} style={{ ...INPUT_STYLES.base, width: "calc(100% - 70px)" }} />
