@@ -88,11 +88,14 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
         padding: LAYOUT.gap,
         borderRadius: LAYOUT.borderRadius,
         boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-        width: "400px",
+        width: "500px",
         maxWidth: "90%",
+        maxHeight: "85vh",
+        overflowY: "auto",
         display: "flex",
         flexDirection: "column",
         gap: LAYOUT.gap,
+        margin: "0 auto",
       }}>
         <h3 style={{ margin: "0 0 10px 0", color: COLORS.text }}>Add Group Forum</h3>
 
@@ -177,6 +180,7 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
                 ...INPUT_STYLES.textarea,
                 width: "100%",
                 minHeight: "60px",
+                maxHeight: "120px",
                 fontSize: '14px',
                 resize: 'vertical'
               }}
@@ -282,26 +286,35 @@ export default function AddGroupForumModal({ isOpen, onClose, onCreateNewForum, 
             )}
           </div>
 
-          <button 
-            onClick={handleCreateClick} 
-            disabled={!newForumName.trim() || !forumDescription.trim() || !selectedProjectId}
-            style={{
-              ...BUTTON_STYLES.primary,
-              width: "100%",
-              opacity: (!newForumName.trim() || !forumDescription.trim() || !selectedProjectId) ? 0.5 : 1,
-              cursor: (!newForumName.trim() || !forumDescription.trim() || !selectedProjectId) ? 'not-allowed' : 'pointer'
-            }}
-          >
-            Create Forum
-          </button>
+          <div style={{
+            display: "flex",
+            gap: "12px",
+            marginTop: "15px"
+          }}>
+            <button onClick={onClose} style={{
+              ...BUTTON_STYLES.secondary,
+              padding: "10px",
+              fontSize: "14px",
+              fontWeight: "500",
+              flex: "1"
+            }}>
+              Cancel
+            </button>
+            <button 
+              onClick={handleCreateClick} 
+              disabled={!newForumName.trim() || !forumDescription.trim() || !selectedProjectId}
+              style={{
+                ...BUTTON_STYLES.primary,
+                flex: "1.5",
+                padding: "10px",
+                opacity: (!newForumName.trim() || !forumDescription.trim() || !selectedProjectId) ? 0.5 : 1,
+                cursor: (!newForumName.trim() || !forumDescription.trim() || !selectedProjectId) ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Create Forum
+            </button>
+          </div>
         </div>
-
-        <button onClick={onClose} style={{
-          ...BUTTON_STYLES.tertiary,
-          marginTop: LAYOUT.smallGap,
-        }}>
-          Cancel
-        </button>
       </div>
     </div>
   );
