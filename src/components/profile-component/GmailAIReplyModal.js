@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { logLeadEventByEmail } from '../../services/leadScoreService';
+import { ensureTokenFor, requestConsentFor, GMAIL_SCOPES_SEND } from '../../utils/googleAuth';
 
 const BUTTON_STYLES = {
   primary: { background: '#2563eb', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontWeight: 500 },
@@ -15,30 +16,7 @@ const COLORS = {
   danger: '#dc2626'
 };
 
-const loadScript = (src) => new Promise((resolve, reject) => {
-  const script = document.createElement('script');
-  script.src = src;
-  script.async = true;
-  script.onload = resolve;
-  script.onerror = () => reject(new Error('Failed to load ' + src));
-  document.head.appendChild(script);
-});
-
-const requestToken = (clientId) => new Promise((resolve) => {
-  const tokenClient = window.google.accounts.oauth2.initTokenClient({
-    client_id: clientId,
-    scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
-    callback: (response) => resolve(response?.access_token || null),
-  });
-  tokenClient.requestAccessToken();
-});
-
-const requestInteractiveToken = async () => {
-  const clientId = localStorage.getItem('google_oauth_client_id') || '';
-  if (!clientId) throw new Error('Missing OAuth Client ID. Set it via Settings.');
-  try { await loadScript('https://accounts.google.com/gsi/client'); } catch {}
-  return await requestToken(clientId);
-};
+// Tokens are obtained via centralized helpers; no auto-consent on module load
 
 const decodeBase64Url = (base64Url) => {
   let base64 = (base64Url || '').replace(/-/g, '+').replace(/_/g, '/');
@@ -118,7 +96,7 @@ const createReplyMessage = (to, subject, body, originalMessageId, attachments = 
   ])
 ].join('\r\n');
 
-export default function GmailAIReplyModal({ isOpen, onClose, customerEmail, customerName, onAddCustomerNotes, onAddCustomerTasks }) {
+export default function GmailAIReplyModal({ isOpen, onClose, toEmail: toEmailProp, toName: toNameProp, customerEmail, customerName, onAddCustomerNotes, onAddCustomerTasks }) {
   const [mode, setMode] = useState('reply');
   const [token, setToken] = useState('');
   const [authNeeded, setAuthNeeded] = useState(false);
@@ -139,24 +117,15 @@ export default function GmailAIReplyModal({ isOpen, onClose, customerEmail, cust
   const [pickActionsOpen, setPickActionsOpen] = useState(false);
   const [selectedActions, setSelectedActions] = useState({});
 
-  const toEmail = customerEmail || '';
-  const toName = customerName || '';
+  // Backward compatibility: accept both toEmail/toName and customerEmail/customerName
+  const toEmail = (toEmailProp || customerEmail || '').trim();
+  const toName = toNameProp || customerName || '';
 
   const ensureToken = async () => {
-    const clientId = localStorage.getItem('google_oauth_client_id') || '';
-    if (!clientId) return null;
-    try { await loadScript('https://accounts.google.com/gsi/client'); } catch {}
-    return await new Promise((resolve) => {
-      try {
-        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
-          prompt: 'none',
-          callback: (resp) => resolve(resp?.access_token || null)
-        });
-        tokenClient.requestAccessToken({ prompt: 'none' });
-      } catch { resolve(null); }
-    });
+    try {
+      const t = await ensureTokenFor(GMAIL_SCOPES_SEND);
+      return t || null;
+    } catch { return null; }
   };
 
   const fetchThreads = async () => {
@@ -436,7 +405,7 @@ export default function GmailAIReplyModal({ isOpen, onClose, customerEmail, cust
         {authNeeded && (
           <div style={{ marginBottom: 10, padding: 10, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff8e1', color: '#7c6f00', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div>{authError ? `Error: ${authError}` : 'Authorize Gmail to read and send emails.'}</div>
-            <button onClick={async () => { const t = await requestInteractiveToken(); if (t) { setToken(t); setAuthNeeded(false); setError(''); try { await fetchThreads(); } catch {} } }} style={{ ...BUTTON_STYLES.secondary }}>Authorize Gmail</button>
+            <button onClick={async () => { try { const t = await requestConsentFor(GMAIL_SCOPES_SEND); if (t) { setToken(t); setAuthNeeded(false); setError(''); try { await fetchThreads(); } catch {} } } catch {} }} style={{ ...BUTTON_STYLES.secondary }}>Authorize Gmail</button>
           </div>
         )}
         <div style={{ display: 'flex', gap: 16, marginBottom: 12, flex: '0 0 auto', borderBottom: '1px solid #e5e7eb', paddingBottom: 6 }}>

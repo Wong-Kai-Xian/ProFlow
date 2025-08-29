@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ensureDriveToken, requestDriveConsent } from '../../utils/googleAuth';
 
 export default function DriveShareModal({ isOpen, onClose, file }) {
   const [loading, setLoading] = useState(false);
@@ -11,26 +12,7 @@ export default function DriveShareModal({ isOpen, onClose, file }) {
   const [expireAt, setExpireAt] = useState(''); // datetime-local
   const clientId = useMemo(() => localStorage.getItem('google_oauth_client_id') || '', []);
 
-  const loadScriptOnce = (src) => new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
-    const s = document.createElement('script'); s.src = src; s.async = true; s.onload = resolve; s.onerror = () => reject(new Error('Failed to load ' + src)); document.head.appendChild(s);
-  });
-
-  const ensureDriveToken = async () => {
-    if (!clientId) return null;
-    await loadScriptOnce('https://accounts.google.com/gsi/client');
-    return await new Promise((resolve) => {
-      try {
-        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
-          prompt: 'none',
-          callback: (resp) => resolve(resp?.access_token || null)
-        });
-        tokenClient.requestAccessToken({ prompt: 'none' });
-      } catch { resolve(null); }
-    });
-  };
+  const [authNeeded, setAuthNeeded] = useState(false);
 
   useEffect(() => {
     if (!isOpen) { setError(''); setMode('anyone'); setRole('reader'); setEmail(''); setExpireEnabled(false); setExpireAt(''); }
@@ -44,7 +26,7 @@ export default function DriveShareModal({ isOpen, onClose, file }) {
     try {
       if (!file?.driveId) { setError('Missing file ID'); setLoading(false); return; }
       let token = await ensureDriveToken();
-      if (!token) { setError('Authorization required.'); setLoading(false); return; }
+      if (!token) { setAuthNeeded(true); setError('Authorization required.'); setLoading(false); return; }
       const url = new URL(`https://www.googleapis.com/drive/v3/files/${file.driveId}/permissions`);
       url.searchParams.set('supportsAllDrives', 'true');
       if (mode === 'user') url.searchParams.set('sendNotificationEmail', 'true');
@@ -109,6 +91,12 @@ export default function DriveShareModal({ isOpen, onClose, file }) {
         </div>
         <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {error && <div style={{ color: '#b91c1c' }}>{error}</div>}
+          {authNeeded && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <div style={{ color: '#7c6f00' }}>Authorize Google Drive to manage sharing.</div>
+              <button onClick={async () => { const t = await requestDriveConsent(); if (t) { setAuthNeeded(false); setError(''); } }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Authorize</button>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setMode('anyone')} style={{ padding: '6px 10px', borderRadius: 8, border: mode === 'anyone' ? '1px solid #111827' : '1px solid #e5e7eb', background: mode === 'anyone' ? '#f3f4f6' : '#fff', fontSize: 12 }}>Anyone with link</button>
             <button onClick={() => setMode('user')} style={{ padding: '6px 10px', borderRadius: 8, border: mode === 'user' ? '1px solid #111827' : '1px solid #e5e7eb', background: mode === 'user' ? '#f3f4f6' : '#fff', fontSize: 12 }}>Invite user</button>

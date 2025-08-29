@@ -89,34 +89,38 @@ export default function ProjectQuotesPanel({ projectId, hideConvert = false }) {
         </h3>
       </div>
       <div style={{ padding: DESIGN_SYSTEM.spacing.base }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 180px 200px 220px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
-          <div>Client</div>
-          <div>Valid Until</div>
-          <div>Tax %</div>
-          <div>Discount (USD/Currency)</div>
-          <div>Total (USD/Currency)</div>
-          <div>Actions</div>
-        </div>
-        <div style={{ marginTop: 6 }}>
-          {quotes.length === 0 ? (
-            <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No quotes yet</div>
-          ) : (
-            quotes.map((q) => (
-              <div key={q.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 180px 200px 220px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
-                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.client || 'Client'}</div>
-                <div>{q.validUntil || '-'}</div>
-                <div>{Number(q.taxRate || 0).toFixed(2)}</div>
-                <div>{(() => { const base='USD'; const fxBase=(q.fxBase||base).toUpperCase(); const curRaw=(q.currency||''); const cur=(curRaw||base).toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const rate=Number(q.fxRate||0); const discCur=Number(q.discount||0); let discBase=(typeof q.discountBase==='number' && fxBase===base)?Number(q.discountBase):NaN; if(!Number.isFinite(discBase)){ if(cur===base){ discBase=discCur; } else if(fxBase===base && rate>0){ discBase=discCur/rate; } } if(!curRaw || cur===base){ return `${fmt(discBase, base)}`; } const discInCur = Number.isFinite(discCur) ? discCur : (Number.isFinite(discBase) && rate>0 ? discBase*rate : discBase); return `${fmt(discBase, base)}  •  ${fmt(discInCur, cur)}`; })()}</div>
-                <div>{(() => { const base='USD'; const fxBase=(q.fxBase||base).toUpperCase(); const curRaw=(q.currency||''); const cur=(curRaw||base).toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const rate=Number(q.fxRate||0); const totCur=Number(q.total||0); let totBase=(typeof q.totalBase==='number' && fxBase===base)?Number(q.totalBase):NaN; if(!Number.isFinite(totBase)){ if(cur===base){ totBase=totCur; } else if(fxBase===base && rate>0){ totBase=totCur/rate; } } return (cur===base) ? `${fmt(totBase, base)}` : `${fmt(totBase, base)}  •  ${fmt(totCur, cur)}`; })()}</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button onClick={() => printQuote(q)} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>Print</button>
-                  {!hideConvert && (
-                    <button disabled={q.status === 'converted'} onClick={() => convertToInvoice(q)} style={{ ...getButtonStyle('primary', 'projects'), padding: '6px 10px', fontSize: 12, opacity: q.status === 'converted' ? 0.6 : 1, cursor: q.status === 'converted' ? 'not-allowed' : 'pointer' }}>{q.status === 'converted' ? 'Converted' : 'Convert to Invoice'}</button>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
+        <div style={{ overflowX: 'auto' }}>
+          <div style={{ minWidth: 960 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 180px 200px 220px', gap: 8, fontSize: 12, color: DESIGN_SYSTEM.colors.text.secondary, fontWeight: 600 }}>
+              <div>Client</div>
+              <div>Valid Until</div>
+              <div>Tax %</div>
+              <div>Discount (USD/Currency)</div>
+              <div>Total (USD/Currency)</div>
+              <div>Actions</div>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              {quotes.length === 0 ? (
+                <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No quotes yet</div>
+              ) : (
+                quotes.map((q) => (
+                  <div key={q.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 80px 180px 200px 220px', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                    <div title={q.client || 'Client'} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'normal' }}>{q.client || 'Client'}</div>
+                    <div>{q.validUntil || '-'}</div>
+                    <div>{Number(q.taxRate || 0).toFixed(2)}</div>
+                    <div>{(() => { const base='USD'; const fxBase=(q.fxBase||base).toUpperCase(); const curRaw=(q.currency||''); const cur=(curRaw||base).toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const rate=Number(q.fxRate||0); const discCur=Number(q.discount||0); let discBase=(typeof q.discountBase==='number' && fxBase===base)?Number(q.discountBase):NaN; if(!Number.isFinite(discBase)){ if(cur===base){ discBase=discCur; } else if(fxBase===base && rate>0){ discBase=discCur/rate; } } if(!curRaw || cur===base){ return `${fmt(discBase, base)}`; } const discInCur = Number.isFinite(discCur) ? discCur : (Number.isFinite(discBase) && rate>0 ? discBase*rate : discBase); return `${fmt(discBase, base)}  •  ${fmt(discInCur, cur)}`; })()}</div>
+                    <div>{(() => { const base='USD'; const fxBase=(q.fxBase||base).toUpperCase(); const curRaw=(q.currency||''); const cur=(curRaw||base).toUpperCase(); const fmt=(n,c)=>{ try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0));}catch{return `${c} ${Number(n||0).toFixed(2)}`;}}; const rate=Number(q.fxRate||0); const totCur=Number(q.total||0); let totBase=(typeof q.totalBase==='number' && fxBase===base)?Number(q.totalBase):NaN; if(!Number.isFinite(totBase)){ if(cur===base){ totBase=totCur; } else if(fxBase===base && rate>0){ totBase=totCur/rate; } } return (cur===base) ? `${fmt(totBase, base)}` : `${fmt(totBase, base)}  •  ${fmt(totCur, cur)}`; })()}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button onClick={() => printQuote(q)} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>Print</button>
+                      {!hideConvert && (
+                        <button disabled={q.status === 'converted'} onClick={() => convertToInvoice(q)} style={{ ...getButtonStyle('primary', 'projects'), padding: '6px 10px', fontSize: 12, opacity: q.status === 'converted' ? 0.6 : 1, cursor: q.status === 'converted' ? 'not-allowed' : 'pointer' }}>{q.status === 'converted' ? 'Converted' : 'Convert to Invoice'}</button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
       {/* Toasts */}

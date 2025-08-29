@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ensureDriveToken, requestDriveConsent } from '../../utils/googleAuth';
 
 export default function AttachDriveFileModal({ isOpen, onClose, onSelect }) {
   const [loading, setLoading] = useState(false);
@@ -10,50 +11,14 @@ export default function AttachDriveFileModal({ isOpen, onClose, onSelect }) {
 
   const clientId = useMemo(() => localStorage.getItem('google_oauth_client_id') || '', []);
 
-  const loadScriptOnce = (src) => new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
-    const s = document.createElement('script'); s.src = src; s.async = true; s.onload = resolve; s.onerror = () => reject(new Error('Failed to load ' + src)); document.head.appendChild(s);
-  });
-
-  const ensureDriveToken = async () => {
-    if (!clientId) return null;
-    await loadScriptOnce('https://accounts.google.com/gsi/client');
-    return await new Promise((resolve) => {
-      try {
-        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file',
-          prompt: 'none',
-          callback: (resp) => resolve(resp?.access_token || null)
-        });
-        tokenClient.requestAccessToken({ prompt: 'none' });
-      } catch { resolve(null); }
-    });
-  };
-
-  const requestInteractiveToken = async () => {
-    if (!clientId) return null;
-    await loadScriptOnce('https://accounts.google.com/gsi/client');
-    return await new Promise((resolve) => {
-      try {
-        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file',
-          prompt: 'consent',
-          callback: (resp) => resolve(resp?.access_token || null)
-        });
-        tokenClient.requestAccessToken({ prompt: 'consent' });
-      } catch { resolve(null); }
-    });
-  };
+  const [authNeeded, setAuthNeeded] = useState(false);
 
   const loadFiles = async () => {
     setLoading(true);
     setError('');
     try {
       let token = await ensureDriveToken();
-      if (!token) token = await requestInteractiveToken();
-      if (!token) { setError('Authorization required.'); setLoading(false); return; }
+      if (!token) { setAuthNeeded(true); setError('Authorization required.'); setLoading(false); return; }
       const base = new URL('https://www.googleapis.com/drive/v3/files');
       base.searchParams.set('orderBy', 'modifiedTime desc');
       base.searchParams.set('pageSize', '50');
@@ -78,8 +43,12 @@ export default function AttachDriveFileModal({ isOpen, onClose, onSelect }) {
   };
 
   useEffect(() => {
-    if (!isOpen) { setFiles([]); setError(''); setQuery(''); return; }
-    loadFiles();
+    if (!isOpen) { setFiles([]); setError(''); setQuery(''); setAuthNeeded(false); return; }
+    (async () => {
+      const token = await ensureDriveToken();
+      if (!token) { setAuthNeeded(true); setError('Authorization required.'); return; }
+      await loadFiles();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, scope]);
 
@@ -108,6 +77,12 @@ export default function AttachDriveFileModal({ isOpen, onClose, onSelect }) {
             <button onClick={() => setScope('all')} style={{ padding: '6px 10px', borderRadius: 8, border: scope === 'all' ? '1px solid #111827' : '1px solid #e5e7eb', background: scope === 'all' ? '#f3f4f6' : '#fff', fontSize: 12 }}>All drives</button>
           </div>
         </div>
+        {authNeeded && (
+          <div style={{ padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderBottom: '1px solid #e5e7eb' }}>
+            <div style={{ color: '#7c6f00' }}>Authorize Google Drive to browse and attach files.</div>
+            <button onClick={async () => { const t = await requestDriveConsent(); if (t) { setAuthNeeded(false); setError(''); await loadFiles(); } }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Authorize</button>
+          </div>
+        )}
         <div style={{ padding: 12, flex: 1, overflow: 'auto' }}>
           {loading ? (
             <div style={{ color: '#6b7280' }}>Loading files…</div>

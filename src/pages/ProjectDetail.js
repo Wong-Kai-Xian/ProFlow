@@ -26,6 +26,7 @@ import AttachDriveFileModal from '../components/common/AttachDriveFileModal';
 import PreviewModal from '../components/common/PreviewModal';
 import DriveShareModal from '../components/common/DriveShareModal';
 import FileActionsModal from '../components/common/FileActionsModal';
+import { ensureDriveToken as ensureDriveTokenCentral, requestDriveConsent } from '../utils/googleAuth';
 
 const DEFAULT_STAGES = ["Planning", "Development", "Testing", "Completed"];
 
@@ -139,20 +140,7 @@ export default function ProjectDetail() {
   });
 
   const ensureDriveToken = async () => {
-    const clientId = localStorage.getItem('google_oauth_client_id') || '';
-    if (!clientId) return null;
-    await loadScriptOnce('https://accounts.google.com/gsi/client');
-    return await new Promise((resolve) => {
-      try {
-        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
-          prompt: 'none',
-          callback: (resp) => resolve(resp?.access_token || null)
-        });
-        tokenClient.requestAccessToken({ prompt: 'none' });
-      } catch { resolve(null); }
-    });
+    try { const t = await ensureDriveTokenCentral(); return t || null; } catch { return null; }
   };
 
   // Proactively check Drive auth when the Project Files card is in view
@@ -172,24 +160,7 @@ export default function ProjectDetail() {
     try {
       if (!projectId) return;
       let token = await ensureDriveToken();
-      if (!token) {
-        // Try interactive consent if silent fails
-        const clientId = localStorage.getItem('google_oauth_client_id') || '';
-        if (clientId) {
-          await loadScriptOnce('https://accounts.google.com/gsi/client');
-          token = await new Promise((resolve) => {
-            try {
-              const tokenClient = window.google.accounts.oauth2.initTokenClient({
-                client_id: clientId,
-                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
-                prompt: 'consent',
-                callback: (resp) => resolve(resp?.access_token || null)
-              });
-              tokenClient.requestAccessToken({ prompt: 'consent' });
-            } catch { resolve(null); }
-          });
-        }
-      }
+      if (!token) { token = await requestDriveConsent(); }
       if (!token) { setDriveAuthNeeded(true); alert('Google Drive authorization required.'); return; }
       const mimeMap = {
         gdoc: 'application/vnd.google-apps.document',
@@ -235,23 +206,7 @@ export default function ProjectDetail() {
       }
       if (!nextName || nextName === file.name) return;
       let token = await ensureDriveToken();
-      if (!token) {
-        const clientId = localStorage.getItem('google_oauth_client_id') || '';
-        if (clientId) {
-          await loadScriptOnce('https://accounts.google.com/gsi/client');
-          token = await new Promise((resolve) => {
-            try {
-              const tokenClient = window.google.accounts.oauth2.initTokenClient({
-                client_id: clientId,
-                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
-                prompt: 'consent',
-                callback: (resp) => resolve(resp?.access_token || null)
-              });
-              tokenClient.requestAccessToken({ prompt: 'consent' });
-            } catch { resolve(null); }
-          });
-        }
-      }
+      if (!token) { token = await requestDriveConsent(); }
       if (!token) { setDriveAuthNeeded(true); alert('Authorization required to rename.'); return; }
       const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.driveId}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nextName }) });
       if (!res.ok) { alert('Failed to rename on Drive'); return; }
@@ -267,23 +222,7 @@ export default function ProjectDetail() {
       const sure = window.confirm('Delete this file from Drive and remove from project?');
       if (!sure) return;
       let token = await ensureDriveToken();
-      if (!token) {
-        const clientId = localStorage.getItem('google_oauth_client_id') || '';
-        if (clientId) {
-          await loadScriptOnce('https://accounts.google.com/gsi/client');
-          token = await new Promise((resolve) => {
-            try {
-              const tokenClient = window.google.accounts.oauth2.initTokenClient({
-                client_id: clientId,
-                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
-                prompt: 'consent',
-                callback: (resp) => resolve(resp?.access_token || null)
-              });
-              tokenClient.requestAccessToken({ prompt: 'consent' });
-            } catch { resolve(null); }
-          });
-        }
-      }
+      if (!token) { token = await requestDriveConsent(); }
       if (!token) { setDriveAuthNeeded(true); alert('Authorization required to delete.'); return; }
       const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.driveId}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true }) });
       if (!res.ok) { alert('Failed to delete on Drive'); return; }
@@ -297,23 +236,7 @@ export default function ProjectDetail() {
     try {
       if (!file?.driveId) return;
       let token = await ensureDriveToken();
-      if (!token) {
-        const clientId = localStorage.getItem('google_oauth_client_id') || '';
-        if (clientId) {
-          await loadScriptOnce('https://accounts.google.com/gsi/client');
-          token = await new Promise((resolve) => {
-            try {
-              const tokenClient = window.google.accounts.oauth2.initTokenClient({
-                client_id: clientId,
-                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
-                prompt: 'consent',
-                callback: (resp) => resolve(resp?.access_token || null)
-              });
-              tokenClient.requestAccessToken({ prompt: 'consent' });
-            } catch { resolve(null); }
-          });
-        }
-      }
+      if (!token) { token = await requestDriveConsent(); }
       if (!token) { setDriveAuthNeeded(true); alert('Authorization required to share.'); return; }
       const permRes = await fetch(`https://www.googleapis.com/drive/v3/files/${file.driveId}/permissions?supportsAllDrives=true`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ role: 'reader', type: 'anyone', allowFileDiscovery: false }) });
       if (!permRes.ok) { alert('Failed to set sharing permission'); return; }
@@ -1415,26 +1338,7 @@ export default function ProjectDetail() {
                     <div>Authorize Google Drive to create, attach, and share files.</div>
                     {driveAuthError && (<div style={{ color: '#b45309', fontSize: 12, marginTop: 4 }}>Error: {driveAuthError}</div>)}
                   </div>
-                  <button onClick={async () => {
-                    const clientId = localStorage.getItem('google_oauth_client_id') || '';
-                    if (!clientId) return;
-                    await loadScriptOnce('https://accounts.google.com/gsi/client');
-                    const t = await new Promise((resolve) => {
-                      try {
-                        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-                          client_id: clientId,
-                          scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
-                          prompt: 'consent',
-                          callback: (resp) => {
-                            if (resp?.access_token) { setDriveAuthError(''); resolve(resp.access_token); }
-                            else { setDriveAuthError(resp?.error || 'Authorization failed'); resolve(null); }
-                          }
-                        });
-                        tokenClient.requestAccessToken({ prompt: 'consent' });
-                      } catch { resolve(null); }
-                    });
-                    if (t) setDriveAuthNeeded(false);
-                  }} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>Authorize Google Drive</button>
+                  <button onClick={async () => { const t = await requestDriveConsent(); if (t) { setDriveAuthNeeded(false); setDriveAuthError(''); } }} style={{ ...getButtonStyle('secondary', 'projects'), padding: '6px 10px', fontSize: 12 }}>Authorize Google Drive</button>
                 </div>
               )}
               {Array.isArray(projectData?.files) && projectData.files.length > 0 ? (

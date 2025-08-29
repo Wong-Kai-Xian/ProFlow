@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
+import { ensureGmailReadonlyToken } from '../utils/googleAuth';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, getDoc, limit as qlimit } from 'firebase/firestore';
 import { logLeadEventByEmail, recomputeAndSaveForCustomer } from '../services/leadScoreService';
 
@@ -11,26 +12,11 @@ export default function NotificationAgent() {
   const gmailStartedRef = useRef(false);
   const gmailLastRefreshRef = useRef(0);
 
-  const loadScriptOnce = (src) => new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
-    const s = document.createElement('script'); s.src = src; s.async = true; s.onload = resolve; s.onerror = () => reject(new Error('Failed to load ' + src)); document.head.appendChild(s);
-  });
-
   const ensureGmailToken = async () => {
-    const clientId = localStorage.getItem('google_oauth_client_id') || '';
-    if (!clientId) return null;
-    await loadScriptOnce('https://accounts.google.com/gsi/client');
-    return await new Promise((resolve) => {
-      try {
-        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/gmail.readonly',
-          prompt: 'none',
-          callback: (resp) => resolve(resp?.access_token || null)
-        });
-        tokenClient.requestAccessToken({ prompt: 'none' });
-      } catch { resolve(null); }
-    });
+    try {
+      const t = await ensureGmailReadonlyToken();
+      return t || null;
+    } catch { return null; }
   };
 
   useEffect(() => {
