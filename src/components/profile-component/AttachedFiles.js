@@ -3,24 +3,80 @@ import React, { useState, useRef } from "react";
 import Card from "./Card";
 import FileUploadModal from "./FileUploadModal"; // Import the new modal component
 import { BUTTON_STYLES, COLORS, INPUT_STYLES, LAYOUT } from "./constants"; // Import constants
-import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa'; // Import FaPlus, FaEdit, FaTrash icons
+import { FaPlus, FaEdit, FaTrash, FaDownload } from 'react-icons/fa'; // Import icons
+import { storage } from '../../firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import AttachDriveFileModal from '../common/AttachDriveFileModal';
+import { ensureDriveToken, requestDriveConsent } from '../../utils/googleAuth';
 
 export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRename, readOnly = false }) {
   const [expandedFile, setExpandedFile] = useState(null);
   const [showModal, setShowModal] = useState(false); // State to control modal visibility
   const [editingFileIndex, setEditingFileIndex] = useState(null);
   const [newFileName, setNewFileName] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [showAttachDrive, setShowAttachDrive] = useState(false);
+  const [driveAuthNeeded, setDriveAuthNeeded] = useState(false);
+  const [driveAuthError, setDriveAuthError] = useState("");
+  
+  const createGoogleFile = async (kind) => {
+    try {
+      let token = await ensureDriveToken();
+      if (!token) token = await requestDriveConsent();
+      if (!token) { setDriveAuthNeeded(true); setDriveAuthError('Authorization required.'); return; }
+      const mimeMap = {
+        gdoc: 'application/vnd.google-apps.document',
+        gsheet: 'application/vnd.google-apps.spreadsheet',
+        gslide: 'application/vnd.google-apps.presentation'
+      };
+      const typeLabel = kind === 'gdoc' ? 'Document' : kind === 'gsheet' ? 'Spreadsheet' : 'Presentation';
+      const defaultName = `${typeLabel} - ${new Date().toLocaleDateString()}`;
+      const res = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink,parents&supportsAllDrives=true', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: defaultName, mimeType: mimeMap[kind], parents: ['root'] })
+      });
+      if (!res.ok) {
+        try { const err = await res.json(); alert(`Failed to create file: ${err?.error?.message || res.status}`); } catch { alert('Failed to create file.'); }
+        return;
+      }
+      const json = await res.json();
+      const entry = {
+        name: json.name || defaultName,
+        type: kind,
+        driveId: json.id,
+        url: json.webViewLink || (kind === 'gdoc' ? `https://docs.google.com/document/d/${json.id}/edit` : kind === 'gsheet' ? `https://docs.google.com/spreadsheets/d/${json.id}/edit` : `https://docs.google.com/presentation/d/${json.id}/edit`),
+        createdAt: Date.now()
+      };
+      onFileAdd(entry);
+    } catch {
+      alert('Failed to create Google file.');
+    }
+  };
 
-  const handleModalUpload = (selectedFile, description, fileSize, addedTime) => {
-    onFileAdd({
-      name: selectedFile.name,
-      type: 'document', // Always document type for file uploads
-      description: description,
-      url: '',
-      size: fileSize, // Add file size
-      uploadTime: addedTime, // Add upload time
-    });
-    setShowModal(false); // Close modal after upload
+  const handleModalUpload = async (selectedFile, description, fileSize, addedTime) => {
+    setUploadError("");
+    try {
+      setUploading(true);
+      const path = `customer_files/${Date.now()}_${selectedFile.name}`;
+      const ref = storageRef(storage, path);
+      await uploadBytes(ref, selectedFile);
+      const url = await getDownloadURL(ref);
+      onFileAdd({
+        name: selectedFile.name,
+        type: (selectedFile.type && selectedFile.type.startsWith('image')) ? 'image' : 'document',
+        description: description,
+        url,
+        size: fileSize,
+        uploadTime: addedTime,
+      });
+      setShowModal(false);
+    } catch (e) {
+      setUploadError('Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const toggleExpand = (index) => {
@@ -74,18 +130,48 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const authorizeDrive = async () => {
+    try {
+      const token = await ensureDriveToken();
+      if (!token) { setDriveAuthNeeded(true); return; }
+      setDriveAuthNeeded(false);
+      setDriveAuthError("");
+      setShowAttachDrive(true);
+    } catch {
+      setDriveAuthNeeded(true);
+      setDriveAuthError('Authorization failed');
+    }
+  };
+
   return (
     <Card style={{ minHeight: "250px" }}>
       <h3>Attached Files</h3>
       {!readOnly && (
-        <div style={{ marginBottom: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div style={{ marginBottom: "10px", display: "flex", flexDirection: "row", gap: "8px", alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => setShowModal(true)} style={{ 
             ...BUTTON_STYLES.primary, 
             padding: "4px 8px", // Smaller padding
             fontSize: "14px" // Adjust font size for the icon
           }}>
-            <FaPlus />
+            <FaPlus /> Upload
           </button>
+          <button onClick={() => createGoogleFile('gdoc')} style={{ ...BUTTON_STYLES.secondary, padding: '4px 8px', fontSize: '14px' }}>+ New Google Doc</button>
+          <button onClick={() => createGoogleFile('gsheet')} style={{ ...BUTTON_STYLES.secondary, padding: '4px 8px', fontSize: '14px' }}>+ New Google Sheet</button>
+          <button onClick={() => createGoogleFile('gslide')} style={{ ...BUTTON_STYLES.secondary, padding: '4px 8px', fontSize: '14px' }}>+ New Google Slides</button>
+          <button onClick={authorizeDrive} style={{ 
+            ...BUTTON_STYLES.secondary,
+            padding: "4px 8px",
+            fontSize: "14px"
+          }}>
+            Attach from Drive
+          </button>
+          {driveAuthNeeded && (
+            <>
+              <button onClick={async () => { const t = await requestDriveConsent(); if (t) { setDriveAuthNeeded(false); setDriveAuthError(''); setShowAttachDrive(true); } }} style={{ ...BUTTON_STYLES.secondary, padding: '4px 8px' }}>Authorize Drive</button>
+              <span style={{ color: COLORS.lightText, fontSize: 12 }}>Authorization required to use Drive features.</span>
+            </>
+          )}
+          {driveAuthError && (<span style={{ color: COLORS.danger, fontSize: 12 }}>{driveAuthError}</span>)}
         </div>
       )}
       <ul style={{ 
@@ -127,6 +213,32 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
                 )}
               </span>
               <div style={{ flexShrink: 0, marginLeft: "10px" }}>
+                {files[i]?.url && (
+                  <a
+                    href={files[i].url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => { e.stopPropagation(); }}
+                    style={{ 
+                      ...BUTTON_STYLES.primary, 
+                      background: '#fff',
+                      color: '#111827',
+                      border: '1px solid #e5e7eb',
+                      padding: "4px 8px",
+                      fontSize: "14px",
+                      marginRight: "5px",
+                      borderRadius: "3px",
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                    download
+                    title="Download"
+                  >
+                    <FaDownload /> <span>Download</span>
+                  </a>
+                )}
                 {!readOnly && editingFileIndex !== i && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); handleRenameClick(i, file.name); }} 
@@ -166,6 +278,11 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
                   <>
                     <p style={{ margin: "5px 0" }}>**Uploaded On:** {file.uploadTime ? new Date(file.uploadTime).toLocaleString() : 'N/A'}</p>
                     <p style={{ margin: "5px 0" }}>**Size:** {file.size ? formatFileSize(file.size) : 'N/A'}</p>
+                    {file.url && (
+                      <p style={{ margin: "5px 0" }}>
+                        <a href={file.url} target="_blank" rel="noopener noreferrer" download style={{ color: COLORS.primary, textDecoration: 'underline' }}>Download</a>
+                      </p>
+                    )}
                   </>
                 )}
               </div>
@@ -180,6 +297,22 @@ export default function AttachedFiles({ files, onFileAdd, onFileRemove, onFileRe
           onUpload={handleModalUpload}
         />
       )}
+      {uploading && (
+        <div style={{ marginTop: 8, fontSize: 12, color: COLORS.lightText }}>Uploading…</div>
+      )}
+      {uploadError && (
+        <div style={{ marginTop: 8, fontSize: 12, color: COLORS.danger }}>{uploadError}</div>
+      )}
+      <AttachDriveFileModal
+        isOpen={showAttachDrive}
+        onClose={() => setShowAttachDrive(false)}
+        onSelect={(file) => {
+          try {
+            onFileAdd({ name: file.name, type: file.type, driveId: file.driveId, url: file.url, createdAt: Date.now() });
+            setShowAttachDrive(false);
+          } catch {}
+        }}
+      />
     </Card>
   );
 }

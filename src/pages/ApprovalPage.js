@@ -895,6 +895,12 @@ export default function ApprovalPage() {
             company: selectedRequest.proposedProject.company || '',
             contactPerson: selectedRequest.proposedProject.customerName || '',
             contactEmail: selectedRequest.proposedProject.customerEmail || '',
+            customerName: selectedRequest.proposedProject.customerName || '',
+            companyInfo: {
+              companyName: selectedRequest.proposedProject.company || '',
+              customerEmail: selectedRequest.proposedProject.customerEmail || '',
+              customerName: selectedRequest.proposedProject.customerName || ''
+            },
             status: 'Active',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),

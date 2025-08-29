@@ -12,8 +12,8 @@ const firebaseConfig = {
   apiKey: "AIzaSyCsYuQCsYXXvRUnFySseC8UNzArjCdJGSo",
   authDomain: "proflow-30144.firebaseapp.com",
   projectId: "proflow-30144",
-  // The storage bucket should be the bucket name, not the download domain
-  storageBucket: "proflow-30144.firebasestorage.app",
+  // The storage bucket should be the bucket name (appspot.com)
+  storageBucket: "proflow-30144.appspot.com",
   messagingSenderId: "278194395988",
   appId: "1:278194395988:web:560cf31ebb0f83f5f686c1",
   measurementId: "G-RVY0MN3GWN"

@@ -440,21 +440,6 @@ export default function ProjectWorkspacePanel({
         {activeTab === 'Files' && (
           selectedProjectId ? (
             <div>
-              {driveAuthNeeded && (
-                <div style={{ marginBottom: 10, padding: 10, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, borderRadius: 8, background: '#fffbe6', color: '#7c6f00', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <div>
-                    <div>Authorize Google Drive to create, attach, and share files.</div>
-                    {driveAuthError && (<div style={{ color: '#b45309', fontSize: 12, marginTop: 4 }}>Error: {driveAuthError}</div>)}
-                  </div>
-                  <button onClick={async () => { const t = await requestDriveConsent(); if (t) { setDriveAuthNeeded(false); setDriveAuthError(''); } }} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: '#fff', cursor: 'pointer', fontSize: 12 }}>Authorize Google Drive</button>
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                <button onClick={() => createGoogleFile('gdoc')} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: '#fff', cursor: 'pointer', fontSize: 12 }}>+ New Google Doc</button>
-                <button onClick={() => createGoogleFile('gsheet')} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: '#fff', cursor: 'pointer', fontSize: 12 }}>+ New Google Sheet</button>
-                <button onClick={() => createGoogleFile('gslide')} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: '#fff', cursor: 'pointer', fontSize: 12 }}>+ New Google Slides</button>
-                <button onClick={() => setShowAttachDrive(true)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: '#fff', cursor: 'pointer', fontSize: 12 }}>Attach from Drive</button>
-              </div>
               {projectFiles.length === 0 ? (
                 <div style={{ color: DESIGN_SYSTEM.colors.text.secondary, fontStyle: 'italic' }}>No files attached.</div>
               ) : (
@@ -479,7 +464,12 @@ export default function ProjectWorkspacePanel({
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name || 'File'}</span>
                       </div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        <button onClick={() => setActionsFile(f)} style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: '#fff', fontSize: 12 }}>Edit</button>
+                        {f.url && (
+                          <a href={f.url} target="_blank" rel="noopener noreferrer" download style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: '#fff', fontSize: 12, textDecoration: 'none' }}>Download</a>
+                        )}
+                        {(f.type === 'gdoc' || f.type === 'gsheet' || f.type === 'gslide') && (
+                          <button onClick={() => { setGoogleViewerType(f.type); setGoogleViewerId(f.driveId); setGoogleViewerTitle(f.name || 'Google File'); setShowGoogleViewer(true); }} style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${DESIGN_SYSTEM.colors.secondary[300]}`, background: '#fff', fontSize: 12 }}>Open</button>
+                        )}
                       </div>
                     </li>
                   ))}

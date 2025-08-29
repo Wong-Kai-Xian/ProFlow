@@ -90,6 +90,7 @@ export default function CustomerProfile() {
   const transcriptBufferRef = useRef("");
   const pendingInterimRef = useRef("");
   const recognitionRef = useRef(null);
+  const lastSavedFinalRef = useRef("");
 
   // Saved transcripts under customer profile
   const [meetingTranscriptsList, setMeetingTranscriptsList] = useState([]);
@@ -430,29 +431,22 @@ export default function CustomerProfile() {
           setLiveTranscript(interim);
           const t = interim.trim();
           pendingInterimRef.current = t;
-          const now = Date.now();
-          const sessionId = meetingSessionIdRef.current;
-          if (sessionId && t && t.length > 0 && now - (lastInterimSaveRef.current || 0) > 2500) {
-            try {
-              await addDoc(collection(db, 'meetingSessions', sessionId, 'transcripts'), {
-                text: t,
-                userId: currentUser?.uid || 'anon',
-                createdAt: serverTimestamp(),
-              });
-              lastInterimSaveRef.current = now;
-            } catch {}
-          }
+          // Do not persist interim chunks to avoid duplicates
         }
         if (finalText) {
           setLiveTranscript("");
-          transcriptBufferRef.current = `${transcriptBufferRef.current} ${finalText.trim()}`.trim();
+          const clean = finalText.trim();
+          transcriptBufferRef.current = `${transcriptBufferRef.current} ${clean}`.trim();
           const sessionId = meetingSessionIdRef.current;
-          if (sessionId) {
+          const prev = (lastSavedFinalRef.current || '').trim();
+          const isDup = !!prev && (clean === prev || prev.endsWith(clean) || clean.endsWith(prev));
+          if (sessionId && clean && !isDup) {
             await addDoc(collection(db, 'meetingSessions', sessionId, 'transcripts'), {
-              text: finalText.trim(),
+              text: clean,
               userId: currentUser?.uid || 'anon',
               createdAt: serverTimestamp(),
             });
+            lastSavedFinalRef.current = clean;
           }
         }
       };
@@ -575,16 +569,13 @@ export default function CustomerProfile() {
 
   const handleGenerateTranscript = async () => {
     try {
-      // Flush remaining interim/live text to session
-      if (meetingSessionId && liveTranscript && liveTranscript.trim().length > 0) {
-        await addDoc(collection(db, 'meetingSessions', meetingSessionId, 'transcripts'), {
-          text: liveTranscript.trim(),
-          userId: currentUser?.uid || 'anon',
-          createdAt: serverTimestamp(),
-        });
+      // Include remaining live text in buffer but do not persist as a separate line
+      if (liveTranscript && liveTranscript.trim().length > 0) {
+        transcriptBufferRef.current = `${transcriptBufferRef.current} ${liveTranscript.trim()}`.trim();
         setLiveTranscript("");
       }
-      const combined = `${sessionTranscripts.map(l => l.text).join('\n')}`.trim();
+      const buffered = transcriptBufferRef.current;
+      const combined = [sessionTranscripts.map(l => l.text).join('\n'), buffered].filter(Boolean).join('\n').trim();
       const fileName = `meeting-transcript-${new Date().toISOString().replace(/[:.]/g,'-')}.txt`;
       await addDoc(collection(db, 'customerProfiles', id, 'meetingTranscripts'), {
         name: fileName,
@@ -862,6 +853,12 @@ export default function CustomerProfile() {
       contactPerson: customerProfile.name || projectData.contactPerson || '',
       contactEmail: customerProfile.email || projectData.contactEmail || '',
       contactPhone: customerProfile.phone || projectData.contactPhone || '',
+      customerName: (projectData.customerName || customerProfile.name || ''),
+      companyInfo: {
+        companyName: (companyProfile.company || projectData.company || ''),
+        customerEmail: (projectData.contactEmail || customerProfile.email || ''),
+        customerName: (projectData.customerName || customerProfile.name || '')
+      },
       status: "Active", // Set as active since approval was already given
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),

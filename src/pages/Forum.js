@@ -117,6 +117,7 @@ export default function Forum() {
       rec.interimResults = true;
       rec.continuous = true;
       rec.maxAlternatives = 1;
+      const lastSavedFinalRef = { current: '' };
       rec.onresult = async (e) => {
         let finalText = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -125,18 +126,19 @@ export default function Forum() {
             finalText += t + ' ';
           } else {
             setLiveTranscript(t);
-            const now = Date.now();
-            if (t && t.trim() && now - (lastInterimSaveRef.current || 0) > 2500) {
-              // push interim line for UI visibility
-              setSessionTranscripts(prev => [...prev, { id: String(now + Math.random()), text: t.trim(), createdAtMs: now }]);
-              lastInterimSaveRef.current = now;
-            }
+            // Do not push interim lines into sessionTranscripts to avoid duplicates
           }
         }
-        if (finalText.trim()) {
-          transcriptBufferRef.current = `${transcriptBufferRef.current} ${finalText.trim()}`.trim();
-          const now = Date.now();
-          setSessionTranscripts(prev => [...prev, { id: String(now + Math.random()), text: finalText.trim(), createdAtMs: now }]);
+        const clean = finalText.trim();
+        if (clean) {
+          transcriptBufferRef.current = `${transcriptBufferRef.current} ${clean}`.trim();
+          const prev = (lastSavedFinalRef.current || '').trim();
+          const isDup = !!prev && (clean === prev || prev.endsWith(clean) || clean.endsWith(prev));
+          if (!isDup) {
+            const now = Date.now();
+            setSessionTranscripts(prevList => [...prevList, { id: String(now + Math.random()), text: clean, createdAtMs: now }]);
+            lastSavedFinalRef.current = clean;
+          }
           setLiveTranscript('');
         }
       };

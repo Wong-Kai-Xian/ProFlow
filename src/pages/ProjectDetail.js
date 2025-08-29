@@ -86,6 +86,7 @@ export default function ProjectDetail() {
   const pendingInterimRef = useRef("");
   const restartTimeoutRef = useRef(null);
   const restartAttemptsRef = useRef(0);
+  const lastSavedFinalRef = useRef("");
 
   const clearRestartTimer = () => {
     if (restartTimeoutRef.current) {
@@ -307,31 +308,22 @@ export default function ProjectDetail() {
           } else {
             setLiveTranscript(t);
             pendingInterimRef.current = t;
-            // Throttle-save interim segments so we don't lose context
-            const now = Date.now();
-            const sessionId = meetingSessionIdRef.current;
-            if (sessionId && t && t.trim().length > 0 && now - (lastInterimSaveRef.current || 0) > 2500) {
-              try {
-                await addDoc(collection(db, 'meetingSessions', sessionId, 'transcripts'), {
-                  text: t.trim(),
-                  userId: currentUser?.uid || 'anon',
-                  createdAt: serverTimestamp()
-                });
-                lastInterimSaveRef.current = now;
-              } catch {}
-            }
+            // Do not persist interim segments to avoid duplicates
           }
         }
-        if (finalText.trim()) {
-          // Append to local buffer for robust summarization
-          transcriptBufferRef.current = `${transcriptBufferRef.current} ${finalText.trim()}`.trim();
+        const clean = finalText.trim();
+        if (clean) {
+          transcriptBufferRef.current = `${transcriptBufferRef.current} ${clean}`.trim();
           const sessionId = meetingSessionIdRef.current;
-          if (sessionId) {
+          const prev = (lastSavedFinalRef.current || '').trim();
+          const isDup = !!prev && (clean === prev || prev.endsWith(clean) || clean.endsWith(prev));
+          if (sessionId && !isDup) {
             await addDoc(collection(db, 'meetingSessions', sessionId, 'transcripts'), {
-              text: finalText.trim(),
+              text: clean,
               userId: currentUser?.uid || 'anon',
               createdAt: serverTimestamp()
             });
+            lastSavedFinalRef.current = clean;
           }
           setLiveTranscript('');
           pendingInterimRef.current = '';
@@ -425,13 +417,7 @@ export default function ProjectDetail() {
         try { recognitionRef.current.stop(); } catch {}
       }
       if (liveTranscript && liveTranscript.trim().length > 0) {
-        if (meetingSessionId) {
-          await addDoc(collection(db, 'meetingSessions', meetingSessionId, 'transcripts'), {
-            text: liveTranscript.trim(),
-            userId: currentUser?.uid || 'anon',
-            createdAt: serverTimestamp()
-          });
-        }
+        // Include any remaining interim text in buffer but do not persist as separate line
         transcriptBufferRef.current = `${transcriptBufferRef.current} ${liveTranscript.trim()}`.trim();
         setLiveTranscript('');
       }
@@ -1272,35 +1258,6 @@ export default function ProjectDetail() {
             </div>
           </div>
 
-          {/* Project Forum Section */}
-          <div style={{
-            ...getCardStyle('projects'),
-            flex: "1 1 350px", 
-            minHeight: "300px",
-            display: "flex",
-            flexDirection: "column"
-          }}>
-            <div style={{
-              background: DESIGN_SYSTEM.pageThemes.forums.gradient,
-              color: DESIGN_SYSTEM.colors.text.inverse,
-              padding: DESIGN_SYSTEM.spacing.base,
-              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
-            }}>
-              <h3 style={{
-                margin: 0,
-                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-              }}>
-                Project Forum
-              </h3>
-            </div>
-            <div style={{ flex: 1, overflow: "visible" }}>
-            <ProjectGroupForum 
-              projectId={projectId} 
-                forums={projectForums}
-            />
-          </div>
-          </div>
           
           {/* Project Files Section */}
           <div style={{
@@ -1493,6 +1450,36 @@ export default function ProjectDetail() {
                 ))
               )}
             </div>
+          </div>
+
+          {/* Project Forum Section */}
+          <div style={{
+            ...getCardStyle('projects'),
+            flex: "1 1 350px", 
+            minHeight: "300px",
+            display: "flex",
+            flexDirection: "column"
+          }}>
+            <div style={{
+              background: DESIGN_SYSTEM.pageThemes.forums.gradient,
+              color: DESIGN_SYSTEM.colors.text.inverse,
+              padding: DESIGN_SYSTEM.spacing.base,
+              borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+              }}>
+                Project Forum
+              </h3>
+            </div>
+            <div style={{ flex: 1, overflow: "visible" }}>
+            <ProjectGroupForum 
+              projectId={projectId} 
+                forums={projectForums}
+            />
+          </div>
           </div>
 
           {/* Leave Project Button at bottom of left panel */}
