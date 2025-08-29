@@ -46,7 +46,11 @@ export default function AttachDriveFileModal({ isOpen, onClose, onSelect }) {
     if (!isOpen) { setFiles([]); setError(''); setQuery(''); setAuthNeeded(false); return; }
     (async () => {
       const token = await ensureDriveToken();
-      if (!token) { setAuthNeeded(true); setError('Authorization required.'); return; }
+      if (!token) {
+        setAuthNeeded(true);
+        setError('Authorization required.');
+        return;
+      }
       await loadFiles();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
