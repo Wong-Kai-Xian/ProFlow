@@ -245,6 +245,7 @@ export default function CustomerProfileList() {
       const initialCustomerData = {
         customerProfile: {
           name: clientData.name,
+          role: clientData.role || '',
           email: clientData.email,
           phone: clientData.phone,
         },
@@ -287,6 +288,7 @@ export default function CustomerProfileList() {
       const clientToAdd = {
         id: newCustomerId,
         name: clientData.name,
+        role: clientData.role || '',
         email: clientData.email,
         phone: clientData.phone,
         company: clientData.company,
@@ -761,7 +763,11 @@ export default function CustomerProfileList() {
                       fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold,
                       textAlign: 'center'
                     }}>
-                      {customer.customerProfile.name || customer.companyProfile.company}
+                      {(() => {
+                        const name = customer.customerProfile.name || customer.companyProfile.company;
+                        const role = customer.customerProfile.role;
+                        return role ? `${name} (${role})` : name;
+                      })()}
                     </h3>
                     <p style={{
                       margin: 0,

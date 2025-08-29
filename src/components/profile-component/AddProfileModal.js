@@ -3,20 +3,23 @@ import { COLORS, BUTTON_STYLES, INPUT_STYLES, LAYOUT } from "./constants";
 
 export default function AddProfileModal({ isOpen, onClose, onAddContact, isLoading = false }) {
   const [name, setName] = useState("");
+  const [role, setRole] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [company, setCompany] = useState("");
 
   // State for focus styles
   const [nameFocused, setNameFocused] = useState(false);
+  const [roleFocused, setRoleFocused] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [phoneFocused, setPhoneFocused] = useState(false);
   const [companyFocused, setCompanyFocused] = useState(false);
 
   const handleSubmit = () => {
-    if (name.trim() && email.trim()) {
-      onAddContact({ name, email, phone, company });
+    if (name.trim() && email.trim() && role.trim()) {
+      onAddContact({ name, role, email, phone, company });
       setName("");
+      setRole("");
       setEmail("");
       setPhone("");
       setCompany("");
@@ -44,6 +47,22 @@ export default function AddProfileModal({ isOpen, onClose, onAddContact, isLoadi
             boxSizing: "border-box",
             transition: "border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
             ...(nameFocused && { borderColor: COLORS.primary, boxShadow: `0 0 0 2px ${COLORS.primary}40` })
+          }}
+        />
+        <input
+          type="text"
+          placeholder="Role"
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          onFocus={() => setRoleFocused(true)}
+          onBlur={() => setRoleFocused(false)}
+          style={{
+            ...INPUT_STYLES.base,
+            marginBottom: LAYOUT.smallGap,
+            width: "100%",
+            boxSizing: "border-box",
+            transition: "border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
+            ...(roleFocused && { borderColor: COLORS.primary, boxShadow: `0 0 0 2px ${COLORS.primary}40` })
           }}
         />
         <input

@@ -108,12 +108,13 @@ export default function CustomerInfo({ data, setCustomerProfile, onSave }) {
         isEditing ? (
           <div>
             <p><strong>Name:</strong> <input type="text" name="name" value={editedData.name} onChange={handleChange} style={{ ...INPUT_STYLES.base, width: "calc(100% - 70px)" }} /></p>
+            <p><strong>Role:</strong> <input type="text" name="role" value={editedData.role || ''} onChange={handleChange} style={{ ...INPUT_STYLES.base, width: "calc(100% - 70px)" }} /></p>
             <p><strong>Email:</strong> <input type="email" name="email" value={editedData.email} onChange={handleChange} style={{ ...INPUT_STYLES.base, width: "calc(100% - 70px)" }} /></p>
             <p><strong>Phone:</strong> <input type="text" name="phone" value={editedData.phone} onChange={handleChange} style={{ ...INPUT_STYLES.base, width: "calc(100% - 70px)" }} /></p>
           </div>
         ) : (
           <div>
-            <p><strong>Name:</strong> {data.name}</p>
+            <p><strong>Name:</strong> {data.name} {data?.role ? (<span style={{ color: '#6b7280' }}>({data.role})</span>) : null}</p>
             <p>
               <strong>Email:</strong> {data.email}
               {data?.email ? (
