@@ -121,12 +121,24 @@ export default function TopBar() {
       <img 
         src="/proflow-logo.png" 
         alt="ProFlow Logo" 
+        onClick={() => navigate('/')}
         style={{ 
           height: '45px', 
           marginRight: '32px', 
           flexShrink: 0,
-          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
-        }} 
+          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
+          cursor: 'pointer',
+          transition: 'transform 0.2s ease, filter 0.2s ease'
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.transform = 'scale(1.05)';
+          e.target.style.filter = 'drop-shadow(0 4px 8px rgba(0,0,0,0.4)) brightness(1.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.transform = 'scale(1)';
+          e.target.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
+        }}
+        title="Go to Home Page"
       />
       {currentUser && (
         <>
