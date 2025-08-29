@@ -306,7 +306,49 @@ export default function UserProfile() {
   };
 
   if (loading) {
-    return <div>Loading profile...</div>;
+    return (
+      <div style={getPageContainerStyle()}>
+        <TopBar />
+        <div style={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          alignItems: "center", 
+          justifyContent: "center", 
+          padding: "100px 20px",
+          gap: DESIGN_SYSTEM.spacing.lg
+        }}>
+          <div style={{ 
+            width: "60px", 
+            height: "60px", 
+            border: `4px solid ${DESIGN_SYSTEM.colors.secondary[200]}`,
+            borderTop: `4px solid ${DESIGN_SYSTEM.colors.primary[500]}`, 
+            borderRadius: "50%",
+            animation: "spin 1.5s linear infinite"
+          }} />
+          <div style={{ 
+            color: DESIGN_SYSTEM.colors.text.primary,
+            fontSize: DESIGN_SYSTEM.typography.fontSize.xl,
+            fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium
+          }}>
+            Loading User Profile
+          </div>
+          <div style={{ 
+            color: DESIGN_SYSTEM.colors.text.secondary,
+            fontSize: DESIGN_SYSTEM.typography.fontSize.base
+          }}>
+            Please wait while we retrieve the profile information...
+          </div>
+          <style>
+            {`
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+            `}
+          </style>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
