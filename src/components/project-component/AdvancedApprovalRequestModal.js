@@ -1365,7 +1365,7 @@ export default function AdvancedApprovalRequestModal({
             onClick={(!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded) ? cpSubmitCreateProject : handleSubmit}
             disabled={(!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded)
               ? (!onCreateProject || !cpProjectName.trim())
-              : (loading || (!requestTitle.trim() || !selectedDecisionMaker))}
+              : (loading || (!noApprovalNeeded && (!requestTitle.trim() || !selectedDecisionMaker)))}
             style={{
               padding: `${DESIGN_SYSTEM.spacing.sm} ${DESIGN_SYSTEM.spacing.base}`,
               border: "none",
@@ -1376,12 +1376,22 @@ export default function AdvancedApprovalRequestModal({
               color: DESIGN_SYSTEM.colors.text.inverse,
               fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
               fontWeight: DESIGN_SYSTEM.typography.fontWeight.medium,
-              cursor: ((!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded) ? (!onCreateProject || !cpProjectName.trim()) : loading) ? "not-allowed" : "pointer",
-              opacity: ((!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded) ? (!onCreateProject || !cpProjectName.trim()) : (loading || (!requestTitle.trim() || !selectedDecisionMaker))) ? 0.6 : 1,
+              cursor: ((!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded)
+                ? (!onCreateProject || !cpProjectName.trim())
+                : (loading || (!noApprovalNeeded && (!requestTitle.trim() || !selectedDecisionMaker)))) ? "not-allowed" : "pointer",
+              opacity: ((!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded)
+                ? (!onCreateProject || !cpProjectName.trim())
+                : (loading || (!noApprovalNeeded && (!requestTitle.trim() || !selectedDecisionMaker)))) ? 0.6 : 1,
               minWidth: "140px"
             }}
           >
-            {(!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded) ? 'Create Project' : (loading ? (uploading ? 'Uploading...' : 'Sending...') : 'Send Request')}
+            {(
+              isStageAdvancement && noApprovalNeeded
+            ) ? 'Advance now' : (
+              (!isStageAdvancement && requestType === 'Customer' && !projectId && showCreateProjectFields && noApprovalNeeded)
+                ? 'Create Project'
+                : (loading ? (uploading ? 'Uploading...' : 'Sending...') : 'Send Request')
+            )}
           </button>
         </div>
       </div>

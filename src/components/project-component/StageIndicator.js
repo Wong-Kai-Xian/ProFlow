@@ -1,8 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { COLORS, LAYOUT, BUTTON_STYLES } from '../profile-component/constants';
 
-export default function StageIndicator({ currentStage, allStages, onAdvanceStage, onGoBackStage, isCurrentStageTasksComplete, onStageSelect, canAdvance, editing = false, onAddStage, onDeleteStageAt, onRenameStage, onMoveStageLeft, onMoveStageRight, isStageApprovalPending = false }) {
+export default function StageIndicator({ currentStage, displayStage = null, allStages, onAdvanceStage, onGoBackStage, onViewStage, isCurrentStageTasksComplete, onStageSelect, canAdvance, editing = false, onAddStage, onDeleteStageAt, onRenameStage, onMoveStageLeft, onMoveStageRight, isStageApprovalPending = false }) {
   const currentStageIndex = allStages.indexOf(currentStage);
+  const effectiveStage = displayStage || currentStage;
+  const displayStageIndex = allStages.indexOf(effectiveStage);
   const isLastStage = currentStageIndex === allStages.length - 1;
   const rowRef = useRef(null);
 
@@ -125,13 +127,32 @@ export default function StageIndicator({ currentStage, allStages, onAdvanceStage
       )}
       {!editing && (
         <div style={{ display: 'flex', gap: LAYOUT.smallGap, width: '100%', marginTop: LAYOUT.smallGap }}>
-          {currentStageIndex > 0 && (
+          {displayStageIndex > 0 && (
             <button
-              onClick={onGoBackStage}
-              title="Go back to previous stage"
+              onClick={() => {
+                if (onViewStage && displayStageIndex > 0) {
+                  onViewStage(allStages[displayStageIndex - 1]);
+                } else if (onGoBackStage) {
+                  onGoBackStage();
+                }
+              }}
+              title="View previous stage"
               style={{ ...BUTTON_STYLES.secondary, padding: '6px 10px' }}
             >
               ◀
+            </button>
+          )}
+          {displayStageIndex >= 0 && displayStageIndex < currentStageIndex && (
+            <button
+              onClick={() => {
+                if (onViewStage) {
+                  onViewStage(allStages[displayStageIndex + 1]);
+                }
+              }}
+              title="View next stage"
+              style={{ ...BUTTON_STYLES.secondary, padding: '6px 10px' }}
+            >
+              ▶
             </button>
           )}
           {currentStageIndex < allStages.length - 1 && (

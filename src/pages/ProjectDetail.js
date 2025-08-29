@@ -61,6 +61,7 @@ export default function ProjectDetail() {
   const [showDeleteStageConfirm, setShowDeleteStageConfirm] = useState(false);
   const [deleteStageIndex, setDeleteStageIndex] = useState(null);
   const [deleteStageName, setDeleteStageName] = useState("");
+  const [viewingStage, setViewingStage] = useState(null);
 
   // Meeting state
   const [showMeeting, setShowMeeting] = useState(false);
@@ -657,12 +658,13 @@ export default function ProjectDetail() {
 
   useEffect(() => {
     if (projectData) {
-    const filteredTasks = (projectData.tasks || []).filter(section => section.stage === currentStage);
-    setProjectTasks(filteredTasks);
+      const stageToShow = viewingStage || currentStage;
+      const filteredTasks = (projectData.tasks || []).filter(section => section.stage === stageToShow);
+      setProjectTasks(filteredTasks);
       setProjectReminders(projectData.reminders || []);
       setProjectDetails(projectData);
     }
-  }, [projectData, currentStage]);
+  }, [projectData, currentStage, viewingStage]);
 
   // Initialize states with projectData or empty arrays if projectData is null
   const [projectTasks, setProjectTasks] = useState([]);
@@ -682,6 +684,7 @@ export default function ProjectDetail() {
         // Use advanced approval modal for stage advancement
         setApprovalModalType('stage');
         setShowAdvancedApprovalModal(true);
+        setViewingStage(null);
       } else {
         alert("All tasks in the current stage must be marked as 'Complete' before advancing.");
       }
@@ -711,17 +714,17 @@ export default function ProjectDetail() {
     if (approvalModalType === 'stage' && result?.nextStage && !result?.bypassed) {
       lines.push(`Requested Stage: ${currentStage} → ${result.nextStage}`);
     }
-    const msg = result?.bypassed
-      ? `Stage advanced to ${result.nextStage}.`
-      : `Approval request sent successfully.${lines.length ? `\n\n${lines.join('\n')}` : ''}`;
-    setConfirmModalConfig({
-      title: 'Approval Sent',
-      message: msg,
-      confirmText: 'OK',
-      confirmButtonType: 'primary',
-      onConfirm: () => setShowConfirmModal(false)
-    });
-    setShowConfirmModal(true);
+    if (!result?.bypassed) {
+      const msg = `Approval request sent successfully.${lines.length ? `\n\n${lines.join('\n')}` : ''}`;
+      setConfirmModalConfig({
+        title: 'Approval Sent',
+        message: msg,
+        confirmText: 'OK',
+        confirmButtonType: 'primary',
+        onConfirm: () => setShowConfirmModal(false)
+      });
+      setShowConfirmModal(true);
+    }
   };
 
   const handleConfirmAdvanceStage = async () => {
@@ -852,6 +855,10 @@ export default function ProjectDetail() {
         setCurrentStage(prevStage);
       }
     }
+  };
+
+  const handleViewStage = (stage) => {
+    setViewingStage(stage);
   };
 
   const isCurrentStageTasksComplete = projectTasks.every(section => 
@@ -1196,6 +1203,12 @@ export default function ProjectDetail() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => setShowMeeting(true)} style={{ ...getButtonStyle('secondary', 'projects') }}>Expand</button>
                 </div>
+              </div>
+            )}
+            {viewingStage && viewingStage !== currentStage && (
+              <div style={{ padding: 8, background: '#FFFBEB', borderTop: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ color: '#92400E', fontSize: 12 }}>Viewing stage: {viewingStage}. This does not change the project stage.</div>
+                <button onClick={() => setViewingStage(null)} style={{ ...getButtonStyle('secondary', 'projects'), padding: '4px 8px' }}>Return to current stage</button>
               </div>
             )}
             {/* Expanded meeting */}
@@ -1732,9 +1745,11 @@ export default function ProjectDetail() {
             <div style={{ padding: DESIGN_SYSTEM.spacing.base, overflowX: 'auto', maxWidth: '100%', width: '100%', boxSizing: 'border-box', minWidth: '0' }}>
                <StageIndicator 
                  currentStage={currentStage} 
+                 displayStage={viewingStage || currentStage}
                  allStages={isEditingStages ? workingStages : projectStages} 
                  onAdvanceStage={handleAdvanceStage} 
                  onGoBackStage={handleGoBackStage} 
+                 onViewStage={handleViewStage}
                  isCurrentStageTasksComplete={isCurrentStageTasksComplete}
                  onStageSelect={handleStageSelect}
                  canAdvance={canAdvanceStage}
