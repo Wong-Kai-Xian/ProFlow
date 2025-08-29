@@ -478,16 +478,57 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
           {post.content}
         </p>
 
-      {/* Attached Files/Media */}
-      {post.files && post.files.length > 0 && (
-        <div style={{ marginBottom: LAYOUT.smallGap, display: 'grid', gap: LAYOUT.tinyGap }}>
-          {post.files.map((file, index) => (
-            <React.Fragment key={index}>
-              {renderFilePreview(file)}
-            </React.Fragment>
-          ))}
-        </div>
-      )}
+        {/* Meeting and Location Information */}
+        {(post.meeting || post.location) && (
+          <div style={{ 
+            marginBottom: "16px", 
+            display: "flex", 
+            gap: "8px", 
+            flexWrap: "wrap" 
+          }}>
+            {post.location && (
+              <span style={{ 
+                background: '#ecfdf5', 
+                border: '1px solid #a7f3d0', 
+                color: '#065f46', 
+                padding: '6px 10px', 
+                borderRadius: '6px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                📍 {post.location}
+              </span>
+            )}
+            {post.meeting && (
+              <span style={{ 
+                background: '#fffbeb', 
+                border: '1px solid #fde68a', 
+                color: '#92400e', 
+                padding: '6px 10px', 
+                borderRadius: '6px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                📅 {post.meeting.type} {post.meeting.fullDateTime}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Attached Files/Media */}
+        {post.files && post.files.length > 0 && (
+          <div style={{ marginBottom: LAYOUT.smallGap, display: 'grid', gap: LAYOUT.tinyGap }}>
+            {post.files.map((file, index) => (
+              <React.Fragment key={index}>
+                {renderFilePreview(file)}
+              </React.Fragment>
+            ))}
+          </div>
+        )}
 
       </div>
 
