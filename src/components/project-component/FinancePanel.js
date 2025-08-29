@@ -206,7 +206,7 @@ function ExpenseModal({ projectId, onClose }) {
   const [date, setDate] = useState('');
   const [category, setCategory] = useState('General');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('');
+  const [currency, setCurrency] = useState('USD');
   const [fxBase, setFxBase] = useState('USD');
   useEffect(() => {
     const loadBase = async () => {
@@ -220,7 +220,17 @@ function ExpenseModal({ projectId, onClose }) {
   const save = async () => {
     if (!projectId || !amount) return;
     try {
-      await addDoc(collection(db, 'projects', projectId, 'expenses'), { note, date, category, amount: Number(amount), currency: currency || undefined, fxBase: fxBase || undefined, fxRate: Number(fxRate || 1), createdAt: serverTimestamp() });
+      await addDoc(collection(db, 'projects', projectId, 'expenses'), {
+        note,
+        date,
+        category,
+        amount: Number(amount),
+        currency: currency || undefined,
+        fxBase: 'USD',
+        fxRate: Number(fxRate || 1),
+        amountBase: (currency && currency.toUpperCase() !== 'USD') ? (Number(amount||0) / Number(fxRate||1)) : Number(amount||0),
+        createdAt: serverTimestamp()
+      });
       onClose();
     } catch {}
   };
@@ -247,8 +257,29 @@ function ExpenseModal({ projectId, onClose }) {
         </Field>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <Field label="FX Base"><input list="proflow-currencies" value={fxBase} onChange={(e) => setFxBase((e.target.value||'').toUpperCase())} style={inputStyle} placeholder="USD" /></Field>
-        <Field label="FX Rate (to base)"><input type="number" step="0.0001" value={fxRate} onChange={(e) => setFxRate(e.target.value)} style={inputStyle} placeholder="1.0" /></Field>
+        <Field label="FX Rate (USD → Currency)"><div style={{ display: 'flex', gap: 8 }}><input type="number" step="0.0001" value={fxRate} onChange={(e) => setFxRate(e.target.value)} style={inputStyle} placeholder="1.0" /><button onClick={async () => { try { const cur=(currency||'USD').toUpperCase(); if (!cur || cur==='USD') { setFxRate(1); return; } const resp = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json'); const data = await resp.json(); const rate = data && data.usd ? data.usd[cur.toLowerCase()] : undefined; if (rate != null) setFxRate(Number(rate)); } catch {} }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Fetch Rate</button></div></Field>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        {(() => {
+          try {
+            const cur = (currency || 'USD').toUpperCase();
+            const amt = Number(amount || 0);
+            const rate = Number(fxRate || 1);
+            const usd = cur === 'USD' ? amt : (rate > 0 ? amt / rate : amt);
+            const fmt = (n, c) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } };
+            const left = (note || '-');
+            const right = (cur === 'USD') ? `${fmt(usd, 'USD')}` : `${fmt(usd, 'USD')}  •  ${fmt(amt, cur)}`;
+            return (
+              <div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Preview</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px', background: '#fafafa' }}>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{left}</div>
+                  <div>{right}</div>
+                </div>
+              </div>
+            );
+          } catch { return null; }
+        })()}
       </div>
     </Modal>
   );
@@ -258,7 +289,7 @@ function InvoiceModal({ projectId, onClose, initialClient, initialCurrency, init
   const [client, setClient] = useState(initialClient || '');
   const [dueDate, setDueDate] = useState('');
   const [status, setStatus] = useState('unpaid');
-  const [currency, setCurrency] = useState((initialCurrency || '').toUpperCase());
+  const [currency, setCurrency] = useState((initialCurrency || 'USD').toUpperCase());
   const [fxBase, setFxBase] = useState('USD');
   const [fxRate, setFxRate] = useState(1);
   const [taxRate, setTaxRate] = useState(typeof initialTaxRate === 'number' ? initialTaxRate : 0);
@@ -266,12 +297,12 @@ function InvoiceModal({ projectId, onClose, initialClient, initialCurrency, init
   const [items, setItems] = useState([]); // items grid
   const fetchRate = async () => {
     try {
-      const base = (fxBase || '').toUpperCase();
-      const cur = (currency || '').toUpperCase();
-      if (!cur || !base) { alert('Please select Currency and FX Base first'); return; }
-      const resp = await fetch(`https://api.exchangerate.host/latest?base=${encodeURIComponent(base)}&api_key=eb803299bef64dc80de605049727ccf4`);
+      const cur = (currency || 'USD').toUpperCase();
+      if (!cur || cur==='USD') { setFxRate(1); return; }
+      const resp = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
       const data = await resp.json();
-      if (data && data.rates && data.rates[cur] != null) setFxRate(Number(data.rates[cur]));
+      const rate = data && data.usd ? data.usd[cur.toLowerCase()] : undefined;
+      if (rate != null) setFxRate(Number(rate));
     } catch {}
   };
   const save = async () => {
@@ -283,11 +314,9 @@ function InvoiceModal({ projectId, onClose, initialClient, initialCurrency, init
       const discountNum = Number(discount || 0);
       const finalTotal = subtotal + taxAmount - discountNum;
       const rate = Number(fxRate || 1);
-      const baseCode = (fxBase || 'USD').toUpperCase();
       const curCode = (currency || 'USD').toUpperCase();
-      const isSame = baseCode === curCode;
-      const toBase = (n) => isSame ? Number(n||0) : Number(n||0) / (rate || 1);
-      await addDoc(collection(db, 'projects', projectId, 'invoices'), { client, dueDate, items: safeItems, subtotal, taxRate: Number(taxRate || 0), taxAmount, discount: discountNum, total: finalTotal, status, currency: currency || undefined, fxBase: fxBase || undefined, fxRate: Number(fxRate || 1), createdAt: serverTimestamp(),
+      const toBase = (n) => (curCode === 'USD') ? Number(n||0) : Number(n||0) / (rate || 1);
+      await addDoc(collection(db, 'projects', projectId, 'invoices'), { client, dueDate, items: safeItems, subtotal, taxRate: Number(taxRate || 0), taxAmount, discount: discountNum, total: finalTotal, status, currency: currency || undefined, fxBase: 'USD', fxRate: Number(fxRate || 1), createdAt: serverTimestamp(),
         subtotalBase: toBase(subtotal), taxAmountBase: toBase(taxAmount), discountBase: toBase(discountNum), totalBase: toBase(finalTotal)
       });
       onClose();
@@ -320,7 +349,7 @@ function InvoiceModal({ projectId, onClose, initialClient, initialCurrency, init
         <Field label="Discount"><input type="number" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} style={inputStyle} /></Field>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <Field label="FX Rate (to base)"><div style={{ display: 'flex', gap: 8 }}><input type="number" step="0.0001" value={fxRate} onChange={(e) => setFxRate(e.target.value)} style={{ ...inputStyle, flex: 1 }} placeholder="1.0" /><button onClick={fetchRate} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Fetch Rate</button></div></Field>
+        <Field label="FX Rate (USD → Currency)"><div style={{ display: 'flex', gap: 8 }}><input type="number" step="0.0001" value={fxRate} onChange={(e) => setFxRate(e.target.value)} style={{ ...inputStyle, flex: 1 }} placeholder="1.0" /><button onClick={fetchRate} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Fetch Rate</button></div></Field>
       </div>
       <div>
         <div style={{ fontWeight: 600, margin: '8px 0' }}>Items</div>
@@ -345,22 +374,23 @@ function InvoiceModal({ projectId, onClose, initialClient, initialCurrency, init
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 12, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fafafa' }}>
           {(() => {
+            // USD base calculations
             const subtotal = (items||[]).reduce((a, it) => a + (Number(it.qty||0) * Number(it.unitPrice||0)), 0);
             const tax = subtotal * (Number(taxRate || 0) / 100);
             const disc = Number(discount || 0);
             const finalTotal = subtotal + tax - disc;
             const cur = (currency || 'USD').toUpperCase();
-            const base = (fxBase || 'USD').toUpperCase();
+            const base = 'USD';
             const rate = Number(fxRate || 1);
             const isSame = cur === base;
-            const toBase = (n) => isSame ? Number(n||0) : Number(n||0) / (rate || 1);
+            const toCurrency = (n) => isSame ? Number(n||0) : Number(n||0) * (rate || 1);
             const fmt = (n,c) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(n||0)); } catch { return `${c} ${Number(n||0).toFixed(2)}`; } };
             return (
               <>
-                <div>Subtotal: {fmt(subtotal, cur)} ({fmt(toBase(subtotal), base)})</div>
-                <div>Tax: {fmt(tax, cur)} ({fmt(toBase(tax), base)})</div>
-                <div>Discount: {fmt(disc, cur)} ({fmt(toBase(disc), base)})</div>
-                <div style={{ fontWeight: 700 }}>Total: {fmt(finalTotal, cur)} ({fmt(toBase(finalTotal), base)})</div>
+                <div>Subtotal: {fmt(subtotal, base)}{isSame?'':` (${fmt(toCurrency(subtotal), cur)})`}</div>
+                <div>Tax: {fmt(tax, base)}{isSame?'':` (${fmt(toCurrency(tax), cur)})`}</div>
+                <div>Discount: {fmt(disc, base)}{isSame?'':` (${fmt(toCurrency(disc), cur)})`}</div>
+                <div style={{ fontWeight: 700 }}>Total: {fmt(finalTotal, base)}{isSame?'':` (${fmt(toCurrency(finalTotal), cur)})`}</div>
               </>
             );
           })()}
