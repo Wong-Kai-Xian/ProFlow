@@ -1079,6 +1079,25 @@ export default function Discussion({ forumData, posts, setPosts, forumId, update
         location: composerLocation,
         meeting: composerMeeting,
       });
+      // Auto-create a forum reminder when meeting is attached
+      try {
+        const m = composerMeeting;
+        if (m && m.date && m.time) {
+          const title = m.title || 'Meeting';
+          const details = [m.description || '', (m.link ? `Link: ${m.link}` : ''), (m.place ? `Location: ${m.place}` : '')].filter(Boolean).join('\n');
+          await addDoc(collection(db, `forums/${forumId}/reminders`), {
+            type: 'meeting',
+            title,
+            date: m.date,
+            time: m.time,
+            description: details,
+            priority: 'medium',
+            duration: m.duration || '',
+            createdFrom: { forumId, postId: refDoc.id },
+            timestamp: serverTimestamp(),
+          });
+        }
+      } catch {}
       await notifyMentions({ text: newPostContent.trim(), forumId, postId: refDoc.id, db, currentUser });
       // Notify all forum members of new post
       try { await notifyForumMembersNewPost({ forumId, postId: refDoc.id, db, currentUser, postText: newPostContent.trim() }); } catch {}

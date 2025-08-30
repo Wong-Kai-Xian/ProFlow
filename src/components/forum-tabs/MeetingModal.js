@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 
 export default function MeetingModal({ isOpen, onClose, onSave }) {
-  const [meetingType, setMeetingType] = useState("Google Meet");
+  const [mode, setMode] = useState("internal"); // internal | external | physical
+  const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [duration, setDuration] = useState("1 hour");
   const [description, setDescription] = useState("");
+  const [link, setLink] = useState(""); // for external
+  const [place, setPlace] = useState(""); // for physical
 
   // Initialize with current time + 2 hours
   React.useEffect(() => {
@@ -24,11 +27,15 @@ export default function MeetingModal({ isOpen, onClose, onSave }) {
   const handleSave = () => {
     if (date && time) {
       const meetingData = {
-        type: meetingType,
+        mode, // internal | external | physical
+        type: mode === 'internal' ? 'Internal (Jitsi)' : mode === 'external' ? 'External (Link)' : 'In-Person',
+        title: title.trim(),
         date,
         time,
         duration,
         description: description.trim(),
+        link: mode === 'external' ? link.trim() : '',
+        place: mode === 'physical' ? place.trim() : '',
         fullDateTime: `${formatDate(date)}, ${time}`
       };
       onSave(meetingData);
@@ -38,11 +45,14 @@ export default function MeetingModal({ isOpen, onClose, onSave }) {
   };
 
   const resetForm = () => {
-    setMeetingType("Google Meet");
+    setMode("internal");
+    setTitle("");
     setDate("");
     setTime("");
     setDuration("1 hour");
     setDescription("");
+    setLink("");
+    setPlace("");
   };
 
   const formatDate = (dateStr) => {
@@ -90,7 +100,7 @@ export default function MeetingModal({ isOpen, onClose, onSave }) {
           Schedule Meeting
         </h3>
         
-        {/* Meeting Type */}
+        {/* Meeting Mode */}
         <div style={{ marginBottom: "15px" }}>
           <label style={{
             display: "block",
@@ -101,28 +111,66 @@ export default function MeetingModal({ isOpen, onClose, onSave }) {
           }}>
             Meeting Type
           </label>
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", flexWrap: 'wrap' }}>
             <label style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
               <input
                 type="radio"
-                value="Google Meet"
-                checked={meetingType === "Google Meet"}
-                onChange={(e) => setMeetingType(e.target.value)}
+                value="internal"
+                checked={mode === "internal"}
+                onChange={() => setMode('internal')}
                 style={{ marginRight: "6px" }}
               />
-              <span style={{ fontSize: "14px" }}>Google Meet</span>
+              <span style={{ fontSize: "14px" }}>Internal (Jitsi)</span>
             </label>
             <label style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
               <input
                 type="radio"
-                value="Others"
-                checked={meetingType === "Others"}
-                onChange={(e) => setMeetingType(e.target.value)}
+                value="external"
+                checked={mode === "external"}
+                onChange={() => setMode('external')}
                 style={{ marginRight: "6px" }}
               />
-              <span style={{ fontSize: "14px" }}>Others</span>
+              <span style={{ fontSize: "14px" }}>External (Google Meet / Zoom / Other)</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+              <input
+                type="radio"
+                value="physical"
+                checked={mode === "physical"}
+                onChange={() => setMode('physical')}
+                style={{ marginRight: "6px" }}
+              />
+              <span style={{ fontSize: "14px" }}>In-Person (Physical)</span>
             </label>
           </div>
+        </div>
+
+        {/* Title */}
+        <div style={{ marginBottom: "15px" }}>
+          <label style={{
+            display: "block",
+            marginBottom: "8px",
+            fontSize: "14px",
+            fontWeight: "500",
+            color: "#2C3E50"
+          }}>
+            Meeting Title
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g., Quarterly Planning, Client Sync, Design Review"
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              borderRadius: "6px",
+              border: "1px solid #BDC3C7",
+              fontSize: "14px",
+              outline: "none",
+              boxSizing: "border-box"
+            }}
+          />
         </div>
 
         {/* Date and Time */}
@@ -212,6 +260,20 @@ export default function MeetingModal({ isOpen, onClose, onSave }) {
             <option value="6 hours">6 hours</option>
           </select>
         </div>
+
+        {/* Mode-specific fields */}
+        {mode === 'external' && (
+          <div style={{ marginBottom: "15px" }}>
+            <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500, color: '#2C3E50' }}>Meeting Link</label>
+            <input type="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://meet.google.com/abc-defg-hij or https://zoom.us/j/123..." style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #BDC3C7', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+        )}
+        {mode === 'physical' && (
+          <div style={{ marginBottom: "15px" }}>
+            <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500, color: '#2C3E50' }}>Location</label>
+            <input type="text" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Office HQ, Room 305, Kuala Lumpur, etc." style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #BDC3C7', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+        )}
 
         {/* Description */}
         <div style={{ marginBottom: "20px" }}>

@@ -269,6 +269,36 @@ export default function CreatePostModal({
           timestamp: serverTimestamp(),
           forumId: forumId
         });
+        // If meeting scheduled, auto-add forum reminders for all members
+        try {
+          const fref = doc(db, 'forums', forumId);
+          const fsnap = await getDoc(fref);
+          if (fsnap.exists()) {
+            const fdata = fsnap.data();
+            const members = Array.isArray(fdata.members) ? fdata.members : [];
+            const m = newPost.meeting;
+            if (m && m.date && m.time) {
+              const title = m.title || 'Meeting';
+              const whenStr = `${m.date}${m.time ? ' ' + m.time : ''}`;
+              const details = [m.description || '', (m.link ? `Link: ${m.link}` : ''), (m.place ? `Location: ${m.place}` : '')].filter(Boolean).join('\n');
+              const reminder = {
+                type: 'meeting',
+                title,
+                date: m.date,
+                time: m.time,
+                description: details,
+                priority: 'medium',
+                duration: m.duration || '',
+                createdFrom: { forumId, postId: refDoc.id }
+              };
+              // Save one forum reminder record; forum members will see via forum reminders and UpcomingEvents listens to forums/{id}/reminders
+              await addDoc(collection(db, `forums/${forumId}/reminders`), {
+                ...reminder,
+                timestamp: serverTimestamp(),
+              });
+            }
+          }
+        } catch {}
         // Notify mentions and forum members
         try { await notifyMentions({ text: newPost.content || '', forumId, postId: refDoc.id, currentUser }); } catch {}
         try { await notifyForumMembersNewPost({ forumId, postId: refDoc.id, currentUser, postText: newPost.content || '' }); } catch {}
