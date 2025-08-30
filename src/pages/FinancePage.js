@@ -7,6 +7,7 @@ import { db, storage } from '../firebase';
 import { collection, onSnapshot, query, where, addDoc, updateDoc, doc, serverTimestamp, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DESIGN_SYSTEM, getPageContainerStyle, getContentContainerStyle } from '../styles/designSystem';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 // Reusable searchable currency dropdown (datalist-backed with filter)
 function CurrencySelect({ value, onChange }) {
@@ -1371,16 +1372,38 @@ export default function FinancePage() {
                     <Stat label="61-90" value={insights.buckets.d61_90} />
                     <Stat label=">90" value={insights.buckets.d90p} />
                   </div>
+                  <div style={{ height: 220, marginTop: 8 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={[
+                        { label: 'Not due', value: Number(insights.buckets.notDue || 0) },
+                        { label: '0-30', value: Number(insights.buckets.d0_30 || 0) },
+                        { label: '31-60', value: Number(insights.buckets.d31_60 || 0) },
+                        { label: '61-90', value: Number(insights.buckets.d61_90 || 0) },
+                        { label: '>90', value: Number(insights.buckets.d90p || 0) },
+                      ]} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="label" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="value" fill="#3b82f6" name={`Amount (${baseCurrency})`} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
                 <div style={{ marginTop: 12, background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
                   <div style={{ fontWeight: 600, marginBottom: 6 }}>Revenue (last 6 months, {baseCurrency})</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 8 }}>
-                    {insights.months.map(m => (
-                      <div key={m.key} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px' }}>
-                        <div style={{ fontSize: 12, color: '#6b7280' }}>{m.key}</div>
-                        <div style={{ fontWeight: 700 }}>{m.value.toFixed(2)}</div>
-                      </div>
-                    ))}
+                  <div style={{ height: 240 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={insights.months.map(m => ({ month: m.key, value: Number(m.value || 0) }))} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="value" fill="#10b981" name={`Revenue (${baseCurrency})`} />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               </>

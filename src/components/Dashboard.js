@@ -55,6 +55,34 @@ function toUsdExpense(exp) {
   return amount; // fallback if legacy record without base/rate
 }
 
+// Compact X-axis tick for long project names with tooltip
+function ProjectNameTick({ x, y, payload }) {
+  try {
+    const full = String(payload?.value ?? '');
+    const short = full.length > 16 ? (full.slice(0, 16) + '…') : full;
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text dy={14} textAnchor="end" transform="rotate(-35)" fill={COLORS.text} style={{ fontSize: 10 }}>
+          {short}
+          <title>{full}</title>
+        </text>
+      </g>
+    );
+  } catch {
+    return null;
+  }
+}
+
+// Compute a max character length for labels based on item count
+function calcLabelMaxChars(count) {
+  if (!Number.isFinite(count) || count <= 0) return 12;
+  if (count <= 6) return 14;
+  if (count <= 8) return 12;
+  if (count <= 10) return 10;
+  if (count <= 14) return 8;
+  return 6;
+}
+
 // Define a simple Widget component for demonstration
 const Widget = ({ children, onRemove, isEditing }) => (
   <div style={{
@@ -452,10 +480,30 @@ export default function Dashboard({ scope = 'private' }) {
               {widget.type === 'projectFinance' && (
                 <>
                   <h3 style={{ marginTop: LAYOUT.gap, marginBottom: LAYOUT.smallGap, color: COLORS.text }}>Revenue & Cost per Project</h3>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={data.projectFinanceData || []}>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={data.projectFinanceData || []} margin={{ top: 8, right: 16, bottom: 40, left: 8 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={COLORS.lightBorder} />
-                      <XAxis dataKey="projectName" stroke={COLORS.text} />
+                      <XAxis
+                        dataKey="projectName"
+                        stroke={COLORS.text}
+                        interval={0}
+                        height={50}
+                        tick={({ x, y, payload }) => {
+                          try {
+                            const full = String(payload?.value ?? '');
+                            const maxChars = calcLabelMaxChars((data.projectFinanceData || []).length);
+                            const short = full.length > maxChars ? (full.slice(0, maxChars) + '…') : full;
+                            return (
+                              <g transform={`translate(${x},${y})`}>
+                                <text dy={14} textAnchor="end" transform="rotate(-35)" fill={COLORS.text} style={{ fontSize: 10 }}>
+                                  {short}
+                                  <title>{full}</title>
+                                </text>
+                              </g>
+                            );
+                          } catch { return null; }
+                        }}
+                      />
                       <YAxis stroke={COLORS.text} />
                       <Tooltip cursor={{ fill: COLORS.light }} />
                       <Legend />

@@ -6,6 +6,7 @@ import { db } from "../firebase"; // Import db
 import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore"; // Import Firestore functions
 import { FaFolder, FaUser, FaComments, FaCalendarAlt } from 'react-icons/fa'; // Import icons for origin and calendar
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import { DESIGN_SYSTEM } from '../styles/designSystem';
 
 export default function UpcomingEvents({ embedded = false, externalCalendarOpen = false, onRequestCloseCalendar }) {
   const [events, setEvents] = useState([]);
@@ -352,11 +353,11 @@ export default function UpcomingEvents({ embedded = false, externalCalendarOpen 
   const getOriginIcon = (origin) => {
     switch (origin) {
       case "project":
-        return <FaFolder size={12} color={COLORS.primary} />;
+        return <FaFolder size={12} color={DESIGN_SYSTEM.colors.accent.green} />;
       case "customer":
-        return <FaUser size={12} color={COLORS.success} />;
+        return <FaUser size={12} color={DESIGN_SYSTEM.colors.accent.orange} />;
       case "forum":
-        return <FaComments size={12} color={COLORS.warning} />;
+        return <FaComments size={12} color={DESIGN_SYSTEM.colors.accent.purple} />;
       default:
         return null;
     }
@@ -448,8 +449,12 @@ export default function UpcomingEvents({ embedded = false, externalCalendarOpen 
                 {d && (
                   <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {eventsOn(d).slice(0, 3).map(ev => (
-                      <div key={ev.id} title={`${ev.name} • ${ev.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`} style={{ fontSize: 11, color: COLORS.text, background: COLORS.cardBackground, borderLeft: `3px solid ${getEventColor(ev.date)}`, padding: '2px 4px', borderRadius: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {ev.name}
+                      <div key={ev.id} title={`${ev.name} • ${ev.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`} style={{ fontSize: 11, color: COLORS.text, background: COLORS.cardBackground, borderLeft: `3px solid ${getEventColor(ev.date)}`, padding: '2px 4px', borderRadius: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {getOriginIcon(ev.origin)}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 10, color: ev.origin === 'project' ? DESIGN_SYSTEM.colors.accent.green : ev.origin === 'forum' ? DESIGN_SYSTEM.colors.accent.purple : ev.origin === 'customer' ? DESIGN_SYSTEM.colors.accent.orange : COLORS.lightText }}>
+                          {ev.origin === 'project' ? 'Project' : ev.origin === 'forum' ? 'Forum' : ev.origin === 'customer' ? 'Client' : ''}
+                        </span>
                       </div>
                     ))}
                     {eventsOn(d).length > 3 && <div style={{ fontSize: 10, color: COLORS.lightText }}>+{eventsOn(d).length - 3} more</div>}
@@ -478,11 +483,27 @@ export default function UpcomingEvents({ embedded = false, externalCalendarOpen 
                         }
                         closeCalendar();
                       }}
-                      style={{ padding: '6px 4px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                      style={{ padding: '6px 4px', borderBottom: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer' }}
                     >
-                      <span style={{ width: 8, height: 8, borderRadius: 999, background: getEventColor(ev.date), display: 'inline-block' }} />
-                      <span style={{ fontSize: 12, color: COLORS.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</span>
-                      <span style={{ fontSize: 11, color: COLORS.lightText }}>{ev.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 999, background: getEventColor(ev.date), display: 'inline-block' }} />
+                        <strong style={{ fontSize: 12, color: COLORS.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</strong>
+                        <span style={{ fontSize: 11, color: COLORS.lightText }}>{ev.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 16, fontSize: 11, overflow: 'hidden' }}>
+                        {getOriginIcon(ev.origin)}
+                        <span
+                          title={ev.sourceName}
+                          style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            color: ev.origin === 'project' ? DESIGN_SYSTEM.colors.accent.green : ev.origin === 'forum' ? DESIGN_SYSTEM.colors.accent.purple : ev.origin === 'customer' ? DESIGN_SYSTEM.colors.accent.orange : COLORS.lightText
+                          }}
+                        >
+                          {ev.origin === 'project' ? `Project: ${ev.sourceName}` : ev.origin === 'customer' ? `Client: ${ev.sourceName}` : ev.origin === 'forum' ? `Forum: ${ev.sourceName}` : ''}
+                        </span>
+                      </div>
                     </li>
                   ))}
                   {eventsOn(selectedDate).length === 0 && (
