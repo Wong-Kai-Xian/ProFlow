@@ -7,7 +7,7 @@ import { db, storage } from '../firebase';
 import { collection, onSnapshot, query, where, addDoc, updateDoc, doc, serverTimestamp, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { DESIGN_SYSTEM, getPageContainerStyle, getContentContainerStyle } from '../styles/designSystem';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 // Reusable searchable currency dropdown (datalist-backed with filter)
 function CurrencySelect({ value, onChange }) {
@@ -1374,7 +1374,7 @@ export default function FinancePage() {
                   </div>
                   <div style={{ height: 220, marginTop: 8 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={[
+                      <ComposedChart data={[
                         { label: 'Not due', value: Number(insights.buckets.notDue || 0) },
                         { label: '0-30', value: Number(insights.buckets.d0_30 || 0) },
                         { label: '31-60', value: Number(insights.buckets.d31_60 || 0) },
@@ -1387,7 +1387,7 @@ export default function FinancePage() {
                         <Tooltip />
                         <Legend />
                         <Bar dataKey="value" fill="#3b82f6" name={`Amount (${baseCurrency})`} />
-                      </BarChart>
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
@@ -1395,14 +1395,15 @@ export default function FinancePage() {
                   <div style={{ fontWeight: 600, marginBottom: 6 }}>Revenue (last 6 months, {baseCurrency})</div>
                   <div style={{ height: 240 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={insights.months.map(m => ({ month: m.key, value: Number(m.value || 0) }))} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                      <ComposedChart data={insights.months.map(m => ({ month: m.key, value: Number(m.value || 0) }))} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis dataKey="month" />
                         <YAxis />
                         <Tooltip />
                         <Legend />
                         <Bar dataKey="value" fill="#10b981" name={`Revenue (${baseCurrency})`} />
-                      </BarChart>
+                        <Line type="monotone" dataKey="value" stroke="#065f46" strokeWidth={2} dot={{ r: 2 }} name="Trend" />
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
