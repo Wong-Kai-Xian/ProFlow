@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import ReactDOM from "react-dom";
 import { COLORS, LAYOUT, INPUT_STYLES, BUTTON_STYLES } from "../profile-component/constants";
 import { db } from "../../firebase"; // Import db
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, arrayUnion, arrayRemove, getDoc, deleteDoc, where, getDocs } from "firebase/firestore"; // Import Firestore functions
@@ -113,6 +114,7 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
   const [authorName, setAuthorName] = useState(post.author || 'Anonymous');
   const [authorPhotoURL, setAuthorPhotoURL] = useState(post.authorPhotoURL || undefined);
   const [commentAuthorMap, setCommentAuthorMap] = useState({}); // authorId -> displayName
+  const [showMeetingDetails, setShowMeetingDetails] = useState(false);
 
   // Fetch live author display for post and comments
   useEffect(() => {
@@ -502,7 +504,7 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
               </span>
             )}
             {post.meeting && (
-              <span style={{ 
+              <button type="button" onClick={() => setShowMeetingDetails(true)} style={{ 
                 background: '#fffbeb', 
                 border: '1px solid #fde68a', 
                 color: '#92400e', 
@@ -511,10 +513,11 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
                 fontSize: '13px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px'
+                gap: '4px',
+                cursor: 'pointer'
               }}>
                 📅 {post.meeting.type} {post.meeting.fullDateTime}
-              </span>
+              </button>
             )}
           </div>
         )}
@@ -638,6 +641,32 @@ const PostItem = ({ post, onLike, onEdit, onDelete, currentUser }) => {
           💬 {post.comments?.length || 0} Comments
         </button>
       </div>
+
+      {/* Meeting details modal */}
+      {showMeetingDetails && post.meeting && ReactDOM.createPortal((
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowMeetingDetails(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '92%', maxWidth: 520, boxShadow: '0 20px 50px rgba(0,0,0,0.25)', padding: 18 }}>
+            <h3 style={{ margin: 0, fontSize: 18, color: COLORS.dark }}>Meeting details</h3>
+            <div style={{ marginTop: 10, display: 'grid', gap: 8, fontSize: 14, color: COLORS.text }}>
+              {post.meeting.title && <div><strong style={{ color: COLORS.dark }}>Title:</strong> {post.meeting.title}</div>}
+              <div><strong style={{ color: COLORS.dark }}>When:</strong> {post.meeting.fullDateTime || `${post.meeting.date} ${post.meeting.time}`}</div>
+              {post.meeting.duration && <div><strong style={{ color: COLORS.dark }}>Duration:</strong> {post.meeting.duration}</div>}
+              {post.meeting.mode === 'external' && post.meeting.link && (
+                <div><strong style={{ color: COLORS.dark }}>Link:</strong> <a href={post.meeting.link} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{post.meeting.link}</a></div>
+              )}
+              {post.meeting.mode === 'physical' && post.meeting.place && (
+                <div><strong style={{ color: COLORS.dark }}>Location:</strong> {post.meeting.place}</div>
+              )}
+              {post.meeting.description && (
+                <div><strong style={{ color: COLORS.dark }}>Notes:</strong><div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{post.meeting.description}</div></div>
+              )}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+              <button onClick={() => setShowMeetingDetails(false)} style={{ background: 'transparent', border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      ), document.body)}
 
       {/* New Comment Input */}
       {showComments && (
