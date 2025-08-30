@@ -24,6 +24,37 @@ function parseDateFlexible(value) {
   }
 }
 
+// USD converters using stored base fields and fx metadata
+function toUsdInvoice(inv) {
+  const base = 'USD';
+  const totalBase = Number(inv?.totalBase);
+  if (Number.isFinite(totalBase)) return totalBase;
+  const cur = String(inv?.currency || base).toUpperCase();
+  const fxBase = String(inv?.fxBase || base).toUpperCase();
+  const total = Number(inv?.total || 0);
+  const rate = Number(inv?.fxRate || 0);
+  if (fxBase === base) {
+    return cur === base ? total : (rate > 0 ? (total / rate) : total);
+  }
+  if (cur === base) return total;
+  return total; // fallback if legacy record without base/rate
+}
+
+function toUsdExpense(exp) {
+  const base = 'USD';
+  const amountBase = Number(exp?.amountBase);
+  if (Number.isFinite(amountBase)) return amountBase;
+  const cur = String(exp?.currency || base).toUpperCase();
+  const fxBase = String(exp?.fxBase || base).toUpperCase();
+  const amount = Number(exp?.amount || 0);
+  const rate = Number(exp?.fxRate || 0);
+  if (fxBase === base) {
+    return cur === base ? amount : (rate > 0 ? (amount / rate) : amount);
+  }
+  if (cur === base) return amount;
+  return amount; // fallback if legacy record without base/rate
+}
+
 // Define a simple Widget component for demonstration
 const Widget = ({ children, onRemove, isEditing }) => (
   <div style={{
@@ -165,19 +196,20 @@ export default function Dashboard({ scope = 'private' }) {
           }));
         } catch {}
 
-        // Top customers by revenue (paid invoices)
+        // Top customers by revenue (paid invoices) in USD
         const revenueByCustomer = new Map();
         for (const inv of invoices) {
           const status = String(inv.status || 'unpaid').toLowerCase();
           if (status !== 'paid') continue; // count revenue on paid only
           const key = inv.client || 'Unknown';
-          const amt = Number(inv.total || 0);
+          const amt = toUsdInvoice(inv);
           revenueByCustomer.set(key, (revenueByCustomer.get(key) || 0) + amt);
         }
         const topCustomers = Array.from(revenueByCustomer.entries())
           .map(([name, value]) => ({ name, value }))
           .sort((a,b) => b.value - a.value)
           .slice(0, 5);
+        const paidRevenueAll = Array.from(revenueByCustomer.values()).reduce((s, v) => s + Number(v || 0), 0);
 
         // Quotes/Invoices per month (last 6 months)
         const now = new Date();
@@ -201,17 +233,17 @@ export default function Dashboard({ scope = 'private' }) {
         }
         const quotesInvoicesMonthlyData = monthKeys.map(k => monthAgg[k]);
 
-        // Revenue & Cost per project (use totals regardless of status)
+        // Revenue & Cost per project (use totals regardless of status), USD
         const financeByProject = new Map();
         projects.forEach(p => financeByProject.set(p.id, { projectId: p.id, projectName: p.name || p.id, revenue: 0, cost: 0 }));
         invoices.forEach(inv => {
           const rec = financeByProject.get(inv.projectId) || { projectId: inv.projectId, projectName: inv.projectName || inv.projectId, revenue: 0, cost: 0 };
-          rec.revenue += Number(inv.total || 0);
+          rec.revenue += toUsdInvoice(inv);
           financeByProject.set(inv.projectId, rec);
         });
         expenses.forEach(exp => {
           const rec = financeByProject.get(exp.projectId) || { projectId: exp.projectId, projectName: exp.projectName || exp.projectId, revenue: 0, cost: 0 };
-          rec.cost += Number(exp.amount || 0);
+          rec.cost += toUsdExpense(exp);
           financeByProject.set(exp.projectId, rec);
         });
         const projectFinanceData = Array.from(financeByProject.values()).sort((a,b) => (b.revenue - a.revenue)).slice(0, 6);
@@ -239,7 +271,7 @@ export default function Dashboard({ scope = 'private' }) {
           activeProjects,
           completedProjects,
           totalClients,
-          revenue,
+          revenue: `$${paidRevenueAll.toFixed(2)}`,
           pendingTasks,
           projectCompletionData: [
             { name: 'Total', value: totalProjects, fill: COLORS.primary },

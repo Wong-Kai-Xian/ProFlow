@@ -315,9 +315,12 @@ function InvoiceModal({ projectId, onClose, initialClient, initialCurrency, init
       const finalTotal = subtotal + taxAmount - discountNum;
       const rate = Number(fxRate || 1);
       const curCode = (currency || 'USD').toUpperCase();
-      const toBase = (n) => (curCode === 'USD') ? Number(n||0) : Number(n||0) / (rate || 1);
-      await addDoc(collection(db, 'projects', projectId, 'invoices'), { client, dueDate, items: safeItems, subtotal, taxRate: Number(taxRate || 0), taxAmount, discount: discountNum, total: finalTotal, status, currency: currency || undefined, fxBase: 'USD', fxRate: Number(fxRate || 1), createdAt: serverTimestamp(),
-        subtotalBase: toBase(subtotal), taxAmountBase: toBase(taxAmount), discountBase: toBase(discountNum), totalBase: toBase(finalTotal)
+      const isUsd = curCode === 'USD';
+      const toCurrency = (n) => isUsd ? Number(n||0) : Number(n||0) * (rate || 1);
+      await addDoc(collection(db, 'projects', projectId, 'invoices'), { client, dueDate, items: safeItems,
+        subtotal: toCurrency(subtotal), taxRate: Number(taxRate || 0), taxAmount: toCurrency(taxAmount), discount: toCurrency(discountNum), total: toCurrency(finalTotal),
+        status, currency: curCode, fxBase: 'USD', fxRate: rate, createdAt: serverTimestamp(),
+        subtotalBase: Number(subtotal||0), taxAmountBase: Number(taxAmount||0), discountBase: Number(discountNum||0), totalBase: Number(finalTotal||0)
       });
       onClose();
     } catch {}

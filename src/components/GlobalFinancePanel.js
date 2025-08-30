@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
@@ -9,6 +9,7 @@ export default function GlobalFinancePanel() {
   const [projects, setProjects] = useState([]);
   const [totals, setTotals] = useState({ expenses: 0, invoiced: 0, paid: 0 });
   const [byCustomer, setByCustomer] = useState([]);
+  const custCacheRef = useRef({}); // { [projectId]: { [customer]: { invoiced, unpaid } } }
 
   useEffect(() => {
     if (!currentUser?.uid) { setProjects([]); return; }
@@ -25,30 +26,44 @@ export default function GlobalFinancePanel() {
     let totalExpenses = 0;
     let totalInvoiced = 0;
     let totalPaid = 0;
-    const customerMap = {};
+    // reset caches when project list changes
+    custCacheRef.current = {};
     for (const p of projects) {
       const cust = p.customerName || p.customer?.name || 'Unassigned';
       const expUnsub = onSnapshot(collection(db, 'projects', p.id, 'expenses'), (s) => {
-        const sum = s.docs.reduce((acc, d) => acc + (Number(d.data()?.amount) || 0), 0);
+        const sum = s.docs.reduce((acc, d) => acc + toUsdExpense(d.data()), 0);
         totalExpenses = recomputeTotals('expenses', p.id, sum, totalExpenses);
         setTotals({ expenses: totalExpenses, invoiced: totalInvoiced, paid: totalPaid });
       });
       const invUnsub = onSnapshot(collection(db, 'projects', p.id, 'invoices'), (s) => {
         let sumInv = 0; let sumPaid = 0;
+        const perProject = {};
         for (const d of s.docs) {
           const data = d.data();
-          const amt = Number(data.total || 0);
-          sumInv += amt;
-          if (data.status === 'paid') sumPaid += amt;
+          const amtUsd = toUsdInvoice(data);
+          sumInv += amtUsd;
+          if ((data.status || '').toLowerCase() === 'paid') sumPaid += amtUsd;
           const name = data.client || cust;
-          customerMap[name] = customerMap[name] || { name, invoiced: 0, unpaid: 0 };
-          customerMap[name].invoiced += amt;
-          if (data.status !== 'paid') customerMap[name].unpaid += amt;
+          const row = perProject[name] || { name, invoiced: 0, unpaid: 0 };
+          row.invoiced += amtUsd;
+          if ((data.status || '').toLowerCase() !== 'paid') row.unpaid += amtUsd;
+          perProject[name] = row;
         }
         totalInvoiced = recomputeTotals('invoiced', p.id, sumInv, totalInvoiced);
         totalPaid = recomputeTotals('paid', p.id, sumPaid, totalPaid);
         setTotals({ expenses: totalExpenses, invoiced: totalInvoiced, paid: totalPaid });
-        const rows = Object.values(customerMap).sort((a,b) => b.unpaid - a.unpaid).slice(0, 5);
+        // update project customer cache and aggregate across projects
+        custCacheRef.current[p.id] = perProject;
+        const agg = {};
+        Object.values(custCacheRef.current).forEach(map => {
+          Object.values(map || {}).forEach(row => {
+            const r = agg[row.name] || { name: row.name, invoiced: 0, unpaid: 0 };
+            r.invoiced += Number(row.invoiced || 0);
+            r.unpaid += Number(row.unpaid || 0);
+            agg[row.name] = r;
+          });
+        });
+        const rows = Object.values(agg).sort((a,b) => b.unpaid - a.unpaid).slice(0, 5);
         setByCustomer(rows);
       });
       unsubs.push(expUnsub, invUnsub);
@@ -109,6 +124,38 @@ const cache = { expenses: {}, invoiced: {}, paid: {} };
 function recomputeTotals(kind, pid, sum, curTotal) {
   cache[kind][pid] = sum;
   return Object.values(cache[kind]).reduce((a, b) => a + (Number(b) || 0), 0);
+}
+
+// USD converters
+function toUsdInvoice(inv) {
+  const base = 'USD';
+  const totalBase = Number(inv?.totalBase);
+  if (Number.isFinite(totalBase)) return totalBase;
+  const cur = String(inv?.currency || base).toUpperCase();
+  const fxBase = String(inv?.fxBase || base).toUpperCase();
+  const total = Number(inv?.total || 0);
+  const rate = Number(inv?.fxRate || 0);
+  if (fxBase === base) {
+    return cur === base ? total : (rate > 0 ? (total / rate) : total);
+  }
+  // Fallbacks: if already USD, or unknown
+  if (cur === base) return total;
+  return total;
+}
+
+function toUsdExpense(exp) {
+  const base = 'USD';
+  const amountBase = Number(exp?.amountBase);
+  if (Number.isFinite(amountBase)) return amountBase;
+  const cur = String(exp?.currency || base).toUpperCase();
+  const fxBase = String(exp?.fxBase || base).toUpperCase();
+  const amount = Number(exp?.amount || 0);
+  const rate = Number(exp?.fxRate || 0);
+  if (fxBase === base) {
+    return cur === base ? amount : (rate > 0 ? (amount / rate) : amount);
+  }
+  if (cur === base) return amount;
+  return amount;
 }
 
 

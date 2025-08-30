@@ -266,7 +266,7 @@ export default function FinancePage() {
     const quoBundle = [];
     for (const p of projects) {
       const unsubExp = onSnapshot(collection(db, 'projects', p.id, 'expenses'), (s) => {
-        const list = s.docs.map(d => ({ id: d.id, type: 'expense', projectId: p.id, projectName: p.name || p.id, date: d.data().date || '', category: d.data().category || '', amount: Number(d.data().amount || 0), note: d.data().note || '', receiptUrl: d.data().receiptUrl || '', currency: d.data().currency || '' }));
+        const list = s.docs.map(d => ({ id: d.id, type: 'expense', projectId: p.id, projectName: p.name || p.id, date: d.data().date || '', category: d.data().category || '', amount: Number(d.data().amount || 0), note: d.data().note || '', receiptUrl: d.data().receiptUrl || '', currency: d.data().currency || '', fxBase: d.data().fxBase || '', fxRate: Number(d.data().fxRate || 0), amountBase: Number(d.data().amountBase || NaN) }));
         // replace for project
         for (let i = expBundle.length - 1; i >= 0; i--) if (expBundle[i].projectId === p.id) expBundle.splice(i, 1);
         expBundle.push(...list);
@@ -412,18 +412,30 @@ export default function FinancePage() {
   }, [expensesRows]);
 
   const customersRollup = useMemo(() => {
+    const toUsd = (inv) => {
+      const base = 'USD';
+      const cur = (inv.currency || base).toUpperCase();
+      const fxBase = (inv.fxBase || base).toUpperCase();
+      const total = Number(inv.total || 0);
+      const totalBase = Number(inv.totalBase);
+      const savedRate = Number(inv.fxRate || 0);
+      if (fxBase === base && Number.isFinite(totalBase)) return totalBase;
+      if (fxBase === base && savedRate > 0) return cur === base ? total : (total / savedRate);
+      return total * getFxRate(cur);
+    };
     const map = {};
     for (const r of invoiceRows) {
       const name = r.client || 'Unassigned';
       const m = map[name] || { name, invoiced: 0, paid: 0, unpaid: 0, count: 0, lastDue: '' };
-      m.invoiced += Number(r.total || 0);
+      const usd = toUsd(r);
+      m.invoiced += usd;
       m.count += 1;
-      if (r.status === 'paid') m.paid += Number(r.total || 0); else m.unpaid += Number(r.total || 0);
+      if (r.status === 'paid') m.paid += usd; else m.unpaid += usd;
       if (r.dueDate && (!m.lastDue || r.dueDate > m.lastDue)) m.lastDue = r.dueDate;
       map[name] = m;
     }
     return Object.values(map).sort((a,b) => b.unpaid - a.unpaid);
-  }, [invoiceRows]);
+  }, [invoiceRows, fxRates, financeDefaults.currency]);
 
   const filteredInvoices = invoiceRows.filter(r => {
     if (invoiceFilter.status !== 'all' && r.status !== invoiceFilter.status) return false;
@@ -501,7 +513,7 @@ export default function FinancePage() {
   }, [filteredQuotes, quoteSort]);
   const toggleQuoteSort = (key) => setQuoteSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
   const baseCurrency = 'USD';
-  const getFxRate = (code) => {
+  function getFxRate(code) {
     const tableBase = (fxRates?.base || 'USD').toUpperCase();
     const base = 'USD';
     const c = (code || base).toUpperCase();
@@ -514,7 +526,7 @@ export default function FinancePage() {
     }
     // cross-rate: USD = CUR * (rBase / rCur)
     return (rBase > 0 && rCur > 0) ? (rBase / rCur) : 1;
-  };
+  }
 
   // Auto fetch FX rates using exchangerate.host with provided API key
   const EXR_API_KEY = 'eb803299bef64dc80de605049727ccf4';
@@ -563,7 +575,7 @@ export default function FinancePage() {
     const buckets = { notDue: 0, d0_30: 0, d31_60: 0, d61_90: 0, d90p: 0 };
     unpaid.forEach(r => {
       const due = parseDate(r.dueDate);
-      const baseAmt = Number(r.total||0) * getFxRate(r.currency);
+      const baseAmt = toUsdInvoice(r);
       if (!due || due > now) { buckets.notDue += baseAmt; return; }
       const days = daysBetween(now, due);
       if (days <= 30) buckets.d0_30 += baseAmt;
@@ -577,7 +589,7 @@ export default function FinancePage() {
     paid.forEach(r => {
       const d = parseDate(r.dueDate) || parseDate(r.createdAt?.toDate ? r.createdAt.toDate().toISOString().slice(0,10) : '') || now;
       const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-      const baseAmt = Number(r.total||0) * getFxRate(r.currency);
+      const baseAmt = toUsdInvoice(r);
       monthly[key] = (monthly[key] || 0) + baseAmt;
     });
     // Last 6 months timeline
@@ -1762,27 +1774,33 @@ export default function FinancePage() {
               if (pdata.customerName) derivedClient = pdata.customerName;
               else if (pdata.client) derivedClient = pdata.client;
             } catch {}
-            await addDoc(collection(db, 'projects', newInvoice.projectId, 'invoices'), {
-              number,
-              client: derivedClient,
-              dueDate: newInvoice.dueDate || '',
-              items,
-              // store both currency and base (USD) totals
-              subtotal,
-              taxRate,
-              taxAmount,
-              discount,
-              total,
-              currency: (newInvoice.currency || financeDefaults.currency || 'USD').toUpperCase(),
-              fxBase: 'USD',
-              fxRate: Number(newInvoice.fxRate || 1),
-              subtotalBase: subtotal / (newInvoice.currency && (newInvoice.currency.toUpperCase() !== 'USD') ? Number(newInvoice.fxRate || 1) : 1),
-              taxAmountBase: taxAmount / (newInvoice.currency && (newInvoice.currency.toUpperCase() !== 'USD') ? Number(newInvoice.fxRate || 1) : 1),
-              discountBase: discount / (newInvoice.currency && (newInvoice.currency.toUpperCase() !== 'USD') ? Number(newInvoice.fxRate || 1) : 1),
-              totalBase: total / (newInvoice.currency && (newInvoice.currency.toUpperCase() !== 'USD') ? Number(newInvoice.fxRate || 1) : 1),
-              status: 'unpaid',
-              createdAt: serverTimestamp()
-            });
+            {
+              const cur = (newInvoice.currency || financeDefaults.currency || 'USD').toUpperCase();
+              const rate = Number(newInvoice.fxRate || 1);
+              const isUsd = cur === 'USD';
+              const toCurrency = (n) => isUsd ? Number(n||0) : Number(n||0) * (rate || 1);
+              await addDoc(collection(db, 'projects', newInvoice.projectId, 'invoices'), {
+                number,
+                client: derivedClient,
+                dueDate: newInvoice.dueDate || '',
+                items,
+                // store both USD base and currency totals
+                subtotal: toCurrency(subtotal),
+                taxRate,
+                taxAmount: toCurrency(taxAmount),
+                discount: toCurrency(discount),
+                total: toCurrency(total),
+                currency: cur,
+                fxBase: 'USD',
+                fxRate: rate,
+                subtotalBase: Number(subtotal || 0),
+                taxAmountBase: Number(taxAmount || 0),
+                discountBase: Number(discount || 0),
+                totalBase: Number(total || 0),
+                status: 'unpaid',
+                createdAt: serverTimestamp()
+              });
+            }
             if (currentUser?.uid) {
               await setDoc(doc(db, 'users', currentUser.uid, 'settings', 'financeDefaults'), {
                 nextInvoiceNumber: seq + 1
