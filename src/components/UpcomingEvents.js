@@ -4,13 +4,21 @@ import Card from "./profile-component/Card"; // Corrected import path
 import { COLORS, LAYOUT } from "./profile-component/constants"; // Import constants
 import { db } from "../firebase"; // Import db
 import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore"; // Import Firestore functions
-import { FaFolder, FaUser, FaComments } from 'react-icons/fa'; // Import icons for origin
+import { FaFolder, FaUser, FaComments, FaCalendarAlt } from 'react-icons/fa'; // Import icons for origin and calendar
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
-export default function UpcomingEvents({ embedded = false }) {
+export default function UpcomingEvents({ embedded = false, externalCalendarOpen = false, onRequestCloseCalendar }) {
   const [events, setEvents] = useState([]);
   const navigate = useNavigate();
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0,0,0,0);
+    return d;
+  });
+  const [selectedDate, setSelectedDate] = useState(null);
 
   useEffect(() => {
     if (!currentUser) {
@@ -23,51 +31,103 @@ export default function UpcomingEvents({ embedded = false }) {
 
     console.log("Setting up Firestore listeners for reminders...");
 
-    // 1. Fetch Project Reminders
-    const projectsQuery = query(collection(db, "projects"), where("userId", "==", currentUser.uid)); // Filter by userId
-    unsubscribes.push(onSnapshot(projectsQuery, (projectSnapshot) => {
+    // 1. Fetch Project Reminders and Tasks (assigned to me)
+    const listenedProjects = new Set();
+    const remindersUnsubMap = {};
+    const projectQueries = [
+      query(collection(db, "projects"), where("userId", "==", currentUser.uid)),
+      query(collection(db, "projects"), where("ownerId", "==", currentUser.uid)),
+    ];
+    if (currentUser.email) {
+      try { projectQueries.push(query(collection(db, "projects"), where("team", "array-contains", currentUser.email))); } catch {}
+    }
+    const handleProjectSnapshot = (projectSnapshot) => {
       console.log("Projects snapshot received.");
       projectSnapshot.docs.forEach(projectDoc => {
         const projectId = projectDoc.id;
-        const projectName = projectDoc.data().name; // Get project name
-        console.log(`Processing project ${projectId}:`, projectDoc.data());
+        const projectData = projectDoc.data();
+        const projectName = projectData.name; // Get project name
+        console.log(`Processing project ${projectId}:`, projectData);
 
-        const projectRemindersQuery = query(collection(db, "projects", projectId, "reminders"));
-        unsubscribes.push(onSnapshot(projectRemindersQuery, (reminderSnapshot) => {
-          console.log(`Project ${projectId} reminders snapshot received.`);
-          // Remove existing events for this project before re-adding
+        // Process project tasks assigned to current user (if any)
+        try {
+          // Remove existing task events for this project before re-adding
           for (let i = fetchedReminders.length - 1; i >= 0; i--) {
-            if (fetchedReminders[i].origin === 'project' && fetchedReminders[i].sourceId === projectId) {
+            if (fetchedReminders[i].origin === 'project' && fetchedReminders[i].sourceId === projectId && fetchedReminders[i].taskId) {
               fetchedReminders.splice(i, 1);
             }
           }
-          if (reminderSnapshot.empty) {
-            console.log(`Project ${projectId} has no reminders in its subcollection.`);
-          }
-          reminderSnapshot.docs.forEach(reminderDoc => {
-            const reminderData = reminderDoc.data();
-            console.log(`Found project reminder:`, reminderData);
-            console.log(`Project reminder date: ${reminderData.date}, time: ${reminderData.time}`);
-            if (reminderData.date) {
-              const timeVal = reminderData.time && reminderData.time.trim() ? reminderData.time : '09:00';
+          const sections = Array.isArray(projectData?.tasks) ? projectData.tasks : [];
+          sections.forEach((section, secIdx) => {
+            const tasks = Array.isArray(section?.tasks) ? section.tasks : [];
+            tasks.forEach((t, taskIdx) => {
+              const assignedRaw = (t.assignedTo || t.assignee || '').toString().toLowerCase();
+              const meName = (currentUser.displayName || '').toLowerCase();
+              const meEmail = (currentUser.email || '').toLowerCase();
+              if (!assignedRaw) return;
+              const isMine = assignedRaw === meName || assignedRaw === meEmail;
+              if (!isMine) return;
+              if (!t.deadline) return;
+              const timeVal = '09:00';
+              const idSafe = t.id || `${secIdx}-${taskIdx}`;
               fetchedReminders.push({
-                id: `${projectId}-${reminderDoc.id}`,
-                name: reminderData.title,
-                date: new Date(`${reminderData.date}T${timeVal}`),
-                origin: "project",
+                id: `task:${projectId}:${idSafe}`,
+                name: t.title || t.name || 'Task',
+                date: new Date(`${t.deadline}T${timeVal}`),
+                origin: 'project', // keep origin as project for existing UI badges
                 sourceId: projectId,
                 sourceName: projectName,
-                description: reminderData.description || '',
-                reminderId: reminderDoc.id
+                description: (t.description || ''),
+                taskId: idSafe,
+                category: 'task'
               });
-            } else {
-              console.warn(`Project reminder missing date or time for project ${projectId}:`, reminderData);
-            }
+            });
           });
           updateEvents();
-        }));
+        } catch (e) { console.warn('Failed processing tasks for project', projectId, e); }
+
+        if (!listenedProjects.has(projectId)) {
+          listenedProjects.add(projectId);
+          const projectRemindersQuery = query(collection(db, "projects", projectId, "reminders"));
+          const unsubRem = onSnapshot(projectRemindersQuery, (reminderSnapshot) => {
+            console.log(`Project ${projectId} reminders snapshot received.`);
+            // Remove existing reminder events for this project before re-adding (do not remove task events)
+            for (let i = fetchedReminders.length - 1; i >= 0; i--) {
+              if (fetchedReminders[i].origin === 'project' && fetchedReminders[i].sourceId === projectId && fetchedReminders[i].reminderId) {
+                fetchedReminders.splice(i, 1);
+              }
+            }
+            if (reminderSnapshot.empty) {
+              console.log(`Project ${projectId} has no reminders in its subcollection.`);
+            }
+            reminderSnapshot.docs.forEach(reminderDoc => {
+              const reminderData = reminderDoc.data();
+              console.log(`Found project reminder:`, reminderData);
+              console.log(`Project reminder date: ${reminderData.date}, time: ${reminderData.time}`);
+              if (reminderData.date) {
+                const timeVal = reminderData.time && reminderData.time.trim() ? reminderData.time : '09:00';
+                fetchedReminders.push({
+                  id: `${projectId}-${reminderDoc.id}`,
+                  name: reminderData.title,
+                  date: new Date(`${reminderData.date}T${timeVal}`),
+                  origin: "project",
+                  sourceId: projectId,
+                  sourceName: projectName,
+                  description: reminderData.description || '',
+                  reminderId: reminderDoc.id
+                });
+              } else {
+                console.warn(`Project reminder missing date or time for project ${projectId}:`, reminderData);
+              }
+            });
+            updateEvents();
+          });
+          unsubscribes.push(unsubRem);
+          remindersUnsubMap[projectId] = unsubRem;
+        }
       });
-    }));
+    };
+    projectQueries.forEach((pq) => unsubscribes.push(onSnapshot(pq, handleProjectSnapshot)));
 
     // 2. Fetch Customer Profile Reminders (owned or shared via access)
     const customerProfilesOwned = query(collection(db, "customerProfiles"), where("userId", "==", currentUser.uid)); // Legacy userId
@@ -198,6 +258,8 @@ export default function UpcomingEvents({ embedded = false }) {
       const seen = seenRaw ? JSON.parse(seenRaw) : {};
       let changed = false;
       for (const ev of sorted) {
+        // Avoid duplicating notifications for tasks (handled by FollowUpAgent)
+        if (ev.taskId) continue;
         const dt = ev.date?.getTime?.();
         if (!dt) continue;
         const timeTo = dt - now;
@@ -329,8 +391,121 @@ export default function UpcomingEvents({ embedded = false }) {
     } catch {}
   };
 
+  const openCalendar = () => {
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0,0,0,0);
+    setCalendarMonth(d);
+    setSelectedDate(null);
+    setShowCalendar(true);
+  };
+  const isCalendarOpen = !!(externalCalendarOpen || showCalendar);
+
+  // Keep month in sync when opened externally
+  useEffect(() => {
+    if (externalCalendarOpen) {
+      const d = new Date();
+      d.setDate(1);
+      d.setHours(0,0,0,0);
+      setCalendarMonth(d);
+      setSelectedDate(null);
+    }
+  }, [externalCalendarOpen]);
+  const closeCalendar = () => { if (onRequestCloseCalendar) try { onRequestCloseCalendar(); } catch {} ; setShowCalendar(false); };
+
+  const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+  const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+  const firstDayIdx = monthStart.getDay();
+  const daysInMonth = monthEnd.getDate();
+  const daysArray = Array.from({ length: firstDayIdx + daysInMonth }, (_, i) => i < firstDayIdx ? null : new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), i - firstDayIdx + 1));
+  const isSameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const eventsOn = (d) => events.filter(ev => isSameDay(new Date(ev.date), d));
+
+  const CalendarModal = isCalendarOpen && (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 72, zIndex: 2000 }} onClick={closeCalendar}>
+      <div style={{ width: 800, maxWidth: '92vw', maxHeight: '88vh', background: '#fff', borderRadius: 12, boxShadow: '0 10px 30px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ padding: 12, background: COLORS.cardBackground, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => { setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1)); setSelectedDate(null); }} style={{ cursor: 'pointer' }}>{'<'}</button>
+            <strong style={{ color: COLORS.text }}>{calendarMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</strong>
+            <button onClick={() => { setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1)); setSelectedDate(null); }} style={{ cursor: 'pointer' }}>{'>'}</button>
+          </div>
+          <button onClick={closeCalendar} style={{ cursor: 'pointer' }}>Close</button>
+        </div>
+        <div style={{ padding: 12, display: 'grid', gridTemplateRows: 'auto 1fr', gap: 12, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', fontSize: 12, color: COLORS.lightText, textAlign: 'center' }}>
+            {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d} style={{ padding: 6 }}>{d}</div>)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, overflow: 'auto' }}>
+            {daysArray.map((d, idx) => (
+              <div key={idx} onClick={() => d && setSelectedDate(d)} style={{ border: '1px solid #eee', borderRadius: 8, minHeight: 84, padding: 6, background: d ? '#fff' : 'transparent', cursor: d ? 'pointer' : 'default', minWidth: 0, overflow: 'hidden' }}>
+                {d && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, color: COLORS.lightText }}>{d.getDate()}</span>
+                    {isSameDay(d, new Date()) && <span style={{ fontSize: 10, color: COLORS.primary }}>Today</span>}
+                  </div>
+                )}
+                {d && (
+                  <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {eventsOn(d).slice(0, 3).map(ev => (
+                      <div key={ev.id} title={`${ev.name} • ${ev.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`} style={{ fontSize: 11, color: COLORS.text, background: COLORS.cardBackground, borderLeft: `3px solid ${getEventColor(ev.date)}`, padding: '2px 4px', borderRadius: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {ev.name}
+                      </div>
+                    ))}
+                    {eventsOn(d).length > 3 && <div style={{ fontSize: 10, color: COLORS.lightText }}>+{eventsOn(d).length - 3} more</div>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 8 }}>
+            {selectedDate ? (
+              <>
+                <strong style={{ color: COLORS.text, fontSize: 14 }}>Events on {selectedDate.toLocaleDateString()}</strong>
+                <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0 0', maxHeight: 200, overflow: 'auto' }}>
+                  {eventsOn(selectedDate).sort((a,b) => a.date.getTime() - b.date.getTime()).map(ev => (
+                    <li
+                      key={ev.id}
+                      onClick={() => {
+                        if (ev.origin === 'project' && ev.reminderId) {
+                          navigate(`/project/${ev.sourceId}?reminderId=${encodeURIComponent(ev.reminderId)}`);
+                        } else if (ev.origin === 'project' && ev.taskId) {
+                          navigate(`/project/${ev.sourceId}?taskId=${encodeURIComponent(ev.taskId)}`);
+                        } else if (ev.origin === 'forum' && ev.reminderId) {
+                          navigate(`/forum/${ev.sourceId}?reminderId=${encodeURIComponent(ev.reminderId)}`);
+                        } else if (ev.origin === 'customer') {
+                          navigate(`/customer/${ev.sourceId}`);
+                        }
+                        closeCalendar();
+                      }}
+                      style={{ padding: '6px 4px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                    >
+                      <span style={{ width: 8, height: 8, borderRadius: 999, background: getEventColor(ev.date), display: 'inline-block' }} />
+                      <span style={{ fontSize: 12, color: COLORS.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</span>
+                      <span style={{ fontSize: 11, color: COLORS.lightText }}>{ev.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    </li>
+                  ))}
+                  {eventsOn(selectedDate).length === 0 && (
+                    <li style={{ padding: '6px 4px', color: COLORS.lightText }}>No events for this day.</li>
+                  )}
+                </ul>
+              </>
+            ) : (
+              <div style={{ fontSize: 12, color: COLORS.lightText }}>Select a day to view its events.</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const List = (
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0, overflowY: "auto", flexGrow: 1, minHeight: 0 }}>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, overflowY: "auto", flexGrow: 1, minHeight: 0, position: 'relative' }}>
+        <div style={{ position: 'sticky', top: 0, padding: 6, display: 'flex', justifyContent: 'flex-end', background: 'linear-gradient(to bottom, rgba(255,255,255,0.96), rgba(255,255,255,0.6))', zIndex: 1 }}>
+          <button onClick={openCalendar} title="Open calendar" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, border: `1px solid ${COLORS.secondary}`, background: '#fff', cursor: 'pointer', fontSize: 12, color: COLORS.text }}>
+            <FaCalendarAlt size={12} /> Calendar
+          </button>
+        </div>
         {events.length === 0 ? (
           <li style={{ padding: LAYOUT.smallGap, color: COLORS.lightText, textAlign: "center" }}>No upcoming events.</li>
         ) : (
@@ -340,6 +515,8 @@ export default function UpcomingEvents({ embedded = false }) {
               onClick={() => {
                 if (event.origin === 'project' && event.reminderId) {
                   navigate(`/project/${event.sourceId}?reminderId=${encodeURIComponent(event.reminderId)}`);
+                } else if (event.origin === 'project' && event.taskId) {
+                  navigate(`/project/${event.sourceId}?taskId=${encodeURIComponent(event.taskId)}`);
                 } else if (event.origin === 'forum' && event.reminderId) {
                   navigate(`/forum/${event.sourceId}?reminderId=${encodeURIComponent(event.reminderId)}`);
                 } else if (event.origin === 'customer') {
@@ -385,8 +562,9 @@ export default function UpcomingEvents({ embedded = false }) {
 
   if (embedded) {
     return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
         {List}
+        {CalendarModal}
       </div>
     );
   }
@@ -400,8 +578,14 @@ export default function UpcomingEvents({ embedded = false }) {
       position: 'relative',
       zIndex: 0
     }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
       <h3 style={{ marginTop: 0, color: COLORS.text, fontSize: "18px" }}>Upcoming Events</h3>
+        <button onClick={openCalendar} title="Open calendar" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, border: `1px solid ${COLORS.secondary}`, background: '#fff', cursor: 'pointer', fontSize: 12, color: COLORS.text }}>
+          <FaCalendarAlt size={12} /> Calendar
+        </button>
+      </div>
       {List}
+      {CalendarModal}
     </Card>
   );
 }

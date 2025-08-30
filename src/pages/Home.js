@@ -16,6 +16,7 @@ export default function Home() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [dashboardScope, setDashboardScope] = useState('private');
+  const [eventsCalendarOpen, setEventsCalendarOpen] = useState(false);
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
   // Forums state is now managed within HomeGroupForum, so we can remove it here
   // const [forums, setForums] = useState([]);
@@ -259,25 +260,30 @@ export default function Home() {
                 <div style={{
                   background: DESIGN_SYSTEM.pageThemes.home.gradient,
                   padding: DESIGN_SYSTEM.spacing.base,
-                  color: DESIGN_SYSTEM.colors.text.inverse
+                  color: DESIGN_SYSTEM.colors.text.inverse,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
                 }}>
-                  <h3 style={{
-                    margin: "0",
-                    fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
-                    fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
-                  }}>
-                    Upcoming Events
-                  </h3>
-                  <p style={{
-                    margin: "4px 0 0 0",
-                    fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
-                    opacity: 0.9
-                  }}>
-                    Stay on top of your schedule
-                  </p>
+                  <div>
+                    <h3 style={{
+                      margin: "0",
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.lg,
+                      fontWeight: DESIGN_SYSTEM.typography.fontWeight.semibold
+                    }}>
+                      Upcoming Events
+                    </h3>
+                    <p style={{
+                      margin: "4px 0 0 0",
+                      fontSize: DESIGN_SYSTEM.typography.fontSize.sm,
+                      opacity: 0.9
+                    }}>
+                      Stay on top of your schedule
+                    </p>
+                  </div>
                 </div>
                 <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-                  <UpcomingEvents embedded />
+                  <UpcomingEvents embedded externalCalendarOpen={eventsCalendarOpen} onRequestCloseCalendar={() => setEventsCalendarOpen(false)} />
                 </div>
               </div>
 
