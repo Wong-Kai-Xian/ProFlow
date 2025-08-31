@@ -942,12 +942,10 @@ export default function ProjectDetail() {
         setAiRaw(fallbackText || (candidates.length ? JSON.stringify(candidates[0].content, null, 2) : ''));
         const normalized = parsed ? normalizeProjectTemplate(parsed) : buildLocalProjectTemplate();
         setDraft(JSON.parse(JSON.stringify(normalized)));
-        setTab('templates');
       } catch (e) {
         try {
           const normalized = buildLocalProjectTemplate();
           setDraft(JSON.parse(JSON.stringify(normalized)));
-          setTab('templates');
           setAiError('');
         } catch {
           setAiError(e?.message || 'Failed to generate');

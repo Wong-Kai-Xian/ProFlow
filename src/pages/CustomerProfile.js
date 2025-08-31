@@ -477,13 +477,11 @@ export default function CustomerProfile() {
         // Local fallback if model returns empty or unparsable
         const normalized = parsed ? normalizeCustomerTemplate(parsed) : buildLocalCustomerTemplate();
         setDraft(JSON.parse(JSON.stringify(normalized)));
-        setTab('templates');
       } catch (e) {
         try {
           // Fallback to local template even on error
           const normalized = buildLocalCustomerTemplate();
           setDraft(JSON.parse(JSON.stringify(normalized)));
-          setTab('templates');
           setAiError('');
         } catch {
           setAiError(e?.message || 'Failed to generate');

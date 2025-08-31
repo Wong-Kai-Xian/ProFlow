@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { db } from '../firebase';
-import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import CatAvatar from './shared/CatAvatar';
@@ -20,6 +20,10 @@ export default function PersonalAssistant() {
   const [userMap, setUserMap] = useState({}); // uid -> name/email
   const [forumPostsMap, setForumPostsMap] = useState({}); // forumId -> [titles]
   const [forumPostsDetailMap, setForumPostsDetailMap] = useState({}); // forumId -> [{title, body, authorUid}]
+  const [forumRemindersMap, setForumRemindersMap] = useState({}); // forumId -> [{title, date, time, type, description, priority, duration, createdFrom, timestamp}]
+  const [projectRemindersMap, setProjectRemindersMap] = useState({}); // projectId -> reminders[]
+  const [customerRemindersMap, setCustomerRemindersMap] = useState({}); // customerId -> reminders[]
+  const [finance, setFinance] = useState({ invoices: [], expenses: [], quotes: [] });
   const [queryText, setQueryText] = useState('');
   const [summary, setSummary] = useState('');
   const [history, setHistory] = useState([]); // {q,a,timestamp}
@@ -113,7 +117,126 @@ export default function PersonalAssistant() {
   useEffect(() => { if (!currentUser?.uid) return; const r1 = query(collection(db, 'approvalRequests'), where('requesterUid', '==', currentUser.uid)); const r2 = query(collection(db, 'approvalRequests'), where('recipients', 'array-contains', currentUser.uid)); const u1 = onSnapshot(r1, s => { const items = s.docs.map(d => ({ id: d.id, ...d.data() })); setApprovals(a => { const m = new Map(a.map(i => [i.id, i])); items.forEach(it => m.set(it.id, it)); return Array.from(m.values()); }); }); const u2 = onSnapshot(r2, s => { const items = s.docs.map(d => ({ id: d.id, ...d.data() })); setApprovals(a => { const m = new Map(a.map(i => [i.id, i])); items.forEach(it => m.set(it.id, it)); return Array.from(m.values()); }); }); return () => { u1(); u2(); }; }, [currentUser?.uid]);
   useEffect(() => { if (!currentUser?.uid) return; try { const cq = query(collection(db, 'customerProfiles'), where('userId', '==', currentUser.uid)); return onSnapshot(cq, s => setCustomers(s.docs.map(d => ({ id: d.id, ...d.data() })))); } catch { setCustomers([]); } }, [currentUser?.uid]);
   useEffect(() => { const uids = new Set(); projects.forEach(p => (Array.isArray(p.team) ? p.team.forEach(uid => uids.add(uid)) : null)); const all = Array.from(uids); if (all.length === 0) { setUserMap({}); return; } const chunk = 10; let cancelled = false; (async () => { const nm = {}; for (let i = 0; i < all.length; i += chunk) { const slice = all.slice(i, i + chunk); try { const qu = query(collection(db, 'users'), where('uid', 'in', slice)); const snap = await getDocs(qu); snap.forEach(doc => { const d = doc.data(); nm[d.uid || doc.id] = d.name || d.email || 'Member'; }); } catch {} } if (!cancelled) setUserMap(nm); })(); return () => { cancelled = true; }; }, [projects]);
-  useEffect(() => { const ids = forums.map(f => f.id); if (ids.length === 0) { setForumPostsMap({}); setForumPostsDetailMap({}); return; } const chunk = 10; let cancelled = false; (async () => { const map = {}, dmap = {}; for (let i = 0; i < ids.length; i += chunk) { const slice = ids.slice(i, i + chunk); try { const qp = query(collection(db, 'posts'), where('forumId', 'in', slice)); const snap = await getDocs(qp); snap.forEach(d => { const p = d.data(); const fid = p.forumId; map[fid] = map[fid] || []; dmap[fid] = dmap[fid] || []; if (p.title) map[fid].push(p.title); dmap[fid].push({ title: p.title || 'Untitled', body: (p.content || p.body || '').slice(0, 400), authorUid: p.authorUid || p.userId || '' }); }); } catch {} } if (!cancelled) { setForumPostsMap(map); setForumPostsDetailMap(dmap); } })(); return () => { cancelled = true; }; }, [forums]);
+  useEffect(() => {
+    const ids = forums.map(f => f.id);
+    if (ids.length === 0) {
+      setForumPostsMap({});
+      setForumPostsDetailMap({});
+      setForumRemindersMap({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const map = {}, dmap = {}, rmap = {};
+      for (const fid of ids) {
+        try {
+          const postsSnap = await getDocs(query(collection(db, 'forums', fid, 'posts'), orderBy('timestamp', 'desc')));
+          map[fid] = [];
+          dmap[fid] = [];
+          postsSnap.forEach(docSnap => {
+            const p = docSnap.data();
+            const inferredTitle = p.title || (p.content ? String(p.content).split('\n')[0].slice(0, 80) : 'Post');
+            map[fid].push(inferredTitle);
+            dmap[fid].push({ title: inferredTitle, body: String(p.content || p.body || ''), authorUid: p.authorId || p.authorUid || p.userId || '' });
+          });
+        } catch {}
+        try {
+          const remSnap = await getDocs(query(collection(db, 'forums', fid, 'reminders'), orderBy('timestamp', 'desc')));
+          rmap[fid] = [];
+          remSnap.forEach(docSnap => {
+            const r = docSnap.data();
+            rmap[fid].push({ title: r.title || 'Reminder', date: r.date || '', time: r.time || '', type: r.type || '', description: String(r.description || ''), priority: r.priority || '', duration: r.duration || '', createdFrom: r.createdFrom || null, timestamp: r.timestamp || null });
+          });
+        } catch {}
+      }
+      if (!cancelled) {
+        setForumPostsMap(map);
+        setForumPostsDetailMap(dmap);
+        setForumRemindersMap(rmap);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [forums]);
+
+  // Customer reminders map (full details from customer docs)
+  useEffect(() => {
+    try {
+      const cmap = {};
+      customers.forEach(c => {
+        const rems = Array.isArray(c.reminders) ? c.reminders : [];
+        cmap[c.id] = rems.map(r => ({
+          title: r.title || r.name || 'Reminder',
+          description: r.description || r.details || '',
+          date: r.date || '',
+          time: r.time || '',
+          type: r.type || '',
+          priority: r.priority || '',
+          origin: { type: 'customer', id: c.id }
+        }));
+      });
+      setCustomerRemindersMap(cmap);
+    } catch { setCustomerRemindersMap({}); }
+  }, [customers]);
+
+  // Project reminders live aggregation
+  useEffect(() => {
+    if (!projects || projects.length === 0) { setProjectRemindersMap({}); return; }
+    const unsubs = [];
+    const map = new Map();
+    projects.forEach(p => {
+      try {
+        const u = onSnapshot(query(collection(db, 'projects', p.id, 'reminders'), orderBy('timestamp', 'desc')), (snap) => {
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data(), projectId: p.id, projectName: p.name || 'Untitled' }));
+          map.set(p.id, list);
+          const obj = {};
+          map.forEach((v, k) => { obj[k] = v; });
+          setProjectRemindersMap(obj);
+        });
+        unsubs.push(u);
+      } catch {}
+    });
+    return () => { unsubs.forEach(u => { try { u(); } catch {} }); };
+  }, [projects]);
+
+  // Finance live aggregation (invoices, expenses, quotes) across all projects
+  useEffect(() => {
+    if (!projects || projects.length === 0) { setFinance({ invoices: [], expenses: [], quotes: [] }); return; }
+    const unsubs = [];
+    const invMap = new Map(), expMap = new Map(), quoMap = new Map();
+    const emit = () => {
+      const invoices = Array.from(invMap.values()).flat();
+      const expenses = Array.from(expMap.values()).flat();
+      const quotes = Array.from(quoMap.values()).flat();
+      setFinance({ invoices, expenses, quotes });
+    };
+    projects.forEach(p => {
+      try {
+        const uInv = onSnapshot(collection(db, 'projects', p.id, 'invoices'), (snap) => {
+          const list = snap.docs.map(d => ({ id: d.id, projectId: p.id, projectName: p.name || 'Untitled', ...d.data() }));
+          invMap.set(p.id, list);
+          emit();
+        });
+        unsubs.push(uInv);
+      } catch {}
+      try {
+        const uExp = onSnapshot(collection(db, 'projects', p.id, 'expenses'), (snap) => {
+          const list = snap.docs.map(d => ({ id: d.id, projectId: p.id, projectName: p.name || 'Untitled', ...d.data() }));
+          expMap.set(p.id, list);
+          emit();
+        });
+        unsubs.push(uExp);
+      } catch {}
+      try {
+        const uQuo = onSnapshot(collection(db, 'projects', p.id, 'quotes'), (snap) => {
+          const list = snap.docs.map(d => ({ id: d.id, projectId: p.id, projectName: p.name || 'Untitled', ...d.data() }));
+          quoMap.set(p.id, list);
+          emit();
+        });
+        unsubs.push(uQuo);
+      } catch {}
+    });
+    return () => { unsubs.forEach(u => { try { u(); } catch {} }); };
+  }, [projects]);
 
   const cleanText = useCallback((text) => { if (!text) return ''; let t = text; t = t.replace(/```[\s\S]*?```/g, (m) => m.replace(/```/g, '')); t = t.replace(/^\s*#\s*/gm, ''); t = t.replace(/^\s*[-*•●▪▫]+\s*/gm, '• '); t = t.replace(/\*\*(.*?)\*\*/g, '$1'); t = t.replace(/__(.*?)__/g, '$1'); t = t.replace(/\s*\n\s*\n\s*/g, '\n\n'); return t.trim(); }, []);
 
@@ -128,7 +251,7 @@ export default function PersonalAssistant() {
     return { projectCount, forumCount, customerCount, activeProjects, approvalsPending, myTasks, upcoming, customerNotes, customerReminders, customerFiles };
   }, [projects, forums, approvals, customers]);
 
-  async function callGemini(prompt, context) {
+  async function callGemini(prompt, context, prevTurns = []) {
     const key = apiKey || ''; if (!key) throw new Error('Missing GEMINI API key');
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
     const attachments = Array.isArray(context.attachments) ? context.attachments : [];
@@ -137,13 +260,23 @@ export default function PersonalAssistant() {
       const content = (a.content || '').slice(0, 20000);
       return `${header}${content ? `\nContent (truncated):\n\n\`\`\`\n${content}\n\`\`\`` : ''}`;
     }).join('\n\n');
-    const promptText = [
-      'You are a helpful assistant. Use the attachments and context when relevant. If attachments are provided, prefer their content.',
+    // Build multi-turn conversation
+    const contents = [];
+    const maxTurnChars = 4000;
+    (prevTurns || []).forEach(t => {
+      const uq = String(t?.q || '').slice(0, maxTurnChars);
+      const ua = String(t?.a || '').slice(0, maxTurnChars);
+      if (uq) contents.push({ role: 'user', parts: [{ text: uq }] });
+      if (ua) contents.push({ role: 'model', parts: [{ text: ua }] });
+    });
+    const finalUserText = [
+      'You are a helpful assistant. Use prior conversation, the attachments, and the JSON context when relevant. Be concise and actionable.',
       `Question:\n${prompt}`,
       attachmentsText ? `\n\nAttachments:\n${attachmentsText}` : '',
       `\n\nContext (JSON):\n${JSON.stringify({ ...context, attachments: undefined })}`
     ].join('');
-    const body = { contents: [{ role: 'user', parts: [{ text: promptText }] }] };
+    contents.push({ role: 'user', parts: [{ text: finalUserText }] });
+    const body = { contents };
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!res.ok) throw new Error(await res.text()); const data = await res.json();
     const answerText = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || 'No answer.'; return answerText;
@@ -156,10 +289,31 @@ export default function PersonalAssistant() {
     }
     if (!q) { const base = `Projects: ${insights.projectCount} • Forums: ${insights.forumCount} • Customers: ${insights.customerCount} • Active projects: ${insights.activeProjects.length} • Approvals pending: ${insights.approvalsPending}`; setSummary(base); setHistory(h => [...h, { q: '(overview)', a: base, t: Date.now(), attachments: [] }]); return; }
     const projectsContext = projects.slice(0, 8).map(p => ({ id: p.id, name: p.name || 'Untitled', stage: p.stage || 'N/A', deadline: p.deadline || 'N/A', description: (p.description || '').slice(0, 600), members: (Array.isArray(p.team) ? p.team : []).map(uid => userMap[uid] || uid), tasks: (Array.isArray(p.tasks) ? p.tasks : []).slice(0, 6).flatMap(s => Array.isArray(s.tasks) ? s.tasks.slice(0, 6).map(t => ({ title: t.title || t.name || 'Task', status: t.status || 'open', deadline: t.deadline || '', stage: s.stage || '' })) : []) }));
-    const forumsContext = forums.slice(0, 12).map(f => ({ id: f.id, name: f.name || 'Untitled', postsCount: f.posts || 0, recentPosts: (forumPostsDetailMap[f.id] || []).slice(0, 5).map(p => ({ title: p.title, excerpt: p.body, author: userMap[p.authorUid] || p.authorUid })) }));
+    const forumsContext = forums.slice(0, 12).map(f => ({
+      id: f.id,
+      name: f.name || 'Untitled',
+      postsCount: f.posts || 0,
+      recentPosts: (forumPostsDetailMap[f.id] || []).slice(0, 10).map(p => ({ title: p.title, body: p.body, author: userMap[p.authorUid] || p.authorUid })),
+      reminders: (forumRemindersMap[f.id] || [])
+    }));
+
+    const projectRemindersContext = Object.entries(projectRemindersMap).slice(0, 20).map(([pid, rems]) => ({ projectId: pid, reminders: rems }));
+    const customerRemindersContext = Object.entries(customerRemindersMap).slice(0, 20).map(([cid, rems]) => ({ customerId: cid, reminders: rems }));
     const customersContext = customers.slice(0, 10).map(c => ({ id: c.id, name: c.customerProfile?.name || c.customerProfile?.email || 'Customer', company: c.companyProfile?.company || '', currentStage: c.currentStage || '', notesCount: Object.keys(c.stageData || {}).reduce((acc, k) => acc + ((c.stageData?.[k]?.notes || []).length), 0), reminders: (c.reminders || []).length, files: (c.files || []).length }));
-    const ctx = { user: currentUser?.email || currentUser?.uid || 'unknown', approvalsPending: insights.approvalsPending, upcomingDeadlines: insights.upcoming.slice(0, 10), projects: projectsContext, forums: forumsContext, customers: customersContext, tasksSample: insights.myTasks.slice(0, 20).map(t => ({ title: t.title || t.name || 'Task', project: t.projectName, status: t.status || 'open', stage: t.stage || '' })), attachments };
-    try { setIsCalling(true); const answer = await callGemini(q, ctx); setSummary(cleanText(answer)); setHistory(h => [...h, { q, a: cleanText(answer), t: Date.now(), attachments }]); setQueryText(''); } catch (err) { const msg = `AI error: ${err.message}`; setSummary(msg); setHistory(h => [...h, { q, a: msg, t: Date.now(), attachments }]); } finally { setIsCalling(false); }
+    const ctx = { user: currentUser?.email || currentUser?.uid || 'unknown', approvalsPending: insights.approvalsPending, upcomingDeadlines: insights.upcoming.slice(0, 10), projects: projectsContext, forums: forumsContext, customers: customersContext, projectReminders: projectRemindersContext, customerReminders: customerRemindersContext, finance, tasksSample: insights.myTasks.slice(0, 20).map(t => ({ title: t.title || t.name || 'Task', project: t.projectName, status: t.status || 'open', stage: t.stage || '' })), attachments };
+    try {
+      setIsCalling(true);
+      const prevTurns = history.slice(-6); // include last 6 Q/A turns
+      const answer = await callGemini(q, ctx, prevTurns);
+      const cleaned = cleanText(answer);
+      setSummary(cleaned);
+      setHistory(h => [...h, { q, a: cleaned, t: Date.now(), attachments }]);
+      setQueryText('');
+    } catch (err) {
+      const msg = `AI error: ${err.message}`;
+      setSummary(msg);
+      setHistory(h => [...h, { q, a: msg, t: Date.now(), attachments }]);
+    } finally { setIsCalling(false); }
   };
 
   const handleSaveKey = () => { localStorage.setItem('gemini_api_key', apiKey); setShowKeyEditor(false); };
