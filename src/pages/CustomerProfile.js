@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import CustomerInfo from "../components/profile-component/CustomerInfo";
 import CompanyInfo from "../components/profile-component/CompanyInfo";
@@ -53,17 +53,16 @@ export default function CustomerProfile() {
   const [projects, setProjects] = useState([]); // To store associated projects
   const [showSopPicker, setShowSopPicker] = useState(false);
   const [sopChoice, setSopChoice] = useState('customer_general_v1');
-  // Open SOP picker automatically after creation redirect
+  // Open SOP picker automatically if redirected with ?openSop=1
+  const location = useLocation();
   useEffect(() => {
     try {
-      const key = 'proflow_open_customer_sop_for';
-      const target = localStorage.getItem(key);
-      if (target && target === id) {
+      const params = new URLSearchParams(location.search);
+      if (params.get('openSop') === '1') {
         setShowSopPicker(true);
-        localStorage.removeItem(key);
       }
     } catch {}
-  }, [id]);
+  }, [location.search]);
   const [projectSnapshots, setProjectSnapshots] = useState({}); // Per-project saved data snapshots
   const [activeStageTab, setActiveStageTab] = useState('current');
   const [projectNames, setProjectNames] = useState({}); // Map of projectId -> name
