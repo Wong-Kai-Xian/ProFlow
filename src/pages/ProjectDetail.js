@@ -1568,7 +1568,7 @@ export default function ProjectDetail() {
                   color: DESIGN_SYSTEM.colors.text.inverse
                 }}
               >
-                Use SOP
+                Template
               </button>
               <button
                 onClick={handleToggleMeeting}
