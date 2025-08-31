@@ -162,7 +162,7 @@ export default function ProjectList() {
 
   const handleCreateProject = async (newProject) => {
     if (!currentUser) return; // Ensure user is logged in to create projects
-    await addDoc(collection(db, "projects"), {
+    const ref = await addDoc(collection(db, "projects"), {
       name: newProject.name,
       stage: "Planning",
       status: determineProjectStatus("Planning"), // Set status based on stage
@@ -186,7 +186,10 @@ export default function ProjectList() {
         customerName: (newProject.customerName || '')
       }
     });
-    // setProjects will be handled by the onSnapshot listener, no need to refetch
+    try {
+      // open SOP picker on the newly created project
+      navigate(`/project/${ref.id}?openSop=1`);
+    } catch {}
     setShowCreateModal(false);
   };
 

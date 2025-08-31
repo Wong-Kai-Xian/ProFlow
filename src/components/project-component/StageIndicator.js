@@ -95,7 +95,7 @@ export default function StageIndicator({ currentStage, displayStage = null, allS
               <div 
                 style={{ display: "flex", flexDirection: "column", alignItems: "center", maxWidth: 220 }}
               >
-                <div style={circleStyle} title={isActive ? 'Current Stage' : (isCompleted ? 'Completed' : 'Upcoming')}>
+                <div style={{ ...circleStyle, cursor: editing ? 'pointer' : 'default' }} title={isActive ? 'Current Stage' : (isCompleted ? 'Completed' : 'Upcoming')} onClick={() => { if (editing && onViewStage) onViewStage(stage); }}>
                   {index + 1}
                 </div>
                 {editing ? (
@@ -113,7 +113,7 @@ export default function StageIndicator({ currentStage, displayStage = null, allS
                     <button onClick={() => onDeleteStageAt && onDeleteStageAt(index)} style={{ ...BUTTON_STYLES.secondary, padding: '2px 6px', fontSize: 12, color: '#b91c1c', background: '#fee2e2' }}>{'✕'}</button>
                   </div>
                 ) : (
-                  <div style={labelStyle}>{stage}</div>
+                  <div style={{ ...labelStyle, cursor: editing ? 'pointer' : 'default' }} onClick={() => { if (editing && onViewStage) onViewStage(stage); }}>{stage}</div>
                 )}
               </div>
             </React.Fragment>

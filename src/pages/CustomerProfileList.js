@@ -11,6 +11,7 @@ import AddProfileModal from "../components/profile-component/AddProfileModal"; /
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 import { FaTrash, FaInbox } from 'react-icons/fa'; // Import icons
 import DeleteProfileModal from '../components/profile-component/DeleteProfileModal'; // Import DeleteProfileModal
+import { listSopTemplates } from '../utils/sopTemplates';
 
 // Get initials from customer name
 const getInitials = (name) => {
@@ -69,6 +70,9 @@ export default function CustomerProfileList() {
   const [showDeleteCustomerModal, setShowDeleteCustomerModal] = useState(false); // State for delete confirmation modal
   const [customerToDelete, setCustomerToDelete] = useState(null); // State to hold the customer to be deleted
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false); // Loading state for customer creation
+  const [showCustomerSop, setShowCustomerSop] = useState(false);
+  const [sopChoice, setSopChoice] = useState('customer_general_v1');
+  const [pendingClientData, setPendingClientData] = useState(null);
   const { currentUser } = useAuth(); // Get currentUser from AuthContext
   const [showIncomingShares, setShowIncomingShares] = useState(false);
   const [pendingSharesCount, setPendingSharesCount] = useState(0);
@@ -97,6 +101,236 @@ export default function CustomerProfileList() {
     { code: 'US', name: 'United States' },
     { code: 'GB', name: 'United Kingdom' }
   ];
+
+  // Inline modal for customer SOP selection before creation
+  function CustomerSopModal() {
+    const templates = listSopTemplates('customer');
+    const selected = templates.find(t => t.id === sopChoice) || templates[0];
+    const [draft, setDraft] = useState(() => JSON.parse(JSON.stringify(selected || {})));
+    useEffect(() => { setDraft(JSON.parse(JSON.stringify(selected || {}))); }, [selected?.id]);
+    const [tab, setTab] = useState('templates');
+    const [aiDesc, setAiDesc] = useState('');
+    const [aiIndustry, setAiIndustry] = useState('');
+    const [aiCustomerType, setAiCustomerType] = useState('');
+    const [aiRoles, setAiRoles] = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiError, setAiError] = useState('');
+    const [aiRaw, setAiRaw] = useState('');
+    const parseJsonFromText = (text) => {
+      const tryParse = (s) => { try { return JSON.parse(s); } catch { return null; } };
+      const repairJson = (input) => {
+        try {
+          let s = String(input || '');
+          s = s.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1');
+          s = s.replace(/,\s*(\}|\])/g, '$1');
+          s = s.replace(/([\{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":');
+          s = s.replace(/:\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, ': "$1"');
+          return s;
+        } catch { return input; }
+      };
+      const t0 = (text || '').trim();
+      let parsed = tryParse(t0);
+      if (parsed) return parsed;
+      const fence = t0.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fence) {
+        const inner = fence[1].trim();
+        parsed = tryParse(inner) || tryParse(repairJson(inner));
+        if (parsed) return parsed;
+      }
+      const first = t0.indexOf('{'); const last = t0.lastIndexOf('}');
+      if (first !== -1 && last !== -1 && last > first) {
+        const slice = t0.slice(first, last + 1);
+        parsed = tryParse(slice) || tryParse(repairJson(slice));
+        if (parsed) return parsed;
+      }
+      const match = t0.match(/\{[\s\S]*\}/);
+      if (match) {
+        parsed = tryParse(match[0]) || tryParse(repairJson(match[0]));
+        if (parsed) return parsed;
+      }
+      return null;
+    };
+    const normalizeCustomerTemplate = (obj) => {
+      try {
+        const t = typeof obj === 'object' && obj ? obj : {};
+        const outlineStages = Array.isArray(t?.outline?.stages) ? t.outline.stages : [];
+        const safeStages = outlineStages.map((s) => {
+          const name = String(s?.name || s?.stage || 'Stage');
+          const tasks = Array.isArray(s?.tasks) ? s.tasks : [];
+          const safeTasks = tasks.map((tk) => ({ title: String(tk?.title || tk?.name || 'Task') }));
+          return { name, tasks: safeTasks };
+        });
+        const defRems = Array.isArray(t.defaultReminders) ? t.defaultReminders : [];
+        const defFiles = Array.isArray(t.defaultFiles) ? t.defaultFiles : [];
+        return {
+          id: String(t.id || `ai_customer_${Date.now()}`),
+          type: 'customer',
+          name: String(t.name || 'AI Customer SOP'),
+          version: Number(t.version || 1),
+          outline: { stages: safeStages },
+          defaultReminders: defRems.map((r) => (typeof r === 'string' ? r : String(r?.title || 'Reminder'))),
+          defaultFiles: defFiles.map((f) => (typeof f === 'string' ? f : String(f?.name || 'File')))
+        };
+      } catch { return { id: `ai_customer_${Date.now()}`, type: 'customer', name: 'AI Customer SOP', version: 1, outline: { stages: [] }, defaultReminders: [], defaultFiles: [] }; }
+    };
+    const generateAiCustomerTemplate = async () => {
+      try {
+        setAiLoading(true); setAiError('');
+        const key = localStorage.getItem('gemini_api_key');
+        if (!key) throw new Error('Missing GEMINI API key. Set it in Personal Assistant.');
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
+        const sys = `You generate a customer SOP template as pure JSON only. Schema: { id:string, type:\"customer\", name:string, version:number, outline:{ stages:[ { name:string, tasks:[ { title:string, description?:string } ] } ] }, defaultReminders:(string|{title})[], defaultFiles:(string|{name})[] }. Constraints: 3-6 stages, 2-6 tasks/stage, concise titles. Do not include any text outside the JSON.`;
+        const user = `Industry: ${aiIndustry||''}\nCustomer type: ${aiCustomerType||''}\nRoles involved: ${aiRoles||''}\nDescription: ${aiDesc||''}`;
+        const body = { contents: [ { role: 'user', parts: [ { text: `${sys}\n\nContext:\n${user}` } ] } ], generationConfig: { temperature: 0.3, maxOutputTokens: 1600, responseMimeType: 'application/json' } };
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!res.ok) throw new Error(`AI error ${res.status}`);
+        const json = await res.json();
+        setAiRaw('');
+        if (json?.promptFeedback?.blockReason) {
+          setAiRaw(JSON.stringify(json, null, 2));
+          throw new Error(`AI blocked: ${json.promptFeedback.blockReason}`);
+        }
+        let parsed = null;
+        const candidates = Array.isArray(json?.candidates) ? json.candidates : [];
+        let fallbackText = '';
+        for (let i = 0; i < candidates.length; i++) {
+          const parts = Array.isArray(candidates[i]?.content?.parts) ? candidates[i].content.parts : [];
+          const joined = parts.map(p => p?.text || '').join('').trim();
+          if (joined) {
+            const attempt = parseJsonFromText(joined);
+            if (attempt) { parsed = attempt; break; }
+            if (!fallbackText) fallbackText = joined;
+          }
+        }
+        if (!parsed && fallbackText) parsed = parseJsonFromText(fallbackText);
+        setAiRaw(fallbackText || (candidates.length ? JSON.stringify(candidates[0].content, null, 2) : ''));
+        if (!parsed) throw new Error('Failed to parse AI response');
+        const normalized = normalizeCustomerTemplate(parsed);
+        setDraft(JSON.parse(JSON.stringify(normalized)));
+        setTab('templates');
+      } catch (e) {
+        setAiError(e?.message || 'Failed to generate');
+      } finally {
+        setAiLoading(false);
+      }
+    };
+    const removeStage = (idx) => setDraft(d => { const n = JSON.parse(JSON.stringify(d||{})); (n.outline.stages||[]).splice(idx,1); return n; });
+    const removeTask = (sIdx, tIdx) => setDraft(d => { const n = JSON.parse(JSON.stringify(d||{})); (n.outline.stages?.[sIdx]?.tasks||[]).splice(tIdx,1); return n; });
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCustomerSop(false)}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: 1040, maxWidth: '96%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ fontWeight: 700 }}>Choose SOP Template (Customer)</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setShowCustomerSop(false)} style={{ padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+              <button onClick={async () => { try { await createCustomerWithSop(pendingClientData, draft); } catch {} }} style={{ padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 12 }}>Create with SOP</button>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 0 }}>
+              <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
+                <button onClick={() => setTab('templates')} style={{ flex: 1, padding: 8, background: tab==='templates' ? '#fff' : '#f9fafb', border: 'none', borderRight: '1px solid #e5e7eb', cursor: 'pointer', fontWeight: 600 }}>Templates</button>
+                <button onClick={() => setTab('ai')} style={{ flex: 1, padding: 8, background: tab==='ai' ? '#fff' : '#f9fafb', border: 'none', cursor: 'pointer', fontWeight: 600 }}>AI Template</button>
+              </div>
+              <div style={{ padding: 8 }}>
+                {tab === 'templates' ? (
+                  <div>
+                    {templates.map(t => (
+                      <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 6px', borderRadius: 6, cursor: 'pointer' }}>
+                        <input type="radio" name="sop" checked={sopChoice === t.id} onChange={() => { setSopChoice(t.id); setDraft(JSON.parse(JSON.stringify(t))); }} />
+                        <span>{t.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                        <span style={{ marginBottom: 4 }}>Industry</span>
+                        <input value={aiIndustry} onChange={(e)=>setAiIndustry(e.target.value)} placeholder="e.g., Manufacturing" />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                        <span style={{ marginBottom: 4 }}>Customer type</span>
+                        <input value={aiCustomerType} onChange={(e)=>setAiCustomerType(e.target.value)} placeholder="e.g., Distributor" />
+                      </label>
+                      <label style={{ gridColumn: '1 / span 2', display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                        <span style={{ marginBottom: 4 }}>Roles involved</span>
+                        <input value={aiRoles} onChange={(e)=>setAiRoles(e.target.value)} placeholder="e.g., Sales; Pre-sales; Legal" />
+                      </label>
+                      <label style={{ gridColumn: '1 / span 2', display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                        <span style={{ marginBottom: 4 }}>Description</span>
+                        <textarea value={aiDesc} onChange={(e)=>setAiDesc(e.target.value)} placeholder="Describe the onboarding/qualification process" style={{ minHeight: 70 }} />
+                      </label>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button onClick={generateAiCustomerTemplate} disabled={aiLoading} style={{ padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: aiLoading ? '#f3f4f6' : '#fff', cursor: aiLoading ? 'not-allowed' : 'pointer', fontSize: 12 }}>{aiLoading ? 'Generating…' : 'Generate AI Template'}</button>
+                      {aiError && <span style={{ color: '#b91c1c', fontSize: 12 }}>{aiError}</span>}
+                      {!!aiRaw && <button onClick={() => { try { alert(aiRaw.slice(0, 5000)); } catch {} }} style={{ padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 12 }}>View AI Output</button>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Outline</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(draft?.outline?.stages || []).length === 0 ? (
+                  <div style={{ color: '#6b7280', fontStyle: 'italic' }}>No stages.</div>
+                ) : (
+                  (draft.outline.stages || []).map((s, idx) => (
+                    <div key={idx} style={{ border: '1px solid #f3f4f6', borderRadius: 8, padding: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontWeight: 600 }}>{s.name}</div>
+                        <button onClick={() => removeStage(idx)} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Remove Stage</button>
+                      </div>
+                      {Array.isArray(s.tasks) && s.tasks.length > 0 && (
+                        <ul style={{ margin: '6px 0 0 16px' }}>
+                          {s.tasks.map((t, i) => (
+                            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>{t.title || t.name}</span>
+                              <button onClick={() => removeTask(idx, i)} style={{ padding: '2px 6px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 11 }}>Remove</button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))
+                )}
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontWeight: 600, margin: '6px 0' }}>Default Reminders</div>
+                  {(draft.defaultReminders || []).length === 0 ? (
+                    <div style={{ color: '#6b7280', fontStyle: 'italic' }}>None</div>
+                  ) : (
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      {(draft.defaultReminders || []).map((r, i) => (
+                        <li key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{typeof r === 'string' ? r : String(r?.title || 'Reminder')}</span>
+                          <button onClick={() => setDraft(d => { const n = JSON.parse(JSON.stringify(d||{})); (n.defaultReminders||[]).splice(i,1); return n; })} style={{ padding: '2px 6px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 11 }}>Remove</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div style={{ fontWeight: 600, margin: '10px 0 6px' }}>Default Files</div>
+                  {(draft.defaultFiles || []).length === 0 ? (
+                    <div style={{ color: '#6b7280', fontStyle: 'italic' }}>None</div>
+                  ) : (
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      {(draft.defaultFiles || []).map((f, i) => (
+                        <li key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{f}</span>
+                          <button onClick={() => setDraft(d => { const n = JSON.parse(JSON.stringify(d||{})); (n.defaultFiles||[]).splice(i,1); return n; })} style={{ padding: '2px 6px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 11 }}>Remove</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (!currentUser) {
@@ -239,6 +473,11 @@ export default function CustomerProfileList() {
   };
 
   const handleCreateNewCustomerFromModal = async (clientData) => {
+    setPendingClientData(clientData);
+    setShowCustomerSop(true);
+  };
+
+  const createCustomerWithSop = async (clientData, draft) => {
     setIsCreatingCustomer(true);
     try {
       const companyName = clientData.company || "Uncategorized Company"; // Default company name
@@ -271,8 +510,26 @@ export default function CustomerProfileList() {
         ownerId: currentUser.uid, // New explicit owner field
         access: [currentUser.uid], // Access control: users who can view/manage this profile
       };
-      const newCustomerDocRef = await addDoc(collection(db, "customerProfiles"), initialCustomerData);
+      // Build stages and stageData from SOP draft
+      const ds = Array.isArray(draft?.outline?.stages) ? draft.outline.stages : [];
+      const stages = ds.length > 0 ? ds.map(s => s.name).filter(Boolean) : STAGES;
+      const stageData = {};
+      stages.forEach(name => {
+        const spec = ds.find(s => s.name === name) || {};
+        const tasks = Array.isArray(spec.tasks) ? spec.tasks : [];
+        stageData[name] = { notes: [], tasks: tasks.map(t => ({ name: String(t.title || t.name || ''), done: false })), completed: false };
+      });
+      const payload = {
+        ...initialCustomerData,
+        stages,
+        currentStage: stages[0],
+        stageData,
+        reminders: Array.isArray(draft?.defaultReminders) ? draft.defaultReminders : [],
+        files: Array.isArray(draft?.defaultFiles) ? draft.defaultFiles : []
+      };
+      const newCustomerDocRef = await addDoc(collection(db, "customerProfiles"), payload);
       console.log("New customer profile created from modal with ID:", newCustomerDocRef.id);
+
 
       // Link to Contacts (Organizations)
       const newCustomerId = newCustomerDocRef.id;
@@ -311,6 +568,7 @@ export default function CustomerProfileList() {
       }
 
       setShowAddCustomerModal(false); // Close the modal
+      setShowCustomerSop(false);
       
       // Show success notice
       const successNotice = document.createElement('div');
@@ -890,6 +1148,9 @@ export default function CustomerProfileList() {
         onAddContact={handleCreateNewCustomerFromModal}
         isLoading={isCreatingCustomer}
       />
+      {showCustomerSop && (
+        <CustomerSopModal />
+      )}
       {/* Delete Confirmation Modal */}
       <DeleteProfileModal
         isOpen={showDeleteCustomerModal}

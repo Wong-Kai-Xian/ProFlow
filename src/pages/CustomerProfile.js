@@ -23,6 +23,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { DESIGN_SYSTEM, getPageContainerStyle, getCardStyle, getPageHeaderStyle, getContentContainerStyle, getButtonStyle } from '../styles/designSystem';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import { recomputeAndSaveForCustomer, logLeadEvent } from '../services/leadScoreService';
+import { listSopTemplates, applyCustomerSopTemplate, listUserSopTemplates, saveUserSopTemplate, updateUserSopTemplate, deleteUserSopTemplate } from '../utils/sopTemplates';
 
 const STAGES = ["Working", "Qualified", "Converted"];
 
@@ -50,6 +51,19 @@ export default function CustomerProfile() {
   const [stageData, setStageData] = useState({});
   const [stages, setStages] = useState(STAGES);
   const [projects, setProjects] = useState([]); // To store associated projects
+  const [showSopPicker, setShowSopPicker] = useState(false);
+  const [sopChoice, setSopChoice] = useState('customer_general_v1');
+  // Open SOP picker automatically after creation redirect
+  useEffect(() => {
+    try {
+      const key = 'proflow_open_customer_sop_for';
+      const target = localStorage.getItem(key);
+      if (target && target === id) {
+        setShowSopPicker(true);
+        localStorage.removeItem(key);
+      }
+    } catch {}
+  }, [id]);
   const [projectSnapshots, setProjectSnapshots] = useState({}); // Per-project saved data snapshots
   const [activeStageTab, setActiveStageTab] = useState('current');
   const [projectNames, setProjectNames] = useState({}); // Map of projectId -> name
@@ -197,6 +211,453 @@ export default function CustomerProfile() {
         console.error("Error updating stages in Firestore:", error);
       }
     }
+  };
+
+  const SopPicker = ({ onClose }) => {
+    const templates = listSopTemplates('customer');
+    const selected = templates.find(t => t.id === sopChoice) || templates[0];
+    const [draft, setDraft] = useState(() => JSON.parse(JSON.stringify(selected || {})));
+    useEffect(() => { setDraft(JSON.parse(JSON.stringify(selected || {}))); }, [selected?.id]);
+    const [tab, setTab] = useState('templates'); // 'templates' | 'ai' | 'my'
+    const [aiDesc, setAiDesc] = useState('');
+    const [aiIndustry, setAiIndustry] = useState('');
+    const [aiCustomerType, setAiCustomerType] = useState('');
+    const [aiRoles, setAiRoles] = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiError, setAiError] = useState('');
+    const [aiRaw, setAiRaw] = useState('');
+    // My templates state
+    const [userTemplates, setUserTemplates] = useState([]);
+    const [userTemplatesLoading, setUserTemplatesLoading] = useState(false);
+    const [userTemplatesError, setUserTemplatesError] = useState('');
+    const [templateName, setTemplateName] = useState('');
+    const [selectedUserTemplateId, setSelectedUserTemplateId] = useState('');
+    const parseJsonFromText = (text) => {
+      const tryParse = (s) => { try { return JSON.parse(s); } catch { return null; } };
+      const repairJson = (input) => {
+        try {
+          let s = String(input || '');
+          s = s.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1');
+          s = s.replace(/,\s*(\}|\])/g, '$1');
+          s = s.replace(/([\{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":');
+          // Replace single-quoted strings cautiously (common simple cases)
+          s = s.replace(/:\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, ': "$1"');
+          return s;
+        } catch { return input; }
+      };
+      const t0 = (text || '').trim();
+      let parsed = tryParse(t0);
+      if (parsed) return parsed;
+      const fence = t0.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fence) {
+        const inner = fence[1].trim();
+        parsed = tryParse(inner) || tryParse(repairJson(inner));
+        if (parsed) return parsed;
+      }
+      const first = t0.indexOf('{'); const last = t0.lastIndexOf('}');
+      if (first !== -1 && last !== -1 && last > first) {
+        const slice = t0.slice(first, last + 1);
+        parsed = tryParse(slice) || tryParse(repairJson(slice));
+        if (parsed) return parsed;
+      }
+      // As last resort, attempt to find a top-level JSON-like block
+      const match = t0.match(/\{[\s\S]*\}/);
+      if (match) {
+        parsed = tryParse(match[0]) || tryParse(repairJson(match[0]));
+        if (parsed) return parsed;
+      }
+      return null;
+    };
+    const normalizeCustomerTemplate = (obj) => {
+      try {
+        const t = typeof obj === 'object' && obj ? obj : {};
+        const outlineStages = Array.isArray(t?.outline?.stages) ? t.outline.stages : [];
+        const safeStages = outlineStages.map((s) => {
+          const name = String(s?.name || s?.stage || 'Stage');
+          const tasks = Array.isArray(s?.tasks) ? s.tasks : [];
+          const safeTasks = tasks.map((tk) => ({ title: String(tk?.title || tk?.name || 'Task') }));
+          return { name, tasks: safeTasks };
+        });
+        const defRems = Array.isArray(t.defaultReminders) ? t.defaultReminders : [];
+        const defFiles = Array.isArray(t.defaultFiles) ? t.defaultFiles : [];
+        return {
+          id: String(t.id || `ai_customer_${Date.now()}`),
+          type: 'customer',
+          name: String(t.name || 'AI Customer SOP'),
+          version: Number(t.version || 1),
+          outline: { stages: safeStages },
+          defaultReminders: defRems.map((r) => (typeof r === 'string' ? r : String(r?.title || 'Reminder'))),
+          defaultFiles: defFiles.map((f) => (typeof f === 'string' ? f : String(f?.name || 'File')))
+        };
+      } catch { return { id: `ai_customer_${Date.now()}`, type: 'customer', name: 'AI Customer SOP', version: 1, outline: { stages: [] }, defaultReminders: [], defaultFiles: [] }; }
+    };
+    const buildLocalCustomerTemplate = () => {
+      const name = `AI Customer SOP (${aiIndustry || 'General'})`;
+      const toTasks = (arr) => arr.map(t => ({ title: t }));
+      const stages = [
+        { name: 'Inquiry Intake', tasks: toTasks([
+          'Record inquiry details',
+          `Identify decision-maker (${aiRoles || 'Sales'})`,
+          'Capture project scope, budget, timeline'
+        ]) },
+        { name: 'Qualification', tasks: toTasks([
+          'Validate requirements and fit',
+          'Check credit terms and compliance',
+          'Determine go/no-go'
+        ]) },
+        { name: 'Quotation Preparation', tasks: toTasks([
+          'Estimate material quantities and costs',
+          'Prepare quotation with terms',
+          'Internal review (Pricing/Legal)'
+        ]) },
+        { name: 'Follow-up', tasks: toTasks([
+          'Send quotation and confirm receipt',
+          'Follow up within 3 business days',
+          'Clarify questions and update quote if needed'
+        ]) },
+        { name: 'Conversion', tasks: toTasks([
+          'Negotiate final terms',
+          'Obtain signed acceptance / PO',
+          'Create project record and handover'
+        ]) }
+      ];
+      return {
+        id: `ai_customer_${Date.now()}`,
+        type: 'customer',
+        name,
+        version: 1,
+        outline: { stages },
+        defaultReminders: ['Follow-up in 3 days', 'Quote validity check in 7 days'],
+        defaultFiles: ['Company Profile.pdf', 'Quotation Template.docx']
+      };
+    };
+    // Load user templates when switching to 'my'
+    useEffect(() => {
+      const loadMy = async () => {
+        if (!currentUser) return;
+        setUserTemplatesLoading(true); setUserTemplatesError('');
+        try {
+          const list = await listUserSopTemplates({ userId: currentUser.uid, kind: 'customer' });
+          setUserTemplates(list);
+        } catch (e) {
+          setUserTemplatesError('Failed to load templates');
+        } finally {
+          setUserTemplatesLoading(false);
+        }
+      };
+      if (tab === 'my') loadMy();
+    }, [tab, currentUser]);
+
+    const handleNewTemplate = () => {
+      const blank = {
+        id: `user_customer_${Date.now()}`,
+        type: 'customer',
+        name: templateName || 'My Customer Template',
+        version: 1,
+        outline: { stages: [ { name: 'Stage 1', tasks: [] } ] },
+        defaultReminders: [],
+        defaultFiles: []
+      };
+      setDraft(JSON.parse(JSON.stringify(blank)));
+    };
+
+    const handleUseCurrentProfileAsTemplate = () => {
+      const stagesList = Array.isArray(stages) ? stages : [];
+      const mappedStages = stagesList.map((stageName) => {
+        const sd = stageData?.[stageName] || {};
+        const tasks = Array.isArray(sd.tasks) ? sd.tasks : [];
+        return { name: stageName, tasks: tasks.map(t => ({ title: String(t.name || t.title || '') })) };
+      });
+      const tpl = {
+        id: `user_customer_${Date.now()}`,
+        type: 'customer',
+        name: templateName || 'My Customer Template',
+        version: 1,
+        outline: { stages: mappedStages },
+        defaultReminders: Array.isArray(reminders) ? reminders.map(r => (typeof r === 'string' ? r : String(r?.title || 'Reminder'))) : [],
+        defaultFiles: Array.isArray(files) ? files.map(f => (typeof f === 'string' ? f : String(f))) : []
+      };
+      setDraft(JSON.parse(JSON.stringify(tpl)));
+    };
+
+    const handleSaveDraftAsMyTemplate = async () => {
+      if (!currentUser) return;
+      const prepared = {
+        ...draft,
+        name: templateName || draft?.name || 'My Customer Template',
+        type: 'customer',
+        version: Number(draft?.version || 1)
+      };
+      const saved = await saveUserSopTemplate({ userId: currentUser.uid, template: prepared });
+      if (saved) {
+        try {
+          const list = await listUserSopTemplates({ userId: currentUser.uid, kind: 'customer' });
+          setUserTemplates(list);
+          setSelectedUserTemplateId(saved._docId || '');
+        } catch {}
+      }
+    };
+
+    const handleSelectUserTemplate = async (docId) => {
+      setSelectedUserTemplateId(docId);
+      const found = userTemplates.find(t => t._docId === docId);
+      if (found) {
+        setTemplateName(String(found.name || ''));
+        setDraft(JSON.parse(JSON.stringify(found)));
+      }
+    };
+
+    const handleDeleteUserTemplate = async (docId) => {
+      if (!currentUser || !docId) return;
+      const ok = await deleteUserSopTemplate({ userId: currentUser.uid, docId });
+      if (ok) {
+        try {
+          const list = await listUserSopTemplates({ userId: currentUser.uid, kind: 'customer' });
+          setUserTemplates(list);
+          if (selectedUserTemplateId === docId) setSelectedUserTemplateId('');
+        } catch {}
+      }
+    };
+
+    // Preview add/remove helpers (customer):
+    const addStage = () => setDraft(d => {
+      const next = JSON.parse(JSON.stringify(d||{}));
+      const count = (next.outline?.stages || []).length;
+      if (!next.outline) next.outline = { stages: [] };
+      next.outline.stages.push({ name: `Stage ${count + 1}`, tasks: [] });
+      return next;
+    });
+    const addTask = (sIdx) => setDraft(d => {
+      const next = JSON.parse(JSON.stringify(d||{}));
+      const tasks = next.outline?.stages?.[sIdx]?.tasks;
+      if (Array.isArray(tasks)) tasks.push({ title: 'New Task' });
+      return next;
+    });
+    const addReminder = () => setDraft(d => { const n = JSON.parse(JSON.stringify(d||{})); (n.defaultReminders||(n.defaultReminders=[])).push('New reminder'); return n; });
+    const addFile = () => setDraft(d => { const n = JSON.parse(JSON.stringify(d||{})); (n.defaultFiles||(n.defaultFiles=[])).push('New file'); return n; });
+    const generateAiCustomerTemplate = async () => {
+      try {
+        setAiLoading(true); setAiError('');
+        const key = localStorage.getItem('gemini_api_key');
+        if (!key) throw new Error('Missing GEMINI API key. Set it in Personal Assistant.');
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${encodeURIComponent(key)}`;
+        const sys = `You generate a customer SOP template as pure JSON only. Schema: { id:string, type:"customer", name:string, version:number, outline:{ stages:[ { name:string, tasks:[ { title:string, description?:string } ] } ] }, defaultReminders:(string|{title})[], defaultFiles:(string|{name})[] }. Constraints: 3-6 stages, 2-6 tasks/stage, concise titles. Do not include any text outside the JSON.`;
+        const user = `Industry: ${aiIndustry||''}\nCustomer type: ${aiCustomerType||''}\nRoles involved: ${aiRoles||''}\nDescription: ${aiDesc||''}`;
+        const body = {
+          contents: [ { role: 'user', parts: [ { text: `${sys}\n\nContext:\n${user}` } ] } ],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 1600, responseMimeType: 'application/json' },
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' }
+          ]
+        };
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!res.ok) throw new Error(`AI error ${res.status}`);
+        const json = await res.json();
+        setAiRaw('');
+        if (json?.promptFeedback?.blockReason) {
+          setAiRaw(JSON.stringify(json, null, 2));
+          throw new Error(`AI blocked: ${json.promptFeedback.blockReason}`);
+        }
+        let parsed = null;
+        const candidates = Array.isArray(json?.candidates) ? json.candidates : [];
+        let fallbackText = '';
+        for (let i = 0; i < candidates.length; i++) {
+          const parts = Array.isArray(candidates[i]?.content?.parts) ? candidates[i].content.parts : [];
+          const joined = parts.map(p => p?.text || '').join('').trim();
+          if (joined) {
+            const attempt = parseJsonFromText(joined);
+            if (attempt) { parsed = attempt; break; }
+            if (!fallbackText) fallbackText = joined;
+          }
+        }
+        if (!parsed && fallbackText) parsed = parseJsonFromText(fallbackText);
+        setAiRaw(fallbackText || (candidates.length ? JSON.stringify(candidates[0].content, null, 2) : ''));
+        // Local fallback if model returns empty or unparsable
+        const normalized = parsed ? normalizeCustomerTemplate(parsed) : buildLocalCustomerTemplate();
+        setDraft(JSON.parse(JSON.stringify(normalized)));
+        setTab('templates');
+      } catch (e) {
+        try {
+          // Fallback to local template even on error
+          const normalized = buildLocalCustomerTemplate();
+          setDraft(JSON.parse(JSON.stringify(normalized)));
+          setTab('templates');
+          setAiError('');
+        } catch {
+          setAiError(e?.message || 'Failed to generate');
+        }
+      } finally {
+        setAiLoading(false);
+      }
+    };
+    const removeStage = (idx) => setDraft(d => { const next = JSON.parse(JSON.stringify(d||{})); (next.outline.stages||[]).splice(idx,1); return next; });
+    const removeTask = (sIdx, tIdx) => setDraft(d => { const next = JSON.parse(JSON.stringify(d||{})); (next.outline.stages?.[sIdx]?.tasks||[]).splice(tIdx,1); return next; });
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: 1040, maxWidth: '96%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: DESIGN_SYSTEM.spacing.base, background: DESIGN_SYSTEM.pageThemes.customers.gradient, color: DESIGN_SYSTEM.colors.text.inverse, borderRadius: `${DESIGN_SYSTEM.borderRadius.lg} ${DESIGN_SYSTEM.borderRadius.lg} 0 0`, marginBottom: DESIGN_SYSTEM.spacing.base }}>
+            <div style={{ fontWeight: 700, fontSize: DESIGN_SYSTEM.typography.fontSize.lg }}>Choose SOP Template (Customer)</div>
+            <button onClick={onClose} style={{ ...getButtonStyle('secondary', 'customers'), padding: '6px 10px' }}>Close</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, borderRadius: DESIGN_SYSTEM.borderRadius.lg, padding: 0 }}>
+              <div style={{ display: 'flex', borderBottom: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}` }}>
+                <button onClick={() => setTab('templates')} style={{ flex: 1, padding: 8, background: tab==='templates' ? '#fff' : '#f9fafb', border: 'none', borderRight: '1px solid #e5e7eb', cursor: 'pointer', fontWeight: 600 }}>Templates</button>
+                <button onClick={() => setTab('ai')} style={{ flex: 1, padding: 8, background: tab==='ai' ? '#fff' : '#f9fafb', border: 'none', borderRight: '1px solid #e5e7eb', cursor: 'pointer', fontWeight: 600 }}>AI Template</button>
+                <button onClick={() => setTab('my')} style={{ flex: 1, padding: 8, background: tab==='my' ? '#fff' : '#f9fafb', border: 'none', cursor: 'pointer', fontWeight: 600 }}>My Templates</button>
+              </div>
+              <div style={{ padding: DESIGN_SYSTEM.spacing.base, maxHeight: '60vh', overflowY: 'auto' }}>
+                {tab === 'templates' ? (
+                  <div>
+                    {templates.map(t => (
+                      <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 10, borderRadius: 8, cursor: 'pointer', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, marginBottom: 8, background: sopChoice === t.id ? '#fff' : '#fafafa' }}>
+                        <input type="radio" name="sop" checked={sopChoice === t.id} onChange={() => { setSopChoice(t.id); setDraft(JSON.parse(JSON.stringify(t))); }} />
+                        <span style={{ fontWeight: 600 }}>{t.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : tab === 'ai' ? (
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DESIGN_SYSTEM.spacing.base }}>
+                      <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                        <span style={{ marginBottom: 4 }}>Industry</span>
+                        <input value={aiIndustry} onChange={(e)=>setAiIndustry(e.target.value)} placeholder="e.g., Manufacturing" />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                        <span style={{ marginBottom: 4 }}>Customer type</span>
+                        <input value={aiCustomerType} onChange={(e)=>setAiCustomerType(e.target.value)} placeholder="e.g., Distributor" />
+                      </label>
+                      <label style={{ gridColumn: '1 / span 2', display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                        <span style={{ marginBottom: 4 }}>Roles involved</span>
+                        <input value={aiRoles} onChange={(e)=>setAiRoles(e.target.value)} placeholder="e.g., Sales; Pre-sales; Legal" />
+                      </label>
+                      <label style={{ gridColumn: '1 / span 2', display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                        <span style={{ marginBottom: 4 }}>Description</span>
+                        <textarea value={aiDesc} onChange={(e)=>setAiDesc(e.target.value)} placeholder="Describe the onboarding/qualification process" style={{ minHeight: 70 }} />
+                      </label>
+                    </div>
+                    <div style={{ display: 'flex', gap: DESIGN_SYSTEM.spacing.base, marginTop: DESIGN_SYSTEM.spacing.base }}>
+                      <button onClick={generateAiCustomerTemplate} disabled={aiLoading} style={{ ...getButtonStyle('primary', 'customers'), opacity: aiLoading ? 0.7 : 1 }}>{aiLoading ? 'Generating…' : 'Generate AI Template'}</button>
+                      {aiError && <span style={{ color: '#b91c1c', fontSize: 12 }}>{aiError}</span>}
+                      {!!aiRaw && <button onClick={() => { try { alert(aiRaw.slice(0, 5000)); } catch {} }} style={{ ...getButtonStyle('secondary', 'customers') }}>View AI Output</button>}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DESIGN_SYSTEM.spacing.base, marginBottom: DESIGN_SYSTEM.spacing.base }}>
+                      <label style={{ gridColumn: '1 / span 2', display: 'flex', flexDirection: 'column', fontSize: 12, color: '#6b7280' }}>
+                        <span style={{ marginBottom: 4 }}>Template name</span>
+                        <input value={templateName} onChange={(e)=>setTemplateName(e.target.value)} placeholder="My Customer Template" />
+                      </label>
+                      <button onClick={handleNewTemplate} style={{ ...getButtonStyle('secondary', 'customers') }}>New Template</button>
+                      <button onClick={handleUseCurrentProfileAsTemplate} style={{ ...getButtonStyle('secondary', 'customers') }}>Use Current Profile</button>
+                      <button onClick={handleSaveDraftAsMyTemplate} style={{ ...getButtonStyle('primary', 'customers') }}>Save as My Template</button>
+                    </div>
+                    {userTemplatesLoading ? (
+                      <div>Loading…</div>
+                    ) : userTemplatesError ? (
+                      <div style={{ color: '#b91c1c' }}>{userTemplatesError}</div>
+                    ) : (
+                      <div>
+                        {(userTemplates || []).map(ut => (
+                          <div key={ut._docId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, borderRadius: 8, padding: 8, marginBottom: 8, background: selectedUserTemplateId === ut._docId ? '#fff' : '#fafafa' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                              <input type="radio" name="my_tpl" checked={selectedUserTemplateId === ut._docId} onChange={() => handleSelectUserTemplate(ut._docId)} />
+                              <span style={{ fontWeight: 600 }}>{ut.name}</span>
+                            </label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button onClick={() => handleSelectUserTemplate(ut._docId)} style={{ ...getButtonStyle('secondary', 'customers'), padding: '4px 8px' }}>Load</button>
+                              <button onClick={() => handleDeleteUserTemplate(ut._docId)} style={{ ...getButtonStyle('secondary', 'customers'), padding: '4px 8px' }}>Delete</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, borderRadius: DESIGN_SYSTEM.borderRadius.lg, padding: DESIGN_SYSTEM.spacing.base }}>
+              <div style={{ fontWeight: 700, marginBottom: DESIGN_SYSTEM.spacing.sm, fontSize: DESIGN_SYSTEM.typography.fontSize.base }}>Outline</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: DESIGN_SYSTEM.spacing.sm, maxHeight: '66vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+                  <button onClick={addStage} style={{ ...getButtonStyle('secondary', 'customers'), padding: '4px 8px' }}>+ Add Stage</button>
+                </div>
+                {(draft?.outline?.stages || []).length === 0 ? (
+                  <div style={{ color: '#6b7280', fontStyle: 'italic' }}>No stages.</div>
+                ) : (
+                  (draft.outline.stages || []).map((s, idx) => (
+                    <div key={idx} style={{ border: `1px solid ${DESIGN_SYSTEM.colors.secondary[200]}`, borderRadius: 8, padding: 8, background: '#fafafa' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <input value={s.name} onChange={(e)=>setDraft(d=>{ const n=JSON.parse(JSON.stringify(d||{})); n.outline.stages[idx].name = e.target.value; return n; })} style={{ fontWeight: 700, flex: 1 }} />
+                        <button onClick={() => removeStage(idx)} style={{ ...getButtonStyle('secondary', 'customers'), padding: '4px 8px' }}>Remove Stage</button>
+                      </div>
+                      {Array.isArray(s.tasks) && s.tasks.length > 0 && (
+                        <ul style={{ margin: '6px 0 0 16px' }}>
+                          {s.tasks.map((t, i) => (
+                            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <input value={t.title || t.name} onChange={(e)=>setDraft(d=>{ const n=JSON.parse(JSON.stringify(d||{})); n.outline.stages[idx].tasks[i].title = e.target.value; return n; })} />
+                              <button onClick={() => removeTask(idx, i)} style={{ ...getButtonStyle('secondary', 'customers'), padding: '2px 6px', fontSize: 11 }}>Remove</button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <div style={{ marginTop: 6 }}>
+                        <button onClick={() => addTask(idx)} style={{ ...getButtonStyle('secondary', 'customers'), padding: '2px 6px', fontSize: 12 }}>+ Add Task</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontWeight: 700, margin: '6px 0' }}>Default Reminders</div>
+                  {(draft.defaultReminders || []).length === 0 ? (
+                    <div style={{ color: '#6b7280', fontStyle: 'italic' }}>None</div>
+                  ) : (
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      {(draft.defaultReminders || []).map((r, i) => {
+                        const label = (typeof r === 'string') ? r : String(r?.title || 'Reminder');
+                        return (
+                          <li key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>{label}</span>
+                            <button onClick={() => setDraft(d => { const n = JSON.parse(JSON.stringify(d||{})); (n.defaultReminders||[]).splice(i,1); return n; })} style={{ ...getButtonStyle('secondary', 'customers'), padding: '2px 6px', fontSize: 11 }}>Remove</button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  <div style={{ marginTop: 6 }}>
+                    <button onClick={addReminder} style={{ ...getButtonStyle('secondary', 'customers'), padding: '2px 6px', fontSize: 12 }}>+ Add Reminder</button>
+                  </div>
+                  <div style={{ fontWeight: 700, margin: '10px 0 6px' }}>Default Files</div>
+                  {(draft.defaultFiles || []).length === 0 ? (
+                    <div style={{ color: '#6b7280', fontStyle: 'italic' }}>None</div>
+                  ) : (
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      {(draft.defaultFiles || []).map((f, i) => (
+                        <li key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{f}</span>
+                          <button onClick={() => setDraft(d => { const n = JSON.parse(JSON.stringify(d||{})); (n.defaultFiles||[]).splice(i,1); return n; })} style={{ ...getButtonStyle('secondary', 'customers'), padding: '2px 6px', fontSize: 11 }}>Remove</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div style={{ marginTop: 6 }}>
+                    <button onClick={addFile} style={{ ...getButtonStyle('secondary', 'customers'), padding: '2px 6px', fontSize: 12 }}>+ Add File</button>
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginTop: DESIGN_SYSTEM.spacing.base, display: 'flex', justifyContent: 'flex-end', gap: DESIGN_SYSTEM.spacing.base }}>
+                <button onClick={onClose} style={{ ...getButtonStyle('secondary', 'customers') }}>Cancel</button>
+                <button onClick={async () => { try { if (id) { await applyCustomerSopTemplate(id, draft); /* refresh local state */ setStages((draft.outline?.stages||[]).map(s=>s.name) || stages); const nextStageData = {}; (draft.outline?.stages||[]).forEach(s => { nextStageData[s.name] = { notes: [], tasks: (s.tasks||[]).map(t => ({ name: String(t.title||t.name||''), done: false })), completed: false }; }); setStageData(nextStageData); setCurrentStage(((draft.outline?.stages||[])[0]?.name) || stages[0]); setReminders(Array.isArray(draft.defaultReminders)?draft.defaultReminders:[]); setFiles(Array.isArray(draft.defaultFiles)?draft.defaultFiles:[]); } onClose(); } catch {} }} style={{ ...getButtonStyle('primary', 'customers') }}>Apply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const handleConvertToProject = () => {
@@ -919,6 +1380,11 @@ export default function CustomerProfile() {
       console.warn('Project created but failed to link to customer profile:', e);
     }
 
+    // Open Project SOP picker immediately so user can choose Project SOP before tasks initialize
+    try {
+      navigate(`/project/${newProjectRef.id}?openSop=1`);
+    } catch {}
+
       // Move attached files to the project record for project history visibility
       try {
         await updateDoc(doc(db, 'projects', newProjectRef.id), {
@@ -1290,6 +1756,7 @@ export default function CustomerProfile() {
                 </div>
                 <div style={{ flex: 1 }} />
                 <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setShowSopPicker(true)} style={{ ...getButtonStyle('secondary', 'customers') }}>Use SOP</button>
                   <button
                     onClick={() => {
                       if (Boolean(selectedProjectId) || (hasPendingConversionRequest && !hasApprovedConversion)) return;
@@ -1751,6 +2218,7 @@ export default function CustomerProfile() {
           </div>
         </div>
       )}
+      {showSopPicker && <SopPicker onClose={() => setShowSopPicker(false)} />}
     </div>
   );
 }

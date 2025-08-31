@@ -6,7 +6,7 @@ import TaskChatModal from './TaskChatModal';
 import AddSubtitleModal from './AddSubtitleModal';
 import UserAvatar from '../shared/UserAvatar';
 import { db } from "../../firebase"; // Import db
-import { doc, updateDoc } from "firebase/firestore"; // Import Firestore functions
+import { doc, updateDoc, getDoc } from "firebase/firestore"; // Import Firestore functions
 import ConfirmationModal from '../common/ConfirmationModal';
 
 
@@ -236,7 +236,7 @@ const TaskItem = ({ task, onToggle, onRemove, onShowComment, onStatusChange, onE
   );
 };
 
-export default function ProjectTaskPanel({ projectTasks, setProjectTasks, currentStage, projectId, setProjectData, projectMembers = [] }) {
+export default function ProjectTaskPanel({ projectTasks, setProjectTasks, currentStage, projectId, setProjectData, projectMembers = [], activeStageName }) {
   const [panelTitle, setPanelTitle] = useState("Project Tasks");
   const [showTaskFormModal, setShowTaskFormModal] = useState(false); // Renamed from showAddTaskModal
   const [currentSubtitleIndex, setCurrentSubtitleIndex] = useState(null); // Renamed from currentSubtitleIndexForTask
@@ -259,29 +259,41 @@ export default function ProjectTaskPanel({ projectTasks, setProjectTasks, curren
   });
 
   const updateProjectTasksInFirestore = async (updatedTasks) => {
-    if (projectId) {
+    if (!projectId) return;
+    try {
+      const projectRef = doc(db, "projects", projectId);
+      const stageKey = activeStageName || currentStage;
+      // Ensure all updated sections are tagged with the active stage
+      const normalizedUpdates = (updatedTasks || []).map(section => ({ ...section, stage: stageKey }));
+      // Read latest from Firestore to avoid clobbering other stages
+      let existingAll = [];
       try {
-        const projectRef = doc(db, "projects", projectId);
-        await updateDoc(projectRef, { tasks: updatedTasks });
-        // After updating Firestore, update the parent's projectData state
-        setProjectData(prevProjectData => ({
-          ...prevProjectData,
-          tasks: updatedTasks
-        }));
-        console.log("Project tasks updated in Firestore!");
-      } catch (error) {
-        console.error("Error updating project tasks in Firestore: ", error);
+        const snap = await getDoc(projectRef);
+        if (snap.exists()) existingAll = Array.isArray(snap.data()?.tasks) ? snap.data().tasks : [];
+      } catch {}
+      if (!Array.isArray(existingAll) || existingAll.length === 0) {
+        // Fallback to local state if Firestore empty
+        existingAll = Array.isArray((typeof setProjectData === 'function' ? null : null)) ? [] : [];
       }
+      const otherStages = existingAll.filter(section => section && section.stage !== stageKey);
+      const merged = [...otherStages, ...normalizedUpdates];
+      await updateDoc(projectRef, { tasks: merged });
+      // Update local parent state with merged result
+      setProjectData(prev => ({ ...(prev || {}), tasks: merged }));
+      console.log("Project tasks updated in Firestore (merged by stage)!");
+    } catch (error) {
+      console.error("Error updating project tasks in Firestore: ", error);
     }
   };
 
   const handleAddSubtitle = (subtitleName, selectedColor) => {
+    const stageKey = activeStageName || currentStage;
     const newSubtitle = {
       id: Date.now() + Math.random(), // Unique ID for subtitle
       name: subtitleName,
       color: selectedColor, // Use the selected color
       tasks: [],
-      stage: currentStage, // Assign new subtitles to the current stage
+      stage: stageKey, // Assign new subtitles to the active stage
     };
     const updatedTasks = [...projectTasks, newSubtitle];
     setProjectTasks(updatedTasks); // Update local state
