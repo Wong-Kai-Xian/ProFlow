@@ -1756,7 +1756,7 @@ export default function CustomerProfile() {
                 </div>
                 <div style={{ flex: 1 }} />
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setShowSopPicker(true)} style={{ ...getButtonStyle('secondary', 'customers') }}>Use SOP</button>
+                  <button onClick={() => setShowSopPicker(true)} style={{ ...getButtonStyle('secondary', 'customers') }}>Template</button>
                   <button
                     onClick={() => {
                       if (Boolean(selectedProjectId) || (hasPendingConversionRequest && !hasApprovedConversion)) return;
