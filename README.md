@@ -1,4 +1,4 @@
-<img src="public/proflow-logo.png" width="50" alt="ProFlow Logo"> # ProFlow
+<img src="public/proflow-logo.png" width="50" alt="ProFlow Logo"> ProFlow
 This document provides a comprehensive overview of **ProFlow**, our submission to the **Future Ready Hackathon** in the category of **Digital Transformation for Traditional Processes**.
 
 ## 1. Project Overview
