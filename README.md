@@ -7,7 +7,6 @@ ProFlow is a comprehensive web application designed to streamline project manage
 
 ## Team NoName
 We are a multidisciplinary team where every member contributed to all aspects of the project, including design, coding, testing, and documentation.
-
 - BEH JIAN YONG
 - TAN CHAN JIEN
 - WONG KAI XIAN
@@ -30,30 +29,29 @@ This account is specifically configured to demonstrate our Google Auth 2.0 imple
 
 ### The Problem
 Traditional business processes are a silent drain on productivity and revenue. Our research shows that:
-- Rework & Poor Communication: 80% of employees spend up to half their time on rework caused by poor communication and disorganized processes. _(Geneca)_
-- Lost Revenue: Companies lose RM 2.5M annually per company from missed follow-ups and inefficient client tracking. _(Greenlight Studio)_
-- Wasted Time: An average of 4 hours per workday are wasted on inefficiency and repetitive activities. _(PwC)_
-- Fragmented Tools: Teams struggle with disconnected tools and scattered workflows, making it difficult to align on projects, track customer journeys, and consistently follow standard procedures.
+- **Rework & Poor Communication**: 80% of employees spend up to half their time on rework caused by poor communication and disorganized processes. _(Geneca)_
+- **Lost Revenue**: Companies lose RM 2.5M annually per company from missed follow-ups and inefficient client tracking. _(Greenlight Studio)_
+- **Wasted Time**: An average of 4 hours per workday are wasted on inefficiency and repetitive activities. _(PwC)_
+- **Fragmented Tools**: Teams struggle with disconnected tools and scattered workflows, making it difficult to align on projects, track customer journeys, and consistently follow standard procedures.
 
 ### The Solution
 ProFlow provides a single, intelligent workspace that directly addresses these pain points. We unify all essential business functions to significantly reduce rework, prevent missed opportunities, and streamline operations.
-
-- Unified Workspace: We bring all your customer profiles, project workspaces, and communication into one place.
-- AI-Powered Workflows: Our system offers standardized SOP templates with the option to generate custom ones using AI, ensuring consistent execution across all teams and projects.
-- Automated Efficiency: Automated reminders and timelines are built-in to prevent missed follow-ups and ensure every task is completed on time.
-- Seamless Collaboration: Our platform features integrated video meetings, structured forums, and real-time document sharing to keep teams aligned and communication clear.
-- Financial Control: We provide tools for managing quotes, tracking project costs, and monitoring budgets to give you full visibility into your profitability.
+- **Unified Workspace**: We bring all your customer profiles, project workspaces, and communication into one place.
+- **AI-Powered Workflows**: Our system offers standardized SOP templates with the option to generate custom ones using AI, ensuring consistent execution across all teams and projects.
+- **Automated Efficiency**: Automated reminders and timelines are built-in to prevent missed follow-ups and ensure every task is completed on time.
+- **Seamless Collaboration**: Our platform features integrated video meetings, structured forums, and real-time document sharing to keep teams aligned and communication clear.
+- **Financial Control**: We provide tools for managing quotes, tracking project costs, and monitoring budgets to give you full visibility into your profitability.
 
 ## Technology Stack
-- Frontend: Built with React, utilizing modern frameworks like Tailwind CSS for design and Recharts for data visualization.
-- Backend: Powered by Node.js + Express, handling all server-side logic and API integrations.
-- Database & Authentication: Leverages Firebase for a scalable, serverless solution, including Firestore for the database and Firebase Authentication for user security.
-- AI & Productivity: Integrates powerful APIs from Google (Gemini, Cloud Speech, Drive, Calendar, Gmail) for AI-assisted workflows and seamless productivity.
-- Communication: Features integrated video conferencing via Jitsi Meet.
-- Financials: Uses APIs like PayPal for payments and Currency-API for real-time exchange rates.
-- Mapping: Implements Leaflet with OpenStreetMap for interactive map features.
-- Document Management: Capable of handling PDF generation and file management with PDF-Lib and Google Drive API.
-- AI: Google Generative Language API
+- **Frontend**: Built with React, utilizing modern frameworks like Tailwind CSS for design and Recharts for data visualization.
+- **Backend**: Powered by Node.js + Express, handling all server-side logic and API integrations.
+- **Database & Authentication**: Leverages Firebase for a scalable, serverless solution, including Firestore for the database and Firebase Authentication for user security.
+- **AI & Productivity**: Integrates powerful APIs from Google (Gemini, Cloud Speech, Drive, Calendar, Gmail) for AI-assisted workflows and seamless productivity.
+- **Communication**: Features integrated video conferencing via Jitsi Meet.
+- **Financials**: Uses APIs like PayPal for payments and Currency-API for real-time exchange rates.
+- **Mapping**: Implements Leaflet with OpenStreetMap for interactive map features.
+- **Document Management**: Capable of handling PDF generation and file management with PDF-Lib and Google Drive API.
+- **AI**: Google Generative Language API
 
 ### Setup & Installation
 
@@ -103,25 +101,21 @@ ProFlow provides a single, intelligent workspace that directly addresses these p
 
 ## Usage
 
-- *User Authentication & Profiles*: Secure user registration, login, and personalized profile pages.
-- *Unified Dashboard*: A central hub to view project statuses, financial health, and key metrics at a glance.
-- *Client Relationship Management*: Manage client organizations and their associated customer profiles. You can add, edit, and view detailed customer information, including activity records and attached files.
-- *Projects*: Create, edit, and manage projects with defined stages and team members.
-- *Forums*: Dedicated forums for project discussions, file sharing, and media exchange, with features to invite members and manage topics.
-- *Approvals*: Functionality for handling project approvals and e-signatures.
-- *Financial Management*: Track project budgets, costs, and financial performance with integrated dashboards and reporting.
-- *Team Management*: A dedicated page to view and manage your team members across all projects.
-- *Intuitive Navigation*: Use the top bar to easily navigate between all key features of the application.
-- *AI Assistant (Cat)*: An intelligent assistant that helps with workflows
+- ***User Authentication & Profiles***: Secure user registration, login, and personalized profile pages.
+- ***Unified Dashboard***: A central hub to view project statuses, financial health, and key metrics at a glance.
+- ***Client Relationship Management***: Manage client organizations and their associated customer profiles. You can add, edit, and view detailed customer information, including activity records and attached files.
+- ***Projects***: Create, edit, and manage projects with defined stages and team members.
+- ***Forums***: Dedicated forums for project discussions, file sharing, and media exchange, with features to invite members and manage topics.
+- ***Approvals***: Functionality for handling project approvals and e-signatures.
+- ***Financial Management***: Track project budgets, costs, and financial performance with integrated dashboards and reporting.
+- ***Team Management***: A dedicated page to view and manage your team members across all projects.
+- ***Intuitive Navigation***: Use the top bar to easily navigate between all key features of the application.
+- ***AI Assistant (Cat)***: An intelligent assistant that helps with workflows
 
 ## Reflection: Challenges & Learnings
 The biggest challenge in building ProFlow was not just to create a product, but to build a truly integrated solution that solves real-world business problems. Our key takeaways from this process include:
-
-**Prioritizing a Unified Experience:** We realized that our most important job was to eliminate fragmentation. Every feature we built, from the project hub to the financial tracking, had to seamlessly connect to create a single source of truth for the user.
-
-**Leveraging AI for Tangible Value:** We learned that simply adding an "AI feature" isn't enough. Our focus shifted to using AI to solve a specific pain point—generating a structured SOP—to deliver immediate, measurable value to the user.
-
-**Building for Scale:** We learned to make architectural decisions that would allow for future growth. The use of a scalable NoSQL database like Firestore and a modular component structure ensures our solution can grow with its users.
-
-**The Power of a Unified Team:** We learned the importance of cross-functional collaboration. By contributing to all aspects of the project, we gained a holistic understanding of the product, which helped us make better decisions and build a more cohesive application.
+- **Prioritizing a Unified Experience:** We realized that our most important job was to eliminate fragmentation. Every feature we built, from the project hub to the financial tracking, had to seamlessly connect to create a single source of truth for the user.
+- **Leveraging AI for Tangible Value:** We learned that simply adding an "AI feature" isn't enough. Our focus shifted to using AI to solve a specific pain point—generating a structured SOP—to deliver immediate, measurable value to the user.
+- **Building for Scale:** We learned to make architectural decisions that would allow for future growth. The use of a scalable NoSQL database like Firestore and a modular component structure ensures our solution can grow with its users.
+- **The Power of a Unified Team:** We learned the importance of cross-functional collaboration. By contributing to all aspects of the project, we gained a holistic understanding of the product, which helped us make better decisions and build a more cohesive application.
 
