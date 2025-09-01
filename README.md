@@ -29,10 +29,10 @@ This account is specifically configured to demonstrate our Google Auth 2.0 imple
 ## Problem & Solution Summary
 
 ### The Problem
-- Traditional business processes are a silent drain on productivity and revenue. Our research shows that:
-- Rework & Poor Communication: 80% of employees spend up to half their time on rework caused by poor communication and disorganized processes.
-- Lost Revenue: Companies lose RM 2.5M annually per company from missed follow-ups and inefficient client tracking.
-- Wasted Time: An average of 4 hours per workday are wasted on inefficiency and repetitive activities.
+Traditional business processes are a silent drain on productivity and revenue. Our research shows that:
+- Rework & Poor Communication: 80% of employees spend up to half their time on rework caused by poor communication and disorganized processes. _(Geneca)_
+- Lost Revenue: Companies lose RM 2.5M annually per company from missed follow-ups and inefficient client tracking. _(Greenlight Studio)_
+- Wasted Time: An average of 4 hours per workday are wasted on inefficiency and repetitive activities. _(PwC)_
 - Fragmented Tools: Teams struggle with disconnected tools and scattered workflows, making it difficult to align on projects, track customer journeys, and consistently follow standard procedures.
 
 ### The Solution
