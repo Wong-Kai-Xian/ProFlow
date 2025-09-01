@@ -6,7 +6,7 @@ This document provides a comprehensive overview of **ProFlow**, our submission t
 
 ProFlow is a comprehensive web application designed to streamline project management, client relationship management, and team collaboration. It provides a centralized platform for creating and managing projects, tracking customer interactions, facilitating team communication through forums, and handling various administrative tasks like approvals and quotes. The system is built to enhance productivity and organization for individuals and teams.
 
-## 2. Team NoName
+## 2. Team No Name
 We are a multidisciplinary team where every member contributed to all aspects of the project, including design, coding, testing, and documentation.
 - BEH JIAN YONG
 - TAN CHAN JIEN
