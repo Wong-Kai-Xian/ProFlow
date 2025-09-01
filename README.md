@@ -49,7 +49,7 @@ ProFlow provides a single, intelligent workspace that directly addresses these p
 - **Database & Authentication**: Leverages Firebase for a scalable, serverless solution, including Firestore for the database and Firebase Authentication for user security.
 - **AI & Productivity**: Integrates powerful APIs from Google (Gemini, Cloud Speech, Drive, Calendar, Gmail) for AI-assisted workflows and seamless productivity.
 - **Communication**: Features integrated video conferencing via Jitsi Meet.
-- **Financials**: Uses APIs like PayPal for payments and Currency-API for real-time exchange rates.
+- **Financials**: Uses APIs like Exchange-API for real-time exchange rates.
 - **Mapping**: Implements Leaflet with OpenStreetMap for interactive map features.
 - **Document Management**: Capable of handling PDF generation and file management with PDF-Lib and Google Drive API.
 - **AI**: Google Generative Language API
