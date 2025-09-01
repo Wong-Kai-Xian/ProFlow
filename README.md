@@ -1,5 +1,5 @@
 # ProFlow
-This document provides a comprehensive overview of **ProFlow**, our submission for the **Digital Transformation for Traditional Processes** and it is **Future Ready Hackathon** category.
+This document provides a comprehensive overview of **ProFlow**, our submission to the **Future Ready Hackathon** in the category of **Digital Transformation for Traditional Processes**.
 
 ## 1. Project Overview
 
