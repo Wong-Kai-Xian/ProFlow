@@ -1,3 +1,5 @@
+![ProFlow Logo](public/proflow-logo.png)
+
 # ProFlow
 This document provides a comprehensive overview of **ProFlow**, our submission to the **Future Ready Hackathon** in the category of **Digital Transformation for Traditional Processes**.
 
